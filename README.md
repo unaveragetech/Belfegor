@@ -74,11 +74,95 @@ Belfegor can already do a lot of practical survival automation:
 - run classic beat-the-game style routines through `@gamer` / `@marvion`;
 - let authorized players command the bot by whisper through the Butler system.
 
+## How `@get anvil 4` becomes four anvils
+
+The important idea behind Belfegor is that `@get` is not a macro. It is a goal. When you type:
+
+```text
+@get anvil 4
+```
+
+Belfegor turns that command into a resource plan:
+
+1. Parse the command as "obtain 4 of `minecraft:anvil`."
+2. Check the visible inventory first.
+3. Check remembered shulkers and known containers for existing anvils or ingredients.
+4. Look up the `anvil` recipe.
+5. Expand the recipe into missing ingredients.
+6. Gather or craft each missing ingredient.
+7. Open the correct crafting interface.
+8. Move ingredients through guarded inventory transactions.
+9. Craft the output.
+10. Verify that the requested count exists in inventory or accessible storage.
+
+For an anvil, the vanilla recipe is:
+
+```text
+3 iron blocks
+4 iron ingots
+```
+
+For four anvils, Belfegor's planner expands that to:
+
+```text
+12 iron blocks
+16 iron ingots
+```
+
+Because each iron block is itself craftable from 9 iron ingots, the dependency tree becomes:
+
+```text
+4 anvils
+└─ 12 iron blocks + 16 iron ingots
+   └─ 108 iron ingots + 16 iron ingots
+      └─ 124 total iron ingots
+```
+
+Then the bot asks, in order:
+
+- do I already have anvils?
+- do I already have iron blocks?
+- do I already have iron ingots?
+- are any of those inside a catalogued shulker?
+- are any in a known container?
+- can I smelt raw iron or iron ore?
+- can I mine more iron?
+
+If the iron is inside a shulker, the shulker path is part of the same resource plan: place the shulker, ensure it can open, open it, withdraw the required stacks, recatalog contents, close it, mine it, pick it back up, then resume the craft. If the iron must be mined, Belfegor switches into gathering/mining/smelting subtasks and returns to the anvil craft once the prerequisites are satisfied.
+
+This is the same model used for every normal craftable item in Minecraft `1.21.4`: command -> item target -> recipe lookup -> dependency expansion -> source selection -> gather/craft/smelt/retrieve -> guarded crafting -> count verification. The more complete the recipe data and ingredient-tag handling are, the more items can be handled without writing a custom task for each one. Belfegor still has beta edge cases around interchangeable ingredients and unusual server inventories, but the architecture is intentionally recipe-driven rather than hardcoded around one item like a composter or anvil.
+
+```mermaid
+flowchart TD
+    Cmd["@get anvil 4"] --> Target["Target: 4x anvil"]
+    Target --> Have{"Already have enough?"}
+    Have -- Yes --> Done["Finish"]
+    Have -- No --> Recipe["Load anvil recipe"]
+    Recipe --> Expand["Expand ingredients"]
+    Expand --> Blocks["Need 12 iron blocks"]
+    Expand --> Ingots["Need 16 iron ingots"]
+    Blocks --> SubRecipe["Iron block recipe"]
+    SubRecipe --> Total["Need 124 total iron ingots"]
+    Total --> Sources{"Best source?"}
+    Sources --> Inv["Inventory"]
+    Sources --> Shulker["Catalogued shulker"]
+    Sources --> Container["Known container"]
+    Sources --> Smelt["Smelt raw iron"]
+    Sources --> Mine["Mine iron ore"]
+    Inv --> Craft["Craft blocks, then anvils"]
+    Shulker --> Craft
+    Container --> Craft
+    Smelt --> Craft
+    Mine --> Craft
+    Craft --> Verify["Verify 4 anvils"]
+    Verify --> Done
+```
+
 ## What can it not do yet?
 
 Belfegor is not a flawless general Minecraft intelligence. Current limitations include:
 
-- it does not yet automatically catalogue and craft every possible Minecraft item;
+- the recipe-driven planner is meant to cover every normal craftable `1.21.4` item, but some items still need better ingredient-tag normalization or custom acquisition support;
 - recipe variants still need work, especially interchangeable materials such as planks, slabs, stones, dyes, and tags;
 - `@player` is experimental and builds a simple functional campsite, not a beautiful or strategic megabase;
 - shulker identity is based on slot/history/contents rather than a perfect unique ID;

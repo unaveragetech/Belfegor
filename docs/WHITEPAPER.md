@@ -39,7 +39,7 @@ Belfegor is built around four ideas:
 Belfegor should not be oversold. Current limits:
 
 - It is not a full general Minecraft AI.
-- It does not yet automatically craft every item in Minecraft.
+- Its recipe-driven planner is meant to work across normal Minecraft `1.21.4` craftable items, but some recipes still depend on better tag/variant normalization or acquisition logic.
 - Recipe variants and tags still need stronger normalization.
 - `@player` does not yet build complex bases or farms.
 - It can get confused by server lag, plugins, protected regions, or anti-cheat.
@@ -69,6 +69,157 @@ flowchart TD
     Memory --> LocationMem["LocationMemory"]
     Runner --> UI["UI/logs"]
 ```
+
+## How Belfegor knows how to craft an item
+
+Belfegor's crafting system is designed around a recipe graph, not around one-off item scripts. A command such as:
+
+```text
+@get anvil 4
+```
+
+is interpreted as:
+
+```text
+target item: minecraft:anvil
+target count: 4
+```
+
+The bot then runs the same acquisition loop it uses for other craftable items:
+
+1. **Normalize the target.** Convert user input such as `anvil`, `minecraft:anvil`, or command aliases into a concrete item id.
+2. **Count existing supply.** Check visible inventory, cursor state, remembered shulkers, and known containers.
+3. **Load recipe candidates.** Find the Minecraft `1.21.4` recipe or recipes that produce the target item.
+4. **Choose a recipe.** Prefer recipes whose ingredients are already available or easiest to obtain.
+5. **Expand dependencies.** If an ingredient is itself craftable, recursively expand that recipe.
+6. **Resolve sources.** For each leaf ingredient, choose between inventory, shulkers, containers, smelting, mining, gathering, mob drops, or other acquisition tasks.
+7. **Execute subtasks.** Retrieve stored items, mine resources, smelt inputs, or craft prerequisite components.
+8. **Craft the target.** Use inventory crafting or a crafting table depending on recipe size.
+9. **Verify count.** Recount the output and continue until the requested quantity is present or the task is blocked.
+
+The key is that each ingredient can itself become a new `@get`-style subgoal. This turns crafting into a dependency tree.
+
+### Example: `@get anvil 4`
+
+The vanilla anvil recipe is:
+
+```text
+1 anvil = 3 iron blocks + 4 iron ingots
+```
+
+For four anvils:
+
+```text
+4 anvils = 12 iron blocks + 16 iron ingots
+```
+
+Iron blocks are also craftable:
+
+```text
+1 iron block = 9 iron ingots
+12 iron blocks = 108 iron ingots
+```
+
+So the full minimum material requirement is:
+
+```text
+108 ingots for blocks
++16 loose ingots
+=124 iron ingots total
+```
+
+The expanded dependency tree looks like this:
+
+```mermaid
+flowchart TD
+    Anvils["Need 4 anvils"] --> ARecipe["Each anvil: 3 iron blocks + 4 iron ingots"]
+    ARecipe --> Blocks["Need 12 iron blocks"]
+    ARecipe --> Loose["Need 16 loose iron ingots"]
+    Blocks --> BRecipe["Each iron block: 9 iron ingots"]
+    BRecipe --> BlockIngots["Need 108 iron ingots"]
+    Loose --> Total["Total requirement: 124 iron ingots"]
+    BlockIngots --> Total
+```
+
+At that point the planner does not care whether the ingots come from the hotbar, the main inventory, a shulker, a chest, smelting raw iron, or mining ore. They are all sources that can satisfy the same ingredient requirement.
+
+```mermaid
+flowchart LR
+    Need["Need 124 iron ingots"] --> Sources{"Available source?"}
+    Sources --> Inv["Inventory"]
+    Sources --> Shulker["Catalogued shulker"]
+    Sources --> Chest["Known chest/container"]
+    Sources --> Smelt["Smelt raw iron/ore"]
+    Sources --> Mine["Mine iron ore"]
+    Inv --> Ready["Ingredient count satisfied"]
+    Shulker --> Ready
+    Chest --> Ready
+    Smelt --> Ready
+    Mine --> Ready
+    Ready --> CraftBlocks["Craft 12 iron blocks"]
+    CraftBlocks --> CraftAnvils["Craft 4 anvils"]
+    CraftAnvils --> Verify["Verify 4 anvils exist"]
+```
+
+### Why this generalizes to craftable items in 1.21.4
+
+For every normal craftable Minecraft `1.21.4` item, the shape of the problem is the same:
+
+```text
+desired output
+-> recipe
+-> ingredients
+-> ingredient sources
+-> prerequisite recipes
+-> execution
+-> verification
+```
+
+That means Belfegor does not need a unique hand-written "make an anvil" brain, a unique "make a composter" brain, and a unique "make a shovel" brain. It needs:
+
+- recipe data;
+- ingredient matching;
+- a source resolver;
+- reliable inventory transactions;
+- movement/gathering/smelting subtasks;
+- output verification.
+
+The same loop handles simple one-step crafts, such as sticks, and deeper crafts, such as anvils, tools, armor, workstations, and resource blocks. Complex items become large dependency graphs, but the planning method is the same.
+
+### Ingredient alternatives and tags
+
+Minecraft recipes often allow alternatives. A composter can be made from wooden slabs, but the slabs may be oak, spruce, birch, jungle, acacia, dark oak, mangrove, cherry, bamboo, crimson, or warped depending on the version and recipe tags. A strong planner should treat those as members of an ingredient group rather than as one exact item.
+
+Belfegor's intended recipe model is:
+
+```text
+ingredient slot
+-> exact item OR tag/group
+-> available matching stacks
+-> preferred stack choice
+```
+
+This is why composter-style bugs matter: if the bot has six oak slabs and one spruce slab, Minecraft may accept the mixture, but a naive exact-item planner may think it is missing one slab. The correct general solution is tag-aware ingredient matching. Once ingredient groups are normalized, the same recipe graph model applies cleanly across all craftable `1.21.4` items.
+
+### Shulkers inside the crafting plan
+
+Shulkers are treated as additional inventory pages. If a required ingredient is catalogued in a shulker, the planner should retrieve it before gathering new resources:
+
+```text
+need sticks
+-> check inventory
+-> check shulker memory
+-> place selected shulker
+-> verify no block above it
+-> open shulker
+-> withdraw sticks
+-> rescan contents
+-> close shulker
+-> mine and pick it back up
+-> resume original craft
+```
+
+This lets `@get diamond_shovel` use sticks already stored in a shulker instead of walking away to chop a tree. In the long-term model, shulkers are not side quests; they are first-class source nodes in the recipe dependency graph.
 
 ## Inventory correctness
 
@@ -211,7 +362,7 @@ Project-style experiments:
 | Shulker identity | NBT/slot/content matching can be imperfect. | Stronger fingerprints and labels. |
 | Server compatibility | Plugins/lag/anti-cheat can break assumptions. | More defensive timing and diagnostics. |
 | `@player` | Still a simple loop, not a human-level planner. | Scoring, semantic memory, modular base plans. |
-| Full catalogue | Recipe registry exists, but is not yet the main planner for all items. | Automated craftable-item dependency graph. |
+| Full catalogue | Recipe registry/planning exists conceptually, but needs stronger universal tag handling and blocked-item reporting. | Automated craftable-item dependency graph for all obtainable craftables. |
 
 ## Future: automate all craftable items
 
