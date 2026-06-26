@@ -208,7 +208,7 @@ The Belfegor UI is meant to make the agent inspectable while it works:
 - [Installation guide](docs/INSTALLATION.md)
 - [Full command reference](docs/COMMANDS.md)
 - [Shulker-box management](docs/SHULKER_MANAGEMENT.md)
-- [Beat-the-game and autonomous gameplay](docs/BEAT_THE_GAME.md)
+- [Beat-the-game, `@player`, and autonomous gameplay](docs/BEAT_THE_GAME.md)
 - [Settings and generated files](docs/CONFIGURATION.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
 - [Build and development guide](docs/DEVELOPMENT.md)
