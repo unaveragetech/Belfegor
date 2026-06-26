@@ -16,6 +16,14 @@ Belfegor creates a config directory in the active Minecraft instance:
 | `belfegor_butler_whitelist.txt` | Players allowed to command the bot by whisper when whitelist mode is enabled. |
 | `belfegor_butler_blacklist.txt` | Players blocked from Butler commands. |
 
+Butler also loads its own config from:
+
+```text
+configs/butler.json
+```
+
+For multiplayer, read [Butler and multiplayer guide](BUTLER_AND_SERVERS.md). The important safety point is that whitelist mode should be enabled before letting anyone command the bot on a public or semi-public server.
+
 ## Useful settings
 
 | Setting | Purpose |
