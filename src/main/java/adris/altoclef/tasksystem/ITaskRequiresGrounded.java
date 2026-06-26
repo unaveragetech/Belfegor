@@ -12,6 +12,7 @@ public interface ITaskRequiresGrounded extends ITaskCanForce {
     default boolean shouldForce(AltoClef mod, Task interruptingCandidate) {
         if (interruptingCandidate instanceof ITaskOverridesGrounded)
             return false;
+        if (mod.getPlayer() == null) return false;
         return !(mod.getPlayer().isOnGround() || mod.getPlayer().isSwimming() || mod.getPlayer().isTouchingWater() || mod.getPlayer().isClimbing());
     }
 }

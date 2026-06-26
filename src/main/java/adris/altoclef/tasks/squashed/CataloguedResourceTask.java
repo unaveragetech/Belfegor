@@ -27,7 +27,10 @@ public class CataloguedResourceTask extends ResourceTask {
 
         for (ItemTarget target : targets) {
             if (target != null) {
-                _tasksToComplete.add(TaskCatalogue.getItemTask(target));
+                ResourceTask task = TaskCatalogue.getItemTask(target);
+                if (task != null) {
+                    _tasksToComplete.add(task);
+                }
             }
         }
 

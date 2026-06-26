@@ -4,6 +4,7 @@ import adris.altoclef.AltoClef;
 import adris.altoclef.Debug;
 import adris.altoclef.tasksystem.TaskChain;
 import adris.altoclef.tasksystem.TaskRunner;
+import adris.altoclef.tasksystem.ITaskUsesCraftingGrid;
 import adris.altoclef.util.helpers.ItemHelper;
 import adris.altoclef.util.helpers.LookHelper;
 import adris.altoclef.util.helpers.StorageHelper;
@@ -15,6 +16,7 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.ChatScreen;
 import net.minecraft.client.gui.screen.DeathScreen;
 import net.minecraft.client.gui.screen.GameMenuScreen;
+import net.minecraft.client.gui.screen.ingame.InventoryScreen;
 import net.minecraft.client.gui.screen.Screen;
 import net.minecraft.item.ItemStack;
 import net.minecraft.screen.slot.SlotActionType;
@@ -88,6 +90,19 @@ public class PlayerInteractionFixChain extends TaskChain {
             }
         } else {
             _shiftDepressTimeout.reset();
+        }
+
+        // Crafting owns the cursor and crafting grid while its task tree is active.
+        // The recovery logic below cannot distinguish a deliberately held ingredient
+        // from a stuck cursor, so it must not refresh, move, or close crafting UIs.
+        var userTask = mod.getUserTaskChain().getCurrentTask();
+        boolean craftingActive = userTask != null
+                && userTask.thisOrChildSatisfies(task -> task instanceof ITaskUsesCraftingGrid);
+        if (craftingActive || StorageHelper.isPlayerInventoryOpen() || StorageHelper.isBigCraftingOpen()) {
+            _stackHeldTimeout.reset();
+            _lastHandStack = null;
+            _generalDuctTapeSwapTimeout.reset();
+            return Float.NEGATIVE_INFINITY;
         }
 
         // Refresh inventory
@@ -173,7 +188,8 @@ public class PlayerInteractionFixChain extends TaskChain {
             _mouseMovingButScreenOpenTimeout.reset();
         }
         // We're in the player screen/a screen we DON'T want to cancel out of
-        if (openScreen == null || openScreen instanceof ChatScreen || openScreen instanceof GameMenuScreen || openScreen instanceof DeathScreen) {
+        if (openScreen == null || openScreen instanceof ChatScreen || openScreen instanceof GameMenuScreen
+                || openScreen instanceof DeathScreen || openScreen instanceof InventoryScreen) {
             _mouseMovingButScreenOpenTimeout.reset();
             return false;
         }

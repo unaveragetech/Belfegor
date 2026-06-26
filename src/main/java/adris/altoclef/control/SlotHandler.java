@@ -2,6 +2,9 @@ package adris.altoclef.control;
 
 import adris.altoclef.AltoClef;
 import adris.altoclef.Debug;
+import adris.altoclef.debug.DebugLogger;
+import adris.altoclef.eventbus.EventBus;
+import adris.altoclef.eventbus.events.SlotClickChangedEvent;
 import adris.altoclef.util.ItemTarget;
 import adris.altoclef.util.helpers.ItemHelper;
 import adris.altoclef.util.helpers.StorageHelper;
@@ -15,6 +18,7 @@ import net.minecraft.item.*;
 import net.minecraft.screen.slot.SlotActionType;
 
 import java.util.List;
+import java.util.ArrayList;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Predicate;
@@ -27,8 +31,34 @@ public class SlotHandler {
     private final TimerGame _slotActionTimer = new TimerGame(0);
     private boolean _overrideTimerOnce = false;
 
+private int _clicksThisTick = 0;
+    private int _lastPlayerAge = Integer.MIN_VALUE;
+    private static final int MAX_CLICKS_PER_TICK = 10;
+
+    // Track consecutive clicks on the same slot to detect stuck loops.
+    // If the same slot is clicked 3+ times in a row with PICKUP, the cursor
+    // is likely stuck (pick up → put back → pick up → ...). Block further clicks.
+    private int _lastClickedSlot = -1;
+    private int _sameSlotClickCount = 0;
+    private static final int MAX_SAME_SLOT_CLICKS = 2;
+
     public SlotHandler(AltoClef mod) {
         _mod = mod;
+    }
+
+private boolean clickBudgetAvailable() {
+        int playerAge = _mod.getPlayer() == null ? Integer.MIN_VALUE : _mod.getPlayer().age;
+        if (playerAge != _lastPlayerAge) {
+            _lastPlayerAge = playerAge;
+            _clicksThisTick = 0;
+            _sameSlotClickCount = 0;
+            _lastClickedSlot = -1;
+        }
+        return _clicksThisTick < MAX_CLICKS_PER_TICK;
+    }
+
+    private void consumeClickBudget() {
+        _clicksThisTick++;
     }
 
     private void forceAllowNextSlotAction() {
@@ -50,22 +80,66 @@ public class SlotHandler {
     }
 
 
-    public void clickSlot(Slot slot, int mouseButton, SlotActionType type) {
-        if (!canDoSlotAction()) return;
+private boolean isSameSlotStuck(int windowSlot, SlotActionType type) {
+        if (type == SlotActionType.PICKUP && windowSlot >= 0 && windowSlot == _lastClickedSlot) {
+            _sameSlotClickCount++;
+            if (_sameSlotClickCount > MAX_SAME_SLOT_CLICKS) {
+                DebugLogger.getInstance().log("SLOT-STUCK", "Blocked click on slot " + windowSlot
+                        + " — clicked " + _sameSlotClickCount + " times in a row (cursor="
+                        + describeStack(StorageHelper.getItemStackInCursorSlot()) + ")");
+                return true;
+            }
+        } else {
+            _lastClickedSlot = windowSlot;
+            _sameSlotClickCount = 1;
+        }
+        return false;
+    }
 
-        if (slot.getWindowSlot() == -1) {
-            clickSlot(PlayerSlot.UNDEFINED, 0, SlotActionType.PICKUP);
+    public void clickSlot(Slot slot, int mouseButton, SlotActionType type) {
+        if (slot == null) {
             return;
         }
-        // NOT THE CASE! We may have something in the cursor slot to place.
-        //if (getItemStackInSlot(slot).isEmpty()) return getItemStackInSlot(slot);
+        int windowSlot = slot.getWindowSlot();
+        if (isSameSlotStuck(windowSlot, type)) {
+            return;
+        }
+        if (!clickBudgetAvailable()) {
+            return;
+        }
+        if (!canDoSlotAction()) {
+            DebugLogger.getInstance().slotClickBlocked("SlotHandler", slot.getWindowSlot(), type);
+            return;
+        }
 
-        clickWindowSlot(slot.getWindowSlot(), mouseButton, type);
+        ItemStack cursorBefore = StorageHelper.getItemStackInCursorSlot();
+        ItemStack slotBefore = windowSlot >= 0 ? StorageHelper.getItemStackInSlot(slot) : ItemStack.EMPTY;
+        DebugLogger.getInstance().slotClick("SlotHandler", slot.getWindowSlot(), mouseButton, type, cursorBefore, slotBefore);
+
+        consumeClickBudget();
+        clickWindowSlot(windowSlot, mouseButton, type);
     }
 
     public void clickSlotForce(Slot slot, int mouseButton, SlotActionType type) {
+        if (slot == null) {
+            return;
+        }
+        int windowSlot = slot.getWindowSlot();
+        if (isSameSlotStuck(windowSlot, type)) {
+            return;
+        }
+        if (!clickBudgetAvailable()) {
+            return;
+        }
+
+        ItemStack cursorBefore = StorageHelper.getItemStackInCursorSlot();
+        ItemStack slotBefore = windowSlot >= 0
+                ? StorageHelper.getItemStackInSlot(slot)
+                : ItemStack.EMPTY;
+        DebugLogger.getInstance().slotClickForce("SlotHandler", slot.getWindowSlot(), mouseButton, type, cursorBefore, slotBefore);
+
         forceAllowNextSlotAction();
-        clickSlot(slot, mouseButton, type);
+        clickWindowSlot(windowSlot, mouseButton, type);
     }
 
     private void clickWindowSlot(int windowSlot, int mouseButton, SlotActionType type) {
@@ -74,14 +148,56 @@ public class SlotHandler {
             return;
         }
         registerSlotAction();
-        int syncId = player.currentScreenHandler.syncId;
+        if (player.currentScreenHandler == null) return;
+        net.minecraft.screen.ScreenHandler handler = player.currentScreenHandler;
+        int syncId = handler.syncId;
+        List<ItemStack> beforeStacks = new ArrayList<>(handler.slots.size());
+        for (net.minecraft.screen.slot.Slot screenSlot : handler.slots) {
+            beforeStacks.add(screenSlot.getStack().copy());
+        }
 
         try {
+            // Persist the attempted click before entering Minecraft's handler. If a
+            // third-party mixin ever blocks inside the click again, the final log
+            // line will still identify the exact action instead of disappearing.
+            DebugLogger.getInstance().flush();
             _mod.getController().clickSlot(syncId, windowSlot, mouseButton, type, player);
+            DebugLogger.getInstance().log("SLOT-RESULT", "completed sync=" + syncId
+                    + " slot=" + windowSlot + " type=" + type
+                    + " cursor_after=" + describeStack(StorageHelper.getItemStackInCursorSlot())
+                    + " handler=" + describeHandler(player));
+            if (player.currentScreenHandler != handler) {
+                DebugLogger.getInstance().log("SLOT-RESULT", "handler changed during click from "
+                        + handler.getClass().getName() + " to " + describeHandler(player));
+                return;
+            }
+            for (int i = 0; i < beforeStacks.size() && i < handler.slots.size(); i++) {
+                ItemStack before = beforeStacks.get(i);
+                ItemStack after = handler.getSlot(i).getStack();
+                if (!ItemStack.areEqual(before, after)) {
+                    Slot changed = Slot.getFromCurrentScreen(i);
+                    if (changed != null) {
+                        EventBus.publish(new SlotClickChangedEvent(changed, before, after.copy()));
+                    }
+                }
+            }
         } catch (Exception e) {
             Debug.logWarning("Slot Click Error (ignored)");
             e.printStackTrace();
         }
+    }
+
+    private String describeStack(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) return "empty";
+        return stack.getCount() + "x" + stack.getItem().getTranslationKey();
+    }
+
+    private String describeHandler(ClientPlayerEntity player) {
+        if (player == null || player.currentScreenHandler == null) return "null";
+        var handler = player.currentScreenHandler;
+        return handler.getClass().getName() + "{sync=" + handler.syncId
+                + ",revision=" + handler.getRevision()
+                + ",slots=" + handler.slots.size() + "}";
     }
 
     public void forceEquipItemToOffhand(Item toEquip) {
@@ -105,6 +221,7 @@ public class SlotHandler {
         if (StorageHelper.getItemStackInSlot(PlayerSlot.getEquipSlot()).getItem() == toEquip) return true;
 
         // Always equip to the second slot. First + last is occupied by baritone.
+        if (_mod.getPlayer() == null) return false;
         _mod.getPlayer().getInventory().selectedSlot = 1;
 
         // If our item is in our cursor, simply move it to the hotbar.
@@ -221,6 +338,7 @@ public class SlotHandler {
         }
 
         Slot target = PlayerSlot.getEquipSlot();
+        if (target == null) return false;
         // Already equipped
         if (toEquip.matches(StorageHelper.getItemStackInSlot(target).getItem())) return true;
 
@@ -237,13 +355,31 @@ public class SlotHandler {
         return forceEquipItem(toEquip, false);
     }
 
-    public void refreshInventory() {
-        if (MinecraftClient.getInstance().player == null)
+public void refreshInventory() {
+        if (MinecraftClient.getInstance().player == null
+                || MinecraftClient.getInstance().currentScreen != null
+                || !StorageHelper.getItemStackInCursorSlot().isEmpty())
             return;
         for (int i = 0; i < MinecraftClient.getInstance().player.getInventory().main.size(); ++i) {
             Slot slot = Slot.getFromCurrentScreenInventory(i);
+            if (slot == null) continue;
+            ItemStack stack = StorageHelper.getItemStackInSlot(slot);
+            if (stack == null || stack.isEmpty()) continue;
+            // Reset same-slot guard before the pick-up-put-back pair
+            _lastClickedSlot = -1;
+            _sameSlotClickCount = 0;
             clickSlotForce(slot, 0, SlotActionType.PICKUP);
             clickSlotForce(slot, 0, SlotActionType.PICKUP);
         }
+    }
+
+    /**
+     * Reset the same-slot consecutive click counter.
+     * Call this when you intentionally need to click the same slot multiple times
+     * as part of a deliberate multi-click transaction (e.g., place one, place another).
+     */
+    public void resetSameSlotGuard() {
+        _lastClickedSlot = -1;
+        _sameSlotClickCount = 0;
     }
 }

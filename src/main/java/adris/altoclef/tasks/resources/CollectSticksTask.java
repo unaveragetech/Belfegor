@@ -18,6 +18,8 @@ import java.util.Optional;
 public class CollectSticksTask extends ResourceTask {
 
     private final int _targetCount;
+    private MineAndCollectTask _activeMineTask = null;
+    private CraftInInventoryTask _activeCraftTask = null;
 
     public CollectSticksTask(int targetCount) {
         super(Items.STICK, targetCount);
@@ -31,6 +33,8 @@ public class CollectSticksTask extends ResourceTask {
 
     @Override
     protected void onResourceStart(AltoClef mod) {
+        _activeMineTask = null;
+        _activeCraftTask = null;
         mod.getBehaviour().push();
         mod.getBlockTracker().trackBlock(Blocks.DEAD_BUSH);
     }
@@ -40,14 +44,24 @@ public class CollectSticksTask extends ResourceTask {
         Optional<BlockPos> nearestBush = mod.getBlockTracker().getNearestTracking(Blocks.DEAD_BUSH);
         // If there's a dead bush within range, go get it
         if (nearestBush.isPresent() && nearestBush.get().isWithinDistance(mod.getPlayer().getPos(), 20)) {
-            return new MineAndCollectTask(Items.DEAD_BUSH, 999999, new Block[]{Blocks.DEAD_BUSH}, MiningRequirement.HAND);
+            _activeCraftTask = null;
+            if (_activeMineTask == null) {
+                _activeMineTask = new MineAndCollectTask(Items.DEAD_BUSH, 999999, new Block[]{Blocks.DEAD_BUSH}, MiningRequirement.HAND);
+            }
+            return _activeMineTask;
         }
         // else craft from wood
-        return new CraftInInventoryTask(new RecipeTarget(Items.STICK, _targetCount, CraftingRecipe.newShapedRecipe("sticks", new ItemTarget[]{new ItemTarget("planks"), null, new ItemTarget("planks"), null}, 4)));
+        _activeMineTask = null;
+        if (_activeCraftTask == null) {
+            _activeCraftTask = new CraftInInventoryTask(new RecipeTarget(Items.STICK, _targetCount, CraftingRecipe.newShapedRecipe("sticks", new ItemTarget[]{new ItemTarget("planks"), null, new ItemTarget("planks"), null}, 4)));
+        }
+        return _activeCraftTask;
     }
 
     @Override
     protected void onResourceStop(AltoClef mod, Task interruptTask) {
+        _activeMineTask = null;
+        _activeCraftTask = null;
         mod.getBlockTracker().stopTracking(Blocks.DEAD_BUSH);
         mod.getBehaviour().pop();
     }

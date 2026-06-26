@@ -225,6 +225,51 @@ public class Arg<T> extends ArgBase {
     public boolean isArbitrarilyLong() {
         // Some arguments don't fit into individual "units".
         // I should _really_ rewrite this system...
-        return isInstanceOf(_tType, ItemList.class) || isInstanceOf(_tType, GotoTarget.class);
+        return _isArray || isInstanceOf(_tType, ItemList.class) || isInstanceOf(_tType, GotoTarget.class);
+    }
+
+    @Override
+    public String getName() {
+        return _name;
+    }
+
+    @Override
+    public String getTypeName() {
+        if (_tType == ItemList.class) return "item list";
+        if (_tType == GotoTarget.class) return "coordinates";
+        if (_tType.isEnum()) return "choice";
+        return _tType.getSimpleName().toLowerCase();
+    }
+
+    @Override
+    public String getExpectedValues() {
+        if (_tType == ItemList.class) {
+            return "item, item count, or [item count, item count]";
+        }
+        if (_tType == GotoTarget.class) {
+            return "x y z, x z, y, optionally followed by OVERWORLD/NETHER/END";
+        }
+        if (_tType.isEnum()) {
+            return java.util.Arrays.stream(_tType.getEnumConstants())
+                    .map(Object::toString)
+                    .collect(java.util.stream.Collectors.joining(" | "));
+        }
+        if (_tType == Integer.class || _tType == Long.class) return "Whole number";
+        if (_tType == Float.class || _tType == Double.class) return "Number";
+        if (_tType == String.class) return "Text; quote it when it contains spaces";
+        return "Valid " + getTypeName();
+    }
+
+    @Override
+    public String getExampleValue() {
+        if (hasDefault()) return String.valueOf(Default);
+        if (_tType == ItemList.class) return "diamond 3";
+        if (_tType == GotoTarget.class) return "100 64 -200";
+        if (_tType.isEnum() && _tType.getEnumConstants().length > 0) {
+            return _tType.getEnumConstants()[0].toString().toLowerCase();
+        }
+        if (_tType == Integer.class || _tType == Long.class) return "1";
+        if (_tType == Float.class || _tType == Double.class) return "1.0";
+        return _name.replace(' ', '_');
     }
 }

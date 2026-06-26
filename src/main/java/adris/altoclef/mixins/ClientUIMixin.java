@@ -17,6 +17,6 @@ public final class ClientUIMixin {
             at = @At("TAIL")
     )
     private void clientRender(DrawContext context, RenderTickCounter tickDelta, CallbackInfo ci) {
-        EventBus.publish(new ClientRenderEvent(context.getMatrices(), tickDelta));
+        EventBus.publish(new ClientRenderEvent(context, tickDelta));
     }
 }

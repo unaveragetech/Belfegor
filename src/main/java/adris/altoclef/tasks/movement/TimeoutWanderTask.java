@@ -90,12 +90,13 @@ public class TimeoutWanderTask extends Task implements ITaskRequiresGrounded {
     }
 
     private boolean isAnnoying(AltoClef mod, BlockPos pos) {
-        for (Block AnnoyingBlocks : annoyingBlocks) {
-            return mod.getWorld().getBlockState(pos).getBlock() == AnnoyingBlocks ||
-                    mod.getWorld().getBlockState(pos).getBlock() instanceof DoorBlock ||
-                    mod.getWorld().getBlockState(pos).getBlock() instanceof FenceBlock ||
-                    mod.getWorld().getBlockState(pos).getBlock() instanceof FenceGateBlock ||
-                    mod.getWorld().getBlockState(pos).getBlock() instanceof FlowerBlock;
+        if (mod.getWorld() == null) return false;
+        Block block = mod.getWorld().getBlockState(pos).getBlock();
+        for (Block annoyingBlock : annoyingBlocks) {
+            if (block == annoyingBlock || block instanceof DoorBlock || block instanceof FenceBlock
+                    || block instanceof FenceGateBlock || block instanceof FlowerBlock) {
+                return true;
+            }
         }
         return false;
     }
@@ -147,8 +148,6 @@ public class TimeoutWanderTask extends Task implements ITaskRequiresGrounded {
             // Try throwing away cursor slot if it's garbage
             garbage.ifPresent(slot -> mod.getSlotHandler().clickSlot(slot, 0, SlotActionType.PICKUP));
             mod.getSlotHandler().clickSlot(Slot.UNDEFINED, 0, SlotActionType.PICKUP);
-        } else {
-            StorageHelper.closeScreen();
         }
     }
 

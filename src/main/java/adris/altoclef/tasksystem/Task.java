@@ -2,6 +2,7 @@ package adris.altoclef.tasksystem;
 
 import adris.altoclef.AltoClef;
 import adris.altoclef.Debug;
+import adris.altoclef.debug.DebugLogger;
 import adris.altoclef.tasks.movement.TimeoutWanderTask;
 
 import java.util.function.Predicate;
@@ -23,6 +24,7 @@ public abstract class Task {
         parentChain.addTaskToChain(this);
         if (_first) {
             Debug.logInternal("Task START: " + this);
+            DebugLogger.getInstance().taskStart(toDebugString());
             _active = true;
             onStart(mod);
             _first = false;
@@ -55,9 +57,18 @@ public abstract class Task {
         } else {
             // We are null
             if (_sub != null && canBeInterrupted(mod, _sub, null)) {
-                // Our previous sub must be interrupted.
-                _sub.stop(mod);
-                _sub = null;
+                // Don't clear a forced subtask that returns null but is still active.
+                // ShulkerInteractionTask returns null during transfer/catalog phases
+                // while it manipulates the open screen — clearing it would lose phase
+                // progress and cause the parent to spawn a fresh restart on the next tick.
+                boolean subStillActive = _sub.isActive()
+                        && !_sub.isFinished(mod)
+                        && !_sub.stopped()
+                        && _sub.thisOrChildSatisfies(t -> t instanceof ITaskCanForce f && f.shouldForce(mod, null));
+                if (!subStillActive) {
+                    _sub.stop(mod);
+                    _sub = null;
+                }
             }
         }
     }
@@ -78,6 +89,7 @@ public abstract class Task {
     public void stop(AltoClef mod, Task interruptTask) {
         if (!_active) return;
         Debug.logInternal("Task STOP: " + this + ", interrupted by " + interruptTask);
+        DebugLogger.getInstance().taskStop(toDebugString(), interruptTask != null ? interruptTask.toDebugString() : "clean");
         if (!_first) {
             onStop(mod, interruptTask);
         }
@@ -100,6 +112,7 @@ public abstract class Task {
      */
     public void interrupt(AltoClef mod, Task interruptTask) {
         if (!_active) return;
+        DebugLogger.getInstance().taskInterrupt(toDebugString(), interruptTask != null ? interruptTask.toDebugString() : "null");
         if (!_first) {
             onStop(mod, interruptTask);
         }

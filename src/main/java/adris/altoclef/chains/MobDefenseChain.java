@@ -14,7 +14,7 @@ import adris.altoclef.util.baritone.CachedProjectile;
 import adris.altoclef.util.helpers.*;
 import adris.altoclef.util.slots.PlayerSlot;
 import adris.altoclef.util.slots.Slot;
-import baritone.Baritone;
+import baritone.api.IBaritone;
 import baritone.api.utils.Rotation;
 import baritone.api.utils.input.Input;
 import net.minecraft.block.AbstractFireBlock;
@@ -48,9 +48,11 @@ import static java.lang.Math.abs;
 public class MobDefenseChain extends SingleTaskChain {
     private static final double DANGER_KEEP_DISTANCE = 30;
     private static final double CREEPER_KEEP_DISTANCE = 10;
-    private static final double ARROW_KEEP_DISTANCE_HORIZONTAL = 2;//4;
-    private static final double ARROW_KEEP_DISTANCE_VERTICAL = 10;//15;
+    private static final double ARROW_KEEP_DISTANCE_HORIZONTAL = 2;
+    private static final double ARROW_KEEP_DISTANCE_VERTICAL = 10;
     private static final double SAFE_KEEP_DISTANCE = 8;
+    private static final Item[] SWORDS = new Item[]{Items.NETHERITE_SWORD, Items.DIAMOND_SWORD, Items.IRON_SWORD, Items.GOLDEN_SWORD,
+            Items.STONE_SWORD, Items.WOODEN_SWORD};
     private static boolean _shielding = false;
     private final DragonBreathTracker _dragonBreathTracker = new DragonBreathTracker();
     private final KillAura _killAura = new KillAura();
@@ -78,7 +80,7 @@ public class MobDefenseChain extends SingleTaskChain {
         _shielding = true;
         mod.getInputControls().hold(Input.SNEAK);
         mod.getInputControls().hold(Input.CLICK_RIGHT);
-        mod.getClientBaritone().getPathingBehavior().requestPause();
+        BaritoneCompat.requestPause(mod.getClientBaritone().getPathingBehavior());
         mod.getExtraBaritoneSettings().setInteractionPaused(true);
         if (!mod.getPlayer().isBlocking()) {
             ItemStack handItem = StorageHelper.getItemStackInSlot(PlayerSlot.getEquipSlot());
@@ -185,7 +187,7 @@ public class MobDefenseChain extends SingleTaskChain {
         _doingFunkyStuff = false;
         PlayerSlot offhandSlot = PlayerSlot.OFFHAND_SLOT;
         Item offhandItem = StorageHelper.getItemStackInSlot(offhandSlot).getItem();
-        ItemStack offhandItemStack = new ItemStack(offhandItem, 1);
+        ItemStack offhandItemStack = new ItemStack(offhandItem);
         // Run away from creepers
         CreeperEntity blowingUp = getClosestFusingCreeper(mod);
         if (blowingUp != null) {
@@ -193,7 +195,7 @@ public class MobDefenseChain extends SingleTaskChain {
                     mod.getItemStorage().hasItemInOffhand(Items.SHIELD)) &&
                     !mod.getEntityTracker().entityFound(PotionEntity.class) && _runAwayTask == null
                     && !mod.getPlayer().getItemCooldownManager().isCoolingDown(offhandItemStack)
-                    && mod.getClientBaritone().getPathingBehavior().isSafeToCancel()) {
+                    && BaritoneCompat.isSafeToCancel(mod.getClientBaritone().getPathingBehavior())) {
                 _doingFunkyStuff = true;
                 LookHelper.lookAt(mod, blowingUp.getEyePos());
                 ItemStack shieldSlot = StorageHelper.getItemStackInSlot(PlayerSlot.OFFHAND_SLOT);
@@ -219,7 +221,7 @@ public class MobDefenseChain extends SingleTaskChain {
                 (mod.getItemStorage().hasItem(Items.SHIELD) || mod.getItemStorage().hasItemInOffhand(Items.SHIELD)) &&
                 !mod.getEntityTracker().entityFound(PotionEntity.class) && _runAwayTask == null
                 && !mod.getPlayer().getItemCooldownManager().isCoolingDown(offhandItemStack)
-                && mod.getClientBaritone().getPathingBehavior().isSafeToCancel()) {
+                && BaritoneCompat.isSafeToCancel(mod.getClientBaritone().getPathingBehavior())) {
             ItemStack shieldSlot = StorageHelper.getItemStackInSlot(PlayerSlot.OFFHAND_SLOT);
             if (shieldSlot.getItem() != Items.SHIELD) {
                 mod.getSlotHandler().forceEquipItemToOffhand(Items.SHIELD);
@@ -257,8 +259,6 @@ public class MobDefenseChain extends SingleTaskChain {
             // TODO: I don't think this lock is necessary at all.
 
             SwordItem bestSword = null;
-            Item[] SWORDS = new Item[]{Items.NETHERITE_SWORD, Items.DIAMOND_SWORD, Items.IRON_SWORD, Items.GOLDEN_SWORD,
-                    Items.STONE_SWORD, Items.WOODEN_SWORD};
             for (Item item : SWORDS) {
                 if (mod.getItemStorage().hasItem(item)) {
                     bestSword = (SwordItem) item;
@@ -346,6 +346,7 @@ public class MobDefenseChain extends SingleTaskChain {
     }
 
     private BlockPos isInsideFireAndOnFire(AltoClef mod) {
+        if (mod.getPlayer() == null) return null;
         boolean onFire = mod.getPlayer().isOnFire();
         if (!onFire) return null;
         BlockPos p = mod.getPlayer().getBlockPos();
@@ -361,6 +362,7 @@ public class MobDefenseChain extends SingleTaskChain {
                 p.add(1, 0, 1)
         };
         for (BlockPos check : toCheck) {
+            if (mod.getWorld() == null) return null;
             Block b = mod.getWorld().getBlockState(check).getBlock();
             if (b instanceof AbstractFireBlock) {
                 return check;
@@ -372,9 +374,9 @@ public class MobDefenseChain extends SingleTaskChain {
     private void putOutFire(AltoClef mod, BlockPos pos) {
         Optional<Rotation> reach = LookHelper.getReach(pos);
         if (reach.isPresent()) {
-            Baritone b = mod.getClientBaritone();
+            IBaritone b = mod.getClientBaritone();
             if (LookHelper.isLookingAt(mod, pos)) {
-                b.getPathingBehavior().requestPause();
+                BaritoneCompat.requestPause(b.getPathingBehavior());
                 b.getInputOverrideHandler().setInputForceState(Input.CLICK_LEFT, true);
                 return;
             }
@@ -462,8 +464,8 @@ public class MobDefenseChain extends SingleTaskChain {
                             Optional<Entity> ghastBall = mod.getEntityTracker().getClosestEntity(FireballEntity.class);
                             Optional<Entity> ghast = mod.getEntityTracker().getClosestEntity(GhastEntity.class);
                             if (ghastBall.isPresent() && ghast.isPresent() && _runAwayTask == null
-                                    && mod.getClientBaritone().getPathingBehavior().isSafeToCancel()) {
-                                mod.getClientBaritone().getPathingBehavior().requestPause();
+                                    && BaritoneCompat.isSafeToCancel(mod.getClientBaritone().getPathingBehavior())) {
+                                BaritoneCompat.requestPause(mod.getClientBaritone().getPathingBehavior());
                                 LookHelper.lookAt(mod, ghast.get().getEyePos());
                             }
                             return false;
@@ -494,10 +496,10 @@ public class MobDefenseChain extends SingleTaskChain {
                         double horizontalDistanceSq = delta.x * delta.x + delta.z * delta.z;
                         double verticalDistance = abs(delta.y);
                         if (horizontalDistanceSq < ARROW_KEEP_DISTANCE_HORIZONTAL * ARROW_KEEP_DISTANCE_HORIZONTAL && verticalDistance < ARROW_KEEP_DISTANCE_VERTICAL) {
-                            if (_runAwayTask == null && mod.getClientBaritone().getPathingBehavior().isSafeToCancel()) {
-                                mod.getClientBaritone().getPathingBehavior().requestPause();
-                                if (projectile.projectileType instanceof ProjectileEntity projectileEntity) {
-                                    Entity owner = projectileEntity.getOwner();
+                            if (_runAwayTask == null && BaritoneCompat.isSafeToCancel(mod.getClientBaritone().getPathingBehavior())) {
+                                BaritoneCompat.requestPause(mod.getClientBaritone().getPathingBehavior());
+                                {
+                                    Entity owner = null;
                                     if (owner != null) {
                                         LookHelper.lookAt(mod, owner.getEyePos());
                                         return true;
@@ -505,8 +507,6 @@ public class MobDefenseChain extends SingleTaskChain {
                                     LookHelper.lookAt(mod, projectile.position);
                                     return true;
                                 }
-                                LookHelper.lookAt(mod, projectile.position);
-                                return true;
                             }
                             return true;
                         }
@@ -576,6 +576,7 @@ public class MobDefenseChain extends SingleTaskChain {
     }
 
     private boolean isInDanger(AltoClef mod) {
+        if (mod.getPlayer() == null) return false;
         Optional<Entity> witch = mod.getEntityTracker().getClosestEntity(WitchEntity.class);
         boolean hasFood = mod.getFoodChain().hasFood();
         float health = mod.getPlayer().getHealth();
@@ -608,6 +609,7 @@ public class MobDefenseChain extends SingleTaskChain {
     }
 
     private boolean isVulnurable(AltoClef mod) {
+        if (mod.getPlayer() == null) return false;
         int armor = mod.getPlayer().getArmor();
         float health = mod.getPlayer().getHealth();
         if (armor <= 15 && health < 3) return true;

@@ -181,7 +181,7 @@ public class FoodChain extends SingleTaskChain {
             return false;
         }
         ClientPlayerEntity player = MinecraftClient.getInstance().player;
-        assert player != null;
+        if (player == null) return false;
         int foodLevel = player.getHungerManager().getFoodLevel();
         float health = player.getHealth();
 
@@ -238,8 +238,7 @@ public class FoodChain extends SingleTaskChain {
                 }
 
                 FoodComponent food = stack.getItem().getComponents().get(DataComponentTypes.FOOD);
-
-                assert food != null;
+                if (food == null) continue;
                 float hungerIfEaten = Math.min(hunger + food.nutrition(), 20);
                 float saturationIfEaten = Math.min(hungerIfEaten, saturation + food.saturation());
                 float gainedSaturation = (saturationIfEaten - saturation);
@@ -265,7 +264,7 @@ public class FoodChain extends SingleTaskChain {
                     bestFood = stack.getItem();
                 }
 
-                foodTotal += Objects.requireNonNull(stack.getItem().getComponents().get(DataComponentTypes.FOOD)).nutrition() * stack.getCount();
+                foodTotal += (stack.getItem().getComponents().get(DataComponentTypes.FOOD) != null ? Objects.requireNonNull(stack.getItem().getComponents().get(DataComponentTypes.FOOD)).nutrition() : 0) * stack.getCount();
             }
         }
 

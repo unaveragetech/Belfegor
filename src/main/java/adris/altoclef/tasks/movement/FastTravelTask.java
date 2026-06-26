@@ -7,6 +7,7 @@ import adris.altoclef.tasks.speedrun.MarvionBeatMinecraftTask;
 import adris.altoclef.tasksystem.Task;
 import adris.altoclef.util.Dimension;
 import adris.altoclef.util.ItemTarget;
+import adris.altoclef.util.helpers.BaritoneCompat;
 import adris.altoclef.util.helpers.WorldHelper;
 import adris.altoclef.util.time.TimerGame;
 import net.minecraft.client.MinecraftClient;
@@ -135,7 +136,7 @@ public class FastTravelTask extends Task {
                 }
 
                 if (WorldHelper.inRangeXZ(mod.getPlayer(), netherTarget, IN_NETHER_CLOSE_ENOUGH_THRESHOLD) &&
-                        mod.getClientBaritone().getPathingBehavior().isSafeToCancel()) {
+                        BaritoneCompat.isSafeToCancel(mod.getClientBaritone().getPathingBehavior())) {
                     // If we're precisely at our target XZ or if we've tried long enough
                     if ((mod.getPlayer().getBlockX() == netherTarget.getX() && mod.getPlayer().getBlockZ() == netherTarget.getZ()) || _attemptToMoveToIdealNetherCoordinateTimeout.elapsed()) {
                         return _goToOverworldTask;

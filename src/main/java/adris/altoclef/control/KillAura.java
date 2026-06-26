@@ -1,6 +1,7 @@
 package adris.altoclef.control;
 
 import adris.altoclef.AltoClef;
+import adris.altoclef.util.helpers.BaritoneCompat;
 import adris.altoclef.util.helpers.LookHelper;
 import adris.altoclef.util.helpers.StlHelper;
 import adris.altoclef.util.helpers.StorageHelper;
@@ -81,6 +82,7 @@ public class KillAura {
     }
 
     public void tickEnd(AltoClef mod) {
+        if (mod.getPlayer() == null) return;
         Optional<Entity> entities = _targets.stream().min(StlHelper.compareValues(entity -> entity.squaredDistanceTo(mod.getPlayer())));
         if (entities.isPresent() && mod.getPlayer().getHealth() >= 10 &&
                 !mod.getEntityTracker().entityFound(PotionEntity.class) && !mod.getFoodChain().needsToEat() &&
@@ -96,7 +98,7 @@ public class KillAura {
                     entities.get().getClass() != WitherEntity.class
                     && (mod.getItemStorage().hasItem(Items.SHIELD) || mod.getItemStorage().hasItemInOffhand(Items.SHIELD))
                     && !mod.getPlayer().getItemCooldownManager().isCoolingDown(offhandItemStack)
-                    && mod.getClientBaritone().getPathingBehavior().isSafeToCancel()) {
+                    && BaritoneCompat.isSafeToCancel(mod.getClientBaritone().getPathingBehavior())) {
                 LookHelper.lookAt(mod, entities.get().getEyePos());
                 ItemStack shieldSlot = StorageHelper.getItemStackInSlot(PlayerSlot.OFFHAND_SLOT);
                 if (shieldSlot.getItem() != Items.SHIELD) {
@@ -158,6 +160,7 @@ public class KillAura {
                 return;
             }
 
+            if (mod.getPlayer() == null) return;
             Optional<Entity> toHit = _targets.stream().min(StlHelper.compareValues(entity -> entity.squaredDistanceTo(mod.getPlayer())));
 
             if (mod.getPlayer() == null || mod.getPlayer().getAttackCooldownProgress(0) < 1) {
@@ -184,6 +187,7 @@ public class KillAura {
 
     private void attack(AltoClef mod, Entity entity, boolean equipSword) {
         if (entity == null) return;
+        if (mod.getPlayer() == null) return;
         if (!(entity instanceof FireballEntity)) {
             LookHelper.lookAt(mod, entity.getEyePos());
         }
@@ -209,10 +213,11 @@ public class KillAura {
     }
 
     public void startShielding(AltoClef mod) {
+        if (mod.getPlayer() == null) return;
         _shielding = true;
         mod.getInputControls().hold(Input.SNEAK);
         mod.getInputControls().hold(Input.CLICK_RIGHT);
-        mod.getClientBaritone().getPathingBehavior().requestPause();
+        BaritoneCompat.requestPause(mod.getClientBaritone().getPathingBehavior());
         mod.getExtraBaritoneSettings().setInteractionPaused(true);
         if (!mod.getPlayer().isBlocking()) {
             ItemStack handItem = StorageHelper.getItemStackInSlot(PlayerSlot.getEquipSlot());

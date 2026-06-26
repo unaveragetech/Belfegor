@@ -4,6 +4,7 @@ import adris.altoclef.AltoClef;
 import adris.altoclef.Debug;
 import adris.altoclef.eventbus.EventBus;
 import adris.altoclef.eventbus.events.BlockPlaceEvent;
+import adris.altoclef.memory.LocationMemory;
 import adris.altoclef.trackers.blacklisting.WorldLocateBlacklist;
 import adris.altoclef.util.Dimension;
 import adris.altoclef.util.helpers.BaritoneHelper;
@@ -11,10 +12,8 @@ import adris.altoclef.util.helpers.ConfigHelper;
 import adris.altoclef.util.helpers.StlHelper;
 import adris.altoclef.util.helpers.WorldHelper;
 import adris.altoclef.util.time.TimerGame;
-import baritone.Baritone;
+import adris.altoclef.util.helpers.BaritoneCompat;
 import baritone.api.utils.BlockOptionalMetaLookup;
-import baritone.pathing.movement.CalculationContext;
-import baritone.process.MineProcess;
 import net.minecraft.block.Block;
 import net.minecraft.block.BlockState;
 import net.minecraft.client.MinecraftClient;
@@ -23,6 +22,7 @@ import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Vec3d;
 
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Semaphore;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
@@ -301,27 +301,26 @@ public class BlockTracker extends Tracker {
         // Perform a baritone scan
         _timer.reset();
         _timer.setInterval(_config.scanInterval);
-        CalculationContext ctx = new CalculationContext(_mod.getClientBaritone(), _config.scanAsynchronously);
         if (_config.scanAsynchronously) {
             if (_scanning && _asyncForceResetScanFlag.elapsed()) {
                 Debug.logMessage("SCANNING TOOK TOO LONG! Will assume it ended mid way. Hopefully this won't break anything...");
                 _scanning = false;
             }
             if (!_scanning) {
-                Baritone.getExecutor().execute(() -> {
+                CompletableFuture.runAsync(() -> {
                     _scanning = true;
                     _asyncForceResetScanFlag.reset();
-                    rescanWorld(ctx, true);
+                    rescanWorld(true);
                     _scanning = false;
                 });
             }
         } else {
             // Synchronous scanning.
-            rescanWorld(ctx, false);
+            rescanWorld(false);
         }
     }
 
-    private void rescanWorld(CalculationContext ctx, boolean async) {
+    private void rescanWorld(boolean async) {
         Block[] blocksToScan;
         if (async) {
             // Wait for end of frame
@@ -336,7 +335,9 @@ public class BlockTracker extends Tracker {
             }
         }
         synchronized (_trackingBlocks) {
-            Debug.logInternal("Rescanning world for " + _trackingBlocks.size() + " blocks... Hopefully not dummy slow.");
+            if (_trackingBlocks.size() > 1) {
+                Debug.logInternal("Rescanning world for " + _trackingBlocks.size() + " blocks...");
+            }
             blocksToScan = new Block[_trackingBlocks.size()];
             _trackingBlocks.keySet().toArray(blocksToScan);
         }
@@ -360,7 +361,7 @@ public class BlockTracker extends Tracker {
 
         // The scanning may run asynchronously.
         BlockOptionalMetaLookup boml = new BlockOptionalMetaLookup(blocksToScan);
-        List<BlockPos> found = MineProcess.searchWorld(ctx, boml, _config.maxCacheSizePerBlockType, Collections.emptyList(), Collections.emptyList(), Collections.emptyList());
+        List<BlockPos> found = BaritoneCompat.searchWorld(MinecraftClient.getInstance().world, boml, _config.maxCacheSizePerBlockType);
 
         synchronized (_scanMutex) {
             if (MinecraftClient.getInstance().world != null) {
@@ -369,8 +370,10 @@ public class BlockTracker extends Tracker {
                         Block block = MinecraftClient.getInstance().world.getBlockState(pos).getBlock();
                         synchronized (_trackingBlocks) {
                             if (_trackingBlocks.containsKey(block)) {
-                                //Debug.logInternal("Good: " + block + " at " + pos);
                                 currentCache().addBlock(block, pos);
+                                String blockName = net.minecraft.registry.Registries.BLOCK.getId(block).getPath();
+                                _mod.getMemory().remember("resource:" + blockName, pos.getX(), pos.getY(), pos.getZ(),
+                                        _mod.getWorld().getRegistryKey().getValue().toString(), blockName);
                             }
                         }
                     }
@@ -552,7 +555,6 @@ public class BlockTracker extends Tracker {
         // Gets nearest block. For now does linear search. In the future might optimize this a bit
         public Optional<BlockPos> getNearest(AltoClef mod, Vec3d position, Predicate<BlockPos> isValid, Block... blocks) {
             if (!anyFound(blocks)) {
-                //Debug.logInternal("(failed cataloguecheck for " + block.getTranslationKey() + ")");
                 return Optional.empty();
             }
 
@@ -566,14 +568,15 @@ public class BlockTracker extends Tracker {
             boolean closestPurged = false;
             if (!blockList.isEmpty()) {
                 for (BlockPos pos : blockList) {
-                    // If our current block isn't valid, fix it up. This cleans while we're iterating.
                     if (!mod.getBlockTracker().blockIsValid(pos, blocks)) {
                         removeBlock(pos, blocks);
                         continue;
                     }
                     if (!isValid.test(pos)) continue;
 
-                    double score = BaritoneHelper.calculateGenericHeuristic(position, WorldHelper.toVec3d(pos));
+                    double euclideanDist = position.squaredDistanceTo(WorldHelper.toVec3d(pos));
+                    double pathfindingCost = BaritoneHelper.calculateGenericHeuristic(position, WorldHelper.toVec3d(pos));
+                    double score = Math.min(euclideanDist, pathfindingCost * 0.5);
 
                     boolean currentlyClosest = false;
                     boolean purged = false;

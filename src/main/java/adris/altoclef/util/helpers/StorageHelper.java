@@ -13,12 +13,13 @@ import adris.altoclef.util.slots.CraftingTableSlot;
 import adris.altoclef.util.slots.CursorSlot;
 import adris.altoclef.util.slots.PlayerSlot;
 import adris.altoclef.util.slots.Slot;
-import baritone.utils.ToolSet;
+import adris.altoclef.util.helpers.BaritoneCompat;
 import net.minecraft.block.BlockState;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.ChatScreen;
 import net.minecraft.client.gui.screen.GameMenuScreen;
 import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.gui.screen.ingame.InventoryScreen;
 import net.minecraft.client.gui.screen.option.GameOptionsScreen;
 import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.component.DataComponentTypes;
@@ -50,7 +51,8 @@ public class StorageHelper {
                 screen != null &&
                         !(screen instanceof GameMenuScreen) &&
                         !(screen instanceof GameOptionsScreen) &&
-                        !(screen instanceof ChatScreen)) {
+                        !(screen instanceof ChatScreen) &&
+                        !(screen instanceof adris.altoclef.ui.AltoclefScreen)) {
             // Close the screen if we're in-game
             MinecraftClient.getInstance().player.closeHandledScreen();
         }
@@ -58,11 +60,16 @@ public class StorageHelper {
 
     public static ItemStack getItemStackInSlot(Slot slot) {
         ClientPlayerEntity player = MinecraftClient.getInstance().player;
-        if (player == null)
+        if (player == null || slot == null)
             return ItemStack.EMPTY;
         // Cursor slot
         if (Slot.isCursor(slot)) {
             return StorageHelper.getItemStackInCursorSlot();
+        }
+        // Negative window slots are protocol actions (for example -999 means
+        // click outside the window), not readable inventory slots.
+        if (slot.getWindowSlot() < 0) {
+            return ItemStack.EMPTY;
         }
         // Inventory slot when inventory is NOT open
         PlayerInventory inv = player.getInventory();
@@ -80,6 +87,8 @@ public class StorageHelper {
         }
         try {
             // We might have messed up and opened the wrong slot.
+            if (player.currentScreenHandler == null)
+                return ItemStack.EMPTY;
             net.minecraft.screen.slot.Slot mcSlot = player.currentScreenHandler.getSlot(slot.getWindowSlot());
             return (mcSlot != null) ? mcSlot.getStack() : ItemStack.EMPTY;
         } catch (Exception e) {
@@ -149,7 +158,7 @@ public class StorageHelper {
                 ItemStack stack = getItemStackInSlot(slot);
                 if (ToolIdentifier.isTool(stack.getName().toString().toLowerCase())) {
                     if (stack.isSuitableFor(state)) {
-                        double speed = ToolSet.calculateSpeedVsBlock(stack, state);
+                        double speed = BaritoneCompat.calculateSpeedVsBlock(stack, state);
                         if (speed > highestSpeed) {
                             highestSpeed = speed;
                             bestToolSlot = slot;
@@ -366,7 +375,11 @@ public class StorageHelper {
     }
 
     public static boolean isPlayerInventoryOpen() {
-        return isScreenOpenInner(screen -> screen instanceof PlayerScreenHandler);
+        // The player inventory screen is only "open" when an InventoryScreen is actually visible.
+        // PlayerScreenHandler is the DEFAULT screen handler — it's always active even when
+        // no screen is open. Checking just currentScreenHandler gives false positives.
+        return MinecraftClient.getInstance().currentScreen instanceof InventoryScreen
+                && isScreenOpenInner(screen -> screen instanceof PlayerScreenHandler);
     }
 
     public static boolean isFurnaceOpen() {
@@ -509,7 +522,7 @@ public class StorageHelper {
         }
         // Consider Cursor slot only if we have our player inventory open AND we're not crafting it...
         if (StorageHelper.isPlayerInventoryOpen() && withItem.matches(getItemStackInCursorSlot().getItem())) {
-            if (!mod.getUserTaskChain().getCurrentTask().thisOrChildSatisfies(task -> {
+            if (mod.getUserTaskChain().getCurrentTask() == null || !mod.getUserTaskChain().getCurrentTask().thisOrChildSatisfies(task -> {
                 if (task instanceof CraftInInventoryTask invCraft) {
                     return withItem.matches(invCraft.getRecipeTarget().getOutputItem());
                 }

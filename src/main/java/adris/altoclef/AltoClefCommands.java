@@ -37,9 +37,14 @@ public class AltoClefCommands {
                 new ListCommand(),
                 new CoverWithSandCommand(),
                 new CoverWithBlocksCommand(),
-                new SelfCareCommand()
-                //new TestMoveInventoryCommand(),
-                //    new TestSwapInventoryCommand()
+                new SelfCareCommand(),
+                new PvpCommand(),
+                new StackedCommand(),
+                new PlayerCommand(),
+                new ToolSetCommand(),
+                new StoreCommand(),
+                new RetrieveCommand(),
+                new ShulkerCommand()
         );
     }
 }

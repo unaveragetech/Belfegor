@@ -56,4 +56,26 @@ public abstract class Command {
     public String getDescription() {
         return _description;
     }
+
+    public ArgBase[] getArguments() {
+        return parser.getArgs().clone();
+    }
+
+    public String getExampleRepresentation(String prefix) {
+        StringBuilder result = new StringBuilder(prefix).append(_name);
+        for (ArgBase arg : parser.getArgs()) {
+            if (arg.hasDefault()) continue;
+            result.append(' ').append(arg.getExampleValue());
+        }
+        return result.toString();
+    }
+
+    public java.util.List<String> getExamples() {
+        return adris.altoclef.commandsystem.CommandDocumentation.examplesFor(_name);
+    }
+
+    public String getDetailedDescription() {
+        return adris.altoclef.commandsystem.CommandDocumentation.detailsFor(
+                _name, _description);
+    }
 }

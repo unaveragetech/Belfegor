@@ -41,7 +41,9 @@ public class PlayerSlot extends Slot {
     public static Slot getEquipSlot(EquipmentSlot equipSlot) {
         switch (equipSlot) {
             case MAINHAND:
-                assert MinecraftClient.getInstance().player != null;
+                if (MinecraftClient.getInstance().player == null) {
+                    return new PlayerSlot(0);
+                }
                 return Slot.getFromCurrentScreenInventory(MinecraftClient.getInstance().player.getInventory().selectedSlot);
             case OFFHAND:
                 return OFFHAND_SLOT;
@@ -54,7 +56,7 @@ public class PlayerSlot extends Slot {
             case HEAD:
                 return ARMOR_HELMET_SLOT;
         }
-        return null;
+        return new PlayerSlot(0);
     }
 
     public static Slot getEquipSlot() {

@@ -21,6 +21,17 @@ public abstract class AbstractDoToClosestObjectTask<T> extends Task {
     private boolean _wasWandering;
     private Task _goalTask = null;
 
+    // Cooldown: don't switch targets more than once per N ticks
+    private int _switchCooldownTicks = 0;
+    private static final int SWITCH_COOLDOWN = 20; // 1 second between switches
+
+    // Distance threshold: switch if new target is within this fraction of current distance.
+    // 0.75 = switch if new target is at least 25% closer than current.
+    private static final double DISTANCE_SWITCH_FACTOR = 0.5625; // 0.75^2 for squared distance
+
+    // Locked: when true, don't switch targets at all (e.g. actively mining)
+    private boolean _locked = false;
+
     protected abstract Vec3d getPos(AltoClef mod, T obj);
 
     protected abstract Optional<T> getClosestTo(AltoClef mod, Vec3d pos);
@@ -40,10 +51,30 @@ public abstract class AbstractDoToClosestObjectTask<T> extends Task {
         _currentlyPursuing = null;
         _heuristicMap.clear();
         _goalTask = null;
+        _locked = false;
+        _switchCooldownTicks = 0;
     }
 
     public boolean wasWandering() {
         return _wasWandering;
+    }
+
+    /**
+     * Lock the current target so the bot sticks to it until mining is complete.
+     */
+    protected void lockTarget() {
+        _locked = true;
+    }
+
+    /**
+     * Unlock so the bot can switch targets again.
+     */
+    protected void unlockTarget() {
+        _locked = false;
+    }
+
+    protected boolean isTargetLocked() {
+        return _locked;
     }
 
     private double getCurrentCalculatedHeuristic(AltoClef mod) {
@@ -52,7 +83,7 @@ public abstract class AbstractDoToClosestObjectTask<T> extends Task {
     }
 
     private boolean isMovingToClosestPos(AltoClef mod) {
-        return _goalTask != null;// && _goalTask.isActive() && !_goalTask.isFinished(mod);
+        return _goalTask != null;
     }
 
     @Override
@@ -60,58 +91,66 @@ public abstract class AbstractDoToClosestObjectTask<T> extends Task {
 
         _wasWandering = false;
 
+        // Decrement switch cooldown
+        if (_switchCooldownTicks > 0) {
+            _switchCooldownTicks--;
+        }
+
         // Reset our pursuit if our pursuing object no longer is pursuable.
         if (_currentlyPursuing != null && !isValid(mod, _currentlyPursuing)) {
-            // This is probably a good idea, no?
             _heuristicMap.remove(_currentlyPursuing);
             _currentlyPursuing = null;
+            _locked = false;
         }
 
         // Get closest object
         Optional<T> checkNewClosest = getClosestTo(mod, getOriginPos(mod));
 
         // Receive closest object and position
+        // DON'T switch targets if locked or on cooldown
         if (checkNewClosest.isPresent() && !checkNewClosest.get().equals(_currentlyPursuing)) {
-            T newClosest = checkNewClosest.get();
-            // Different closest object
-            if (_currentlyPursuing == null) {
-                // We don't have a closest object
-                _currentlyPursuing = newClosest;
-            } else {
-                if (isMovingToClosestPos(mod)) {
-                    setDebugState("Moving towards closest...");
-                    double currentHeuristic = getCurrentCalculatedHeuristic(mod);
-                    double closestDistanceSqr = getPos(mod, _currentlyPursuing).squaredDistanceTo(mod.getPlayer().getPos());
-                    int lastTick = WorldHelper.getTicks();
+            if (!_locked && _switchCooldownTicks <= 0) {
+                T newClosest = checkNewClosest.get();
+                // Different closest object
+                if (_currentlyPursuing == null) {
+                    _currentlyPursuing = newClosest;
+                } else {
+                    if (isMovingToClosestPos(mod)) {
+                        setDebugState("Moving towards closest...");
+                        double currentHeuristic = getCurrentCalculatedHeuristic(mod);
+                        double closestDistanceSqr = getPos(mod, _currentlyPursuing).squaredDistanceTo(mod.getPlayer().getPos());
+                        int lastTick = WorldHelper.getTicks();
 
-                    if (!_heuristicMap.containsKey(_currentlyPursuing)) {
-                        _heuristicMap.put(_currentlyPursuing, new CachedHeuristic());
-                    }
-                    CachedHeuristic h = _heuristicMap.get(_currentlyPursuing);
-                    h.updateHeuristic(currentHeuristic);
-                    h.updateDistance(closestDistanceSqr);
-                    h.setTickAttempted(lastTick);
-                    if (_heuristicMap.containsKey(newClosest)) {
-                        // Our new object has a past potential heuristic calculated, if it's better try it out.
-                        CachedHeuristic maybeReAttempt = _heuristicMap.get(newClosest);
-                        double maybeClosestDistance = getPos(mod, newClosest).squaredDistanceTo(mod.getPlayer().getPos());
-                        // Get considerably closer (divide distance by 2)
-                        if (maybeReAttempt.getHeuristicValue() < h.getHeuristicValue() || maybeClosestDistance < maybeReAttempt.getClosestDistanceSqr() / 4) {
-                            setDebugState("Retrying old heuristic!");
-                            // The currently closest previously calculated heuristic is better, move towards it!
-                            _currentlyPursuing = newClosest;
-                            // In theory, this next line shouldn't need to be run,
-                            // but it's CRITICAL to making this work for some reason
-                            maybeReAttempt.updateDistance(maybeClosestDistance);
+                        if (!_heuristicMap.containsKey(_currentlyPursuing)) {
+                            _heuristicMap.put(_currentlyPursuing, new CachedHeuristic());
+                        }
+                        CachedHeuristic h = _heuristicMap.get(_currentlyPursuing);
+                        h.updateHeuristic(currentHeuristic);
+                        h.updateDistance(closestDistanceSqr);
+                        h.setTickAttempted(lastTick);
+                        if (_heuristicMap.containsKey(newClosest)) {
+                            CachedHeuristic maybeReAttempt = _heuristicMap.get(newClosest);
+                            double maybeClosestDistance = getPos(mod, newClosest).squaredDistanceTo(mod.getPlayer().getPos());
+                            // Switch if new target is closer (better heuristic AND within distance factor)
+                            if (maybeReAttempt.getHeuristicValue() < h.getHeuristicValue()
+                                    && maybeClosestDistance < maybeReAttempt.getClosestDistanceSqr() * DISTANCE_SWITCH_FACTOR) {
+                                setDebugState("Retrying old heuristic!");
+                                _currentlyPursuing = newClosest;
+                                maybeReAttempt.updateDistance(maybeClosestDistance);
+                                _switchCooldownTicks = SWITCH_COOLDOWN;
+                            }
+                        } else {
+                            // New object with no history — switch if meaningfully closer
+                            double newDistanceSqr = getPos(mod, newClosest).squaredDistanceTo(mod.getPlayer().getPos());
+                            if (newDistanceSqr < closestDistanceSqr * DISTANCE_SWITCH_FACTOR) {
+                                setDebugState("Trying out NEW pursuit (much closer)");
+                                _currentlyPursuing = newClosest;
+                                _switchCooldownTicks = SWITCH_COOLDOWN;
+                            }
                         }
                     } else {
-                        setDebugState("Trying out NEW pursuit");
-                        // Our new object does not have a heuristic, TRY IT OUT!
-                        _currentlyPursuing = newClosest;
+                        setDebugState("Waiting for move task to kick in...");
                     }
-                } else {
-                    setDebugState("Waiting for move task to kick in...");
-                    // We should keep moving towards our object until we get some new info.
                 }
             }
         }

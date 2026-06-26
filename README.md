@@ -1,73 +1,133 @@
-# altoclef
+# Belfegor
 
-Plays block game.
+Belfegor is a Fabric client-side Minecraft automation mod for **Minecraft 1.21.4**. It is a production-focused fork and evolution of AltoClef/Baritone-style task automation with stronger inventory handling, safer crafting, managed shulker-box sub-inventories, PvP loadout automation, an in-game command UI, persistent memory, and better debug logs for diagnosing hard inventory/crafting failures.
 
-Powered by Baritone.
+The goal is simple: give a Minecraft client an extensible task system that can gather resources, craft items, manage storage, survive, travel, and execute higher-level routines from compact commands such as `@get diamond_shovel`, `@stacked`, `@shulker store diamond 3`, or `@player`.
 
-A client side bot that can accomplish any Minecraft task that is relatively simple and can be split into smaller
-tasks. "Relatively Simple" is a vague term, so check the list of current capabilities to see examples.
+## Current release
 
-Became [the first bot to beat Minecraft fully autonomously](https://youtu.be/baAa6s8tahA) on May 24, 2021.
+- Minecraft: `1.21.4`
+- Mod version: `1.21.4-beta1`
+- Built jar: [`releases/belfegor-1.21.4-beta1.jar`](releases/belfegor-1.21.4-beta1.jar)
+- Jar SHA256: `C3B24C02E960F059686D1B779B998F6680413945424A153BF97684DD775D85F1`
+- Mod id: `belfegor`
+- Default command prefix: `@`
+- In-game UI key: `C`
+- Global abort key while a task is running: `+`
 
-**Join the [Discord Server](https://discord.gg/JdFP4Kqdqc)** for discussions/updates/goofs & gaffs
+## What Belfegor does
+
+Belfegor runs a stack of Minecraft automation tasks:
+
+- Gets resources and crafted items with `@get`, including multi-step recipes.
+- Crafts in the player inventory and crafting tables with cursor recovery and transaction guards.
+- Uses containers and carried shulker boxes as extended storage.
+- Catalogs shulker contents and can retrieve needed crafting supplies from them.
+- Sorts non-tool inventory items into shulkers in automatic timer or detection modes.
+- Runs PvP preparation commands such as `@stacked`, `@toolset`, and `@pvp`.
+- Provides `@player`, an autonomous exploration/learning mode that sets a home base, builds a small campsite, gathers resources, practices crafts, and uses shulkers as sub-inventories.
+- Exposes a richer `C` UI with task state, command help, settings, logs, and shulker memory.
+- Writes detailed debug logs for inventory/crafting/shulker problems.
 
 ## How it works
 
-Take a look at this [Guide from the wiki](https://github.com/gaucho-matrero/altoclef/wiki/1:-Documentation:-Big-Picture)
-or this [Video explanation](https://youtu.be/q5OmcinQ2ck?t=387)
+Belfegor is built around composable tasks:
 
-## Current capabilities, Examples:
+1. A command parses user intent, for example `@get diamond_shovel`.
+2. The task catalogue resolves the requested item into a resource/crafting task.
+3. Resource tasks prefer nearby dropped items, inventory, carried shulkers, remembered containers, then mining/crafting.
+4. Crafting tasks collect missing recipe materials, open the correct grid, move ingredients, receive output, and recover the cursor.
+5. Shulker transactions place a carried shulker, ensure the block above is open, transfer exact quantities, catalog contents twice, close it, mine it, pick it up, and restore it to its original inventory slot when possible.
+6. Memory systems persist useful state such as shulker contents, learned crafting paths, and home-base locations.
 
-- Obtain 400+ Items from a fresh survival world, like diamond armor, cake, and nether brick stairs
-- Dodge mob projectiles and force field mobs away while accomplishing arbitrary tasks
-- Collect + smelt food from animals, hay, & crops
-- Receive commands from chat whispers via /msg. Whitelist + Blacklist configurable (hereby dubbed the Butler System).
-  Here's
-  a [Butler system demo video](https://drive.google.com/file/d/1axVYYMJ5VjmVHaWlCifFHTwiXlFssOUc/view?usp=sharing)
-- Simple config file that can be reloaded via command (check .minecraft directory)
-- Beat the entire game on its own (no user input.)
-- Print the entire bee movie script with signs in a straight line, automatically collecting signs + bridging materials
-  along the way.
-- Become the terminator: Run away from players while unarmed, gather diamond gear in secret, then return and wreak
-  havoc.
+The key design rule is that inventory transactions should be atomic: once Belfegor starts moving items in a shulker/container/crafting UI, other tasks should not interrupt it mid-click and leave the cursor stuck.
 
-## Download
+## Install
 
-**Note:** After installing, please move/delete your old baritone configurations if you have any. Preexisting baritone
-configurations will interfere with altoclef and introduce bugs. This will be fixed in the future.
+1. Install Fabric Loader for Minecraft `1.21.4`.
+2. Install Fabric API for Minecraft `1.21.4`.
+3. Put [`releases/belfegor-1.21.4-beta1.jar`](releases/belfegor-1.21.4-beta1.jar) in your `.minecraft/mods` folder.
+4. Ensure your environment has the compatible Baritone/Fabric API setup used by this project.
+5. Launch Minecraft once. Belfegor creates its config folder at:
 
-### Nightly Release (Recommended) (has the latest bug fixes)
+   ```text
+   .minecraft/belfegor/
+   ```
 
-Start by downloading [the Latest Long Term Release](https://github.com/gaucho-matrero/altoclef/releases),
-then [Download the Nightly](https://nightly.link/gaucho-matrero/altoclef/workflows/gradle/main/Artifacts.zip) &
-replace `altoclef-4.0-SNAPSHOT.jar`.
+Important generated files:
 
-If the Nightly Link doesn't work, check the latest [Build Action](https://github.com/gaucho-matrero/altoclef/actions)
-that succeeded and download `Artifacts.zip` (you must be signed into GitHub). Replace your
-existing `altoclef-4.0-SNAPSHOT.jar` with the one found in `Artifacts.zip`
+- `belfegor_settings.json` — user settings.
+- `belfegor_debug.log` — detailed runtime diagnostics.
+- `belfegor_shulker_memory.json` — remembered shulker-box contents.
 
-### Long Term Release
+## Quick start
 
-[Check releases](https://github.com/gaucho-matrero/altoclef/releases). Note you will need to copy over both jar files
-for the mod to work.
+Open chat and run commands with `@`:
 
-### Meloweh's Extra Features Release (Unofficial)
+```text
+@help
+@help shulker
+@get crafting_table
+@get diamond_shovel
+@toolset iron
+@stacked
+@shulker list
+@shulker store diamond 3
+@shulker retrieve stick 8
+@shulker auto on
+@player
+@stop
+```
 
-Has some schematic support, command macros and a few utility features. Will eventually be merged, but if you can try it
-out now if you'd like:
+Press `C` to open the Belfegor UI. The command tab includes real examples that can be run by double-clicking them.
 
-- [AltoClef jar](https://github.com/Meloweh/altoclef/releases)
-- [Baritone jar](https://github.com/Meloweh/baritone/releases)
+Press `+` while a task is running to globally abort the active automation.
 
-### Versions
+## Documentation
 
-This is a **fabric only** mod, currently only available for **Minecraft 1.21.4**.
+- [Full command reference](docs/COMMANDS.md)
+- [Shulker-box management](docs/SHULKER_MANAGEMENT.md)
+- [Settings and generated files](docs/CONFIGURATION.md)
+- [Build and development guide](docs/DEVELOPMENT.md)
+- [Roadmap](docs/ROADMAP.md)
 
-For older MC versions, try [multiconnect](https://www.curseforge.com/minecraft/mc-mods/multiconnect) (NOTE: multiconnect
-is untested and not affiliated with altoclef, use at your own risk!)
+## Production assets
 
-## [Usage Guide](usage.md)
+- Built jar: [`releases/belfegor-1.21.4-beta1.jar`](releases/belfegor-1.21.4-beta1.jar)
+- Mod icon: [`src/main/resources/assets/belfegor/icon.png`](src/main/resources/assets/belfegor/icon.png)
+- Fabric metadata: [`src/main/resources/fabric.mod.json`](src/main/resources/fabric.mod.json)
+- Mixin config: [`src/main/resources/belfegor.mixins.json`](src/main/resources/belfegor.mixins.json)
+- Recipe registry data: [`src/main/resources/belfegor_recipes.json`](src/main/resources/belfegor_recipes.json)
 
-## [TODO's/Future Features](todos.md)
+## Build
 
-## [Development Guide](develop.md)
+Requirements:
+
+- Java 21
+- Gradle wrapper from this repo
+- Minecraft/Fabric dependencies from `gradle.properties`
+- Local Baritone API jar at `../baritone/dist/baritone-api.jar` for development builds
+
+Build:
+
+```powershell
+.\gradlew.bat build
+```
+
+The remapped jar is produced at:
+
+```text
+build/libs/belfegor-1.21.4-beta1.jar
+```
+
+## Project status
+
+Belfegor is beta software. Core command execution, resource gathering, crafting, UI, shulker storage, and PvP preparation are active. The hardest ongoing area is Minecraft inventory correctness: cursor state, slot mappings, screen transitions, shulker NBT, container sync, and task interruption. The current code includes extensive debug logging to make those failures diagnosable.
+
+## Credits
+
+Belfegor builds on the AltoClef-style Minecraft automation architecture and Baritone pathing concepts, with additional Belfegor-specific work around Minecraft `1.21.4`, managed shulkers, UI, crafting stability, PvP tooling, autonomous player mode, and debugging.
+
+## License
+
+MIT. See [LICENSE](LICENSE).

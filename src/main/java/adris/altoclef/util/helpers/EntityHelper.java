@@ -72,7 +72,10 @@ public class EntityHelper {
      */
     public static double calculateResultingPlayerDamage(PlayerEntity player, DamageSource source, double damageAmount) {
         // Copied logic from `PlayerEntity.applyDamage`
-        ServerWorld serverWorld = ((MinecraftServer) MinecraftClient.getInstance().getServer()).getOverworld();
+        MinecraftServer server = MinecraftClient.getInstance().getServer();
+        if (server == null)
+            return 0;
+        ServerWorld serverWorld = server.getOverworld();
         if (player.isInvulnerableTo(serverWorld, source))
             return 0;
 

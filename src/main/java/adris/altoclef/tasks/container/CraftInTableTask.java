@@ -2,37 +2,28 @@ package adris.altoclef.tasks.container;
 
 import adris.altoclef.AltoClef;
 import adris.altoclef.tasks.CraftGenericManuallyTask;
-import adris.altoclef.tasks.CraftInInventoryTask;
 import adris.altoclef.tasks.ResourceTask;
+import adris.altoclef.tasks.construction.DestroyBlockTask;
 import adris.altoclef.tasks.movement.TimeoutWanderTask;
 import adris.altoclef.tasks.resources.CollectRecipeCataloguedResourcesTask;
-import adris.altoclef.tasks.slot.MoveInaccessibleItemToInventoryTask;
 import adris.altoclef.tasks.slot.ReceiveCraftingOutputSlotTask;
+import adris.altoclef.tasksystem.ITaskUsesCraftingGrid;
 import adris.altoclef.tasksystem.Task;
 import adris.altoclef.util.ItemTarget;
 import adris.altoclef.util.RecipeTarget;
 import adris.altoclef.util.helpers.ItemHelper;
 import adris.altoclef.util.helpers.StorageHelper;
-import adris.altoclef.util.slots.PlayerSlot;
 import adris.altoclef.util.slots.Slot;
 import adris.altoclef.util.time.TimerGame;
+import adris.altoclef.memory.CraftingMemory;
+import adris.altoclef.memory.LocationMemory;
+import adris.altoclef.tasksystem.CraftingPathRegistry;
 import net.minecraft.block.Blocks;
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
-import net.minecraft.recipe.RecipeEntry;
 import net.minecraft.screen.CraftingScreenHandler;
 import net.minecraft.screen.slot.SlotActionType;
 import net.minecraft.util.math.BlockPos;
-
-
-import net.minecraft.client.MinecraftClient;
-import net.minecraft.client.recipebook.ClientRecipeBook;
-import net.minecraft.recipe.Recipe;
-import net.minecraft.recipe.RecipeManager;
-import net.minecraft.client.network.ClientPlayNetworkHandler;
-import net.minecraft.util.Identifier;
 
 
 
@@ -84,7 +75,7 @@ public class CraftInTableTask extends ResourceTask {
      */
     @Override
     protected boolean shouldAvoidPickingUp(AltoClef mod) {
-        return false;
+        return true;
     }
 
     /**
@@ -117,32 +108,17 @@ public class CraftInTableTask extends ResourceTask {
      */
     @Override
     protected void onResourceStop(AltoClef mod, Task interruptTask) {
-        // Get the item stack in the cursor slot.
         ItemStack cursorStack = StorageHelper.getItemStackInCursorSlot();
-
-        // If the cursor stack is not empty, handle it.
         if (!cursorStack.isEmpty()) {
-            // Find a slot in the player inventory that can fit the cursor stack.
             Optional<Slot> moveToSlot = mod.getItemStorage().getSlotThatCanFitInPlayerInventory(cursorStack, false);
-
-            // If a slot is found, pick up the item from the cursor slot and move it to the found slot.
-            moveToSlot.ifPresent(slot -> mod.getSlotHandler().clickSlot(slot, 0, SlotActionType.PICKUP));
-
-            // If the item can be thrown away, pick up the item from the cursor slot and throw it away.
-            if (ItemHelper.canThrowAwayStack(mod, cursorStack)) {
-                mod.getSlotHandler().clickSlot(Slot.UNDEFINED, 0, SlotActionType.PICKUP);
+            if (moveToSlot.isPresent()) {
+                // One bounded recovery click. Never cascade through several fallback
+                // clicks during task interruption; later clicks may use a new screen.
+                mod.getSlotHandler().clickSlotForce(moveToSlot.get(), 0, SlotActionType.PICKUP);
+                return;
             }
-
-            // Find the garbage slot and move the item from the cursor slot to the garbage slot.
-            Optional<Slot> garbageSlot = StorageHelper.getGarbageSlot(mod);
-            garbageSlot.ifPresent(slot -> mod.getSlotHandler().clickSlot(slot, 0, SlotActionType.PICKUP));
-        } else {
-            // If the cursor stack is empty, close the screen.
-            StorageHelper.closeScreen();
         }
-
-        // Pick up an undefined slot.
-        mod.getSlotHandler().clickSlot(Slot.UNDEFINED, 0, SlotActionType.PICKUP);
+        StorageHelper.closeScreen();
     }
 
     /**
@@ -185,7 +161,7 @@ public class CraftInTableTask extends ResourceTask {
 }
 
 
-class DoCraftInTableTask extends DoStuffInContainerTask {
+class DoCraftInTableTask extends DoStuffInContainerTask implements ITaskUsesCraftingGrid {
 
     private final float CRAFT_RESET_TIMER_BONUS_SECONDS = 10;
 
@@ -196,12 +172,23 @@ class DoCraftInTableTask extends DoStuffInContainerTask {
     private final CollectRecipeCataloguedResourcesTask _collectTask;
     private final TimerGame _craftResetTimer = new TimerGame(CRAFT_RESET_TIMER_BONUS_SECONDS);
     private int _craftCount;
+    private long _startTimeMs = 0;
+    // Cache the active craft task so it persists across ticks.
+    // Creating a new CraftGenericManuallyTask every tick resets its InventoryManager state.
+    private CraftGenericManuallyTask _cachedCraftTask = null;
+    private RecipeTarget _cachedCraftTarget = null;
+    // When true, the crafting table was placed by the bot and should be
+    // broken and collected after crafting is complete so the bot carries
+    // it instead of walking back to a fixed location every time.
+    private boolean _shouldPickupTable = false;
+    private DestroyBlockTask _pickupTableTask = null;
 
     public DoCraftInTableTask(RecipeTarget[] targets, boolean collect, boolean ignoreUncataloguedSlots) {
         super(Blocks.CRAFTING_TABLE, new ItemTarget("crafting_table"));
         _collectTask = new CollectRecipeCataloguedResourcesTask(ignoreUncataloguedSlots, targets);
         _targets = targets;
         _collect = collect;
+        _startTimeMs = System.currentTimeMillis();
     }
 
     public DoCraftInTableTask(RecipeTarget[] targets) {
@@ -222,6 +209,11 @@ class DoCraftInTableTask extends DoStuffInContainerTask {
         // Save the current behaviour and craft count
         mod.getBehaviour().push();
         _craftCount = 0;
+        _cachedCraftTask = null;
+        _cachedCraftTarget = null;
+
+        // Protect crafting materials from being placed as blocks
+        mod.getBehaviour().addPlacementProtectedItems(getMaterialsArray());
 
         // Check if there is an item in the cursor slot
         ItemStack cursorStack = StorageHelper.getItemStackInCursorSlot();
@@ -242,10 +234,9 @@ class DoCraftInTableTask extends DoStuffInContainerTask {
 
             // Clear the cursor slot
             mod.getSlotHandler().clickSlot(Slot.UNDEFINED, 0, SlotActionType.PICKUP);
-        } else {
-            // Close the screen if there is no item in the cursor slot
-            StorageHelper.closeScreen();
         }
+        // NOTE: Do NOT close screen here - parent task manages screen lifecycle.
+        // Closing here causes the crafting table to close every time the task restarts.
 
         // Reset the collect task
         _collectTask.reset();
@@ -260,36 +251,38 @@ class DoCraftInTableTask extends DoStuffInContainerTask {
      */
     @Override
     protected void onStop(AltoClef mod, Task interruptTask) {
-        // Get the item stack in the cursor slot
-        ItemStack cursorStack = StorageHelper.getItemStackInCursorSlot();
-
-        // If the cursor stack is empty, close the screen
-        if (cursorStack.isEmpty()) {
-            StorageHelper.closeScreen();
-        } else {
-            // Get a slot that can fit the cursor stack
-            Optional<Slot> moveToSlot = mod.getItemStorage().getSlotThatCanFitInPlayerInventory(cursorStack, false);
-
-            // If a slot is found, move the cursor stack to that slot
-            moveToSlot.ifPresent(slot -> mod.getSlotHandler().clickSlot(slot, 0, SlotActionType.PICKUP));
-
-            // If the cursor stack can be thrown away, throw it away
-            if (ItemHelper.canThrowAwayStack(mod, cursorStack)) {
-                mod.getSlotHandler().clickSlot(Slot.UNDEFINED, 0, SlotActionType.PICKUP);
+        // Record crafting attempt in memory
+        if (_startTimeMs > 0) {
+            double elapsedSeconds = (System.currentTimeMillis() - _startTimeMs) / 1000.0;
+            for (RecipeTarget target : _targets) {
+                String itemName = target.getOutputItem().getName().getString();
+                if (mod.getItemStorage().getItemCount(target.getOutputItem()) >= target.getTargetCount()) {
+                    CraftingMemory.getInstance().recordSuccess(itemName, elapsedSeconds);
+                    CraftingMemory.getInstance().recordStep(itemName,
+                            new CraftingMemory.Step("craft_table", itemName, target.getTargetCount()));
+                    CraftingPathRegistry.getInstance().recordSuccess(itemName, "craft_table");
+                } else {
+                    CraftingMemory.getInstance().recordFailure(itemName);
+                    CraftingPathRegistry.getInstance().recordFailure(itemName, "craft_table");
+                }
             }
-
-            // Get the garbage slot
-            Optional<Slot> garbageSlot = StorageHelper.getGarbageSlot(mod);
-
-            // If a garbage slot is found, move the cursor stack to that slot
-            garbageSlot.ifPresent(slot -> mod.getSlotHandler().clickSlot(slot, 0, SlotActionType.PICKUP));
-
-            // Move the cursor stack to an undefined slot
-            mod.getSlotHandler().clickSlot(Slot.UNDEFINED, 0, SlotActionType.PICKUP);
         }
+
+        ItemStack cursorStack = StorageHelper.getItemStackInCursorSlot();
+        if (!cursorStack.isEmpty()) {
+            Optional<Slot> moveToSlot = mod.getItemStorage().getSlotThatCanFitInPlayerInventory(cursorStack, false);
+            moveToSlot.ifPresent(slot -> mod.getSlotHandler().clickSlotForce(slot, 0, SlotActionType.PICKUP));
+        }
+        StorageHelper.closeScreen();
 
         // Call the onStop method of the super class
         super.onStop(mod, interruptTask);
+
+        // Record crafting table location in LocationMemory if we used one
+        if (_cachedContainerPosition != null) {
+            LocationMemory.getInstance().forget("crafting_table",
+                    _cachedContainerPosition.getX(), _cachedContainerPosition.getY(), _cachedContainerPosition.getZ());
+        }
 
         // Pop the behaviour from the stack
         mod.getBehaviour().pop();
@@ -304,26 +297,28 @@ class DoCraftInTableTask extends DoStuffInContainerTask {
     @Override
     protected Task onTick(AltoClef mod) {
         // Add protected items to the behaviour
-        mod.getBehaviour().addProtectedItems(getMaterialsArray());
+        Item[] materials = getMaterialsArray();
+        mod.getBehaviour().addProtectedItems(materials);
+        // Also prevent these from being placed as blocks (reserved for crafting)
+        mod.getBehaviour().addPlacementProtectedItems(materials);
 
-        // Avoid breaking crafting tables
-        if (mod.getBlockTracker().isTracking(Blocks.CRAFTING_TABLE)) {
+        // Avoid breaking crafting tables while we're using them,
+        // UNLESS we're done and want to pick up the table
+        if (_shouldPickupTable) {
+            // Don't protect the table — we want to break it
+        } else if (mod.getBlockTracker().isTracking(Blocks.CRAFTING_TABLE)) {
             Optional<BlockPos> craftingTable = mod.getBlockTracker().getNearestTracking(Blocks.CRAFTING_TABLE);
             craftingTable.ifPresent(blockPos -> mod.getBehaviour().avoidBlockBreaking(blockPos));
         }
-        // Check if the player inventory is open and the cursor slot is empty
-        if (StorageHelper.isPlayerInventoryOpen() && StorageHelper.getItemStackInCursorSlot().isEmpty()) {
-            // Get the item in the craft output slot
-            Item outputItem = StorageHelper.getItemStackInSlot(PlayerSlot.CRAFT_OUTPUT_SLOT).getItem();
-            // Check if the output item matches any of the targets and the target count is not reached
-            for (RecipeTarget target : _targets) {
-                if (target.getOutputItem() == outputItem && mod.getItemStorage().getItemCount(target.getOutputItem()) < target.getTargetCount()) {
-                    return new ReceiveCraftingOutputSlotTask(PlayerSlot.CRAFT_OUTPUT_SLOT, target.getTargetCount());
-                }
-            }
+
+        // Track whether the bot placed the table (so we can pick it up later)
+        if (_placeTask != null && _placeTask.getPlaced() != null) {
+            _shouldPickupTable = true;
         }
 
-        // Check if we need to collect items and the collect task is not finished
+        // Check if we need to collect items and the collect task is not finished.
+        // This handles: gathering materials, crafting intermediate items (planks, sticks),
+        // and even crafting the crafting table itself if none exists.
         if (_collect && !_collectTask.isFinished(mod) && !StorageHelper.hasRecipeMaterialsOrTarget(mod, _targets)) {
             return _collectTask;
         }
@@ -331,21 +326,11 @@ class DoCraftInTableTask extends DoStuffInContainerTask {
         // Reset the craft reset timer if the container is not open
         if (!isContainerOpen(mod)) {
             _craftResetTimer.reset();
+            _cachedCraftTask = null;
+            _cachedCraftTarget = null;
         }
 
-        // Check if there is any inaccessible item in the recipes and move it to the inventory
-        if (!thisOrChildSatisfies(task -> task instanceof CraftInInventoryTask)) {
-            for (RecipeTarget target : _targets) {
-                for (int slot = 0; slot < target.getRecipe().getSlotCount(); ++slot) {
-                    ItemTarget toCheck = target.getRecipe().getSlot(slot);
-                    if (StorageHelper.isItemInaccessibleToContainer(mod, toCheck)) {
-                        return new MoveInaccessibleItemToInventoryTask(toCheck);
-                    }
-                }
-            }
-        }
-
-        // Call the parent method
+        // Call the parent method — this handles walking to / placing / opening the crafting table
         return super.onTick(mod);
     }
 
@@ -390,8 +375,13 @@ class DoCraftInTableTask extends DoStuffInContainerTask {
         float interval = mod.getModSettings().getContainerItemMoveDelay() * 10 + CRAFT_RESET_TIMER_BONUS_SECONDS;
         _craftResetTimer.setInterval(interval);
 
-        // If the craft reset timer has elapsed, return a TimeoutWanderTask
-        if (_craftResetTimer.elapsed()) {
+        // Only use the table-open timeout before a manual craft has begun.
+        // CraftGenericManuallyTask has its own inventory-progress watchdog; timing
+        // out here during a valid multi-material craft closes the 3x3 screen and
+        // leaves its cached child running against the player 2x2 grid.
+        if (_cachedCraftTask == null && _craftResetTimer.elapsed()) {
+            _cachedCraftTask = null;
+            _cachedCraftTarget = null;
             return new TimeoutWanderTask(5);
         }
 
@@ -399,18 +389,47 @@ class DoCraftInTableTask extends DoStuffInContainerTask {
         for (RecipeTarget target : _targets) {
             // Check if the output item count meets the target count
             if (mod.getItemStorage().getItemCount(target.getOutputItem()) >= target.getTargetCount()) {
+                // This target is done, clear cache if it was for this target
+                if (_cachedCraftTarget == target) {
+                    _cachedCraftTask = null;
+                    _cachedCraftTarget = null;
+                }
                 continue;
             }
 
-            // Get the recipe to send based on the target recipe and output item
+            // Reuse cached task if it's for the same target and still active
+            if (_cachedCraftTask != null && _cachedCraftTarget == target) {
+                _craftResetTimer.reset();
+                return _cachedCraftTask;
+            }
 
-            // Get the client player entity
-            ClientPlayerEntity player = MinecraftClient.getInstance().player;
-
-            // Return a CraftGenericManuallyTask by default
-            return new CraftGenericManuallyTask(target);
+            // Create and cache a new craft task
+            _cachedCraftTarget = target;
+            _cachedCraftTask = new CraftGenericManuallyTask(target);
+            _craftResetTimer.reset();
+            return _cachedCraftTask;
         }
 
+        // All targets are crafted — close the screen, then break and collect the table
+        _cachedCraftTask = null;
+        _cachedCraftTarget = null;
+        if (isContainerOpen(mod)) {
+            StorageHelper.closeScreen();
+        }
+        // Always break the crafting table when done so the bot carries it.
+        // This prevents the bot from walking back to a fixed table location
+        // every time it needs to craft, greatly reducing travel time.
+        BlockPos tablePos = _cachedContainerPosition;
+        if (tablePos == null && _placeTask != null && _placeTask.getPlaced() != null) {
+            tablePos = _placeTask.getPlaced();
+        }
+        if (tablePos != null && mod.getWorld().getBlockState(tablePos).getBlock() == Blocks.CRAFTING_TABLE) {
+            if (_pickupTableTask == null || _pickupTableTask.stopped()) {
+                _pickupTableTask = new DestroyBlockTask(tablePos);
+            }
+            _shouldPickupTable = true;
+            return _pickupTableTask;
+        }
         return null;
     }
 
@@ -422,8 +441,10 @@ class DoCraftInTableTask extends DoStuffInContainerTask {
      */
     @Override
     public boolean isFinished(AltoClef mod) {
-        // Check if the craft count is greater than or equal to the number of targets
-        return _craftCount >= _targets.length;
+        return Arrays.stream(_targets).allMatch(target ->
+                mod.getItemStorage().getItemCountInventoryOnly(target.getOutputItem())
+                        >= target.getTargetCount())
+                && StorageHelper.getItemStackInCursorSlot().isEmpty();
     }
 
     /**

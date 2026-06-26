@@ -4,6 +4,7 @@ import adris.altoclef.AltoClef;
 import adris.altoclef.Debug;
 import adris.altoclef.tasksystem.ITaskRequiresGrounded;
 import adris.altoclef.tasksystem.Task;
+import adris.altoclef.util.helpers.BaritoneCompat;
 import adris.altoclef.util.helpers.WorldHelper;
 import adris.altoclef.util.progresscheck.MovementProgressChecker;
 import baritone.api.pathing.goals.Goal;
@@ -104,9 +105,8 @@ public abstract class CustomBaritoneGoalTask extends Task implements ITaskRequir
 
     @Override
     protected Task onTick(AltoClef mod) {
-        if (mod.getClientBaritone().getPathingBehavior().isPathing()) {
-            _checker.reset();
-        }
+        // REMOVED: was resetting checker every tick while pathing, preventing progress accumulation
+        // The checker now accumulates progress naturally while pathing
         if (WorldHelper.isInNetherPortal(mod)) {
             if (!mod.getClientBaritone().getPathingBehavior().isPathing()) {
                 setDebugState("Getting out from nether portal");
@@ -161,7 +161,7 @@ public abstract class CustomBaritoneGoalTask extends Task implements ITaskRequir
             }
         }
         if (!mod.getClientBaritone().getCustomGoalProcess().isActive()
-                && mod.getClientBaritone().getPathingBehavior().isSafeToCancel()) {
+                && BaritoneCompat.isSafeToCancel(mod.getClientBaritone().getPathingBehavior())) {
             mod.getClientBaritone().getCustomGoalProcess().setGoalAndPath(_cachedGoal);
         }
         setDebugState("Completing goal.");

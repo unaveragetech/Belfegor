@@ -52,12 +52,12 @@ public class MLGBucketFallChain extends SingleTaskChain implements ITaskOverride
                     BlockPos placed = _lastMLG.getWaterPlacedPos();
                     boolean isPlacedWater;
                     try {
-                        isPlacedWater = mod.getWorld().getBlockState(placed).getBlock() == Blocks.WATER;
+                        isPlacedWater = placed != null && mod.getWorld() != null && mod.getWorld().getBlockState(placed).getBlock() == Blocks.WATER;
                     } catch (Exception e) {
                         isPlacedWater = false;
                     }
                     //Debug.logInternal("PLACED: " + placed);
-                    if (placed != null && placed.isWithinDistance(mod.getPlayer().getPos(), 5.5) && isPlacedWater) {
+                    if (placed != null && mod.getPlayer() != null && placed.isWithinDistance(mod.getPlayer().getPos(), 5.5) && isPlacedWater) {
                         BlockPos toInteract = placed;
                         // Allow looking at fluids
                         mod.getBehaviour().push();
@@ -93,8 +93,9 @@ public class MLGBucketFallChain extends SingleTaskChain implements ITaskOverride
             _lastMLG = null;
         }
         ItemStack chorusFruitStack = new ItemStack(Items.CHORUS_FRUIT);
-        if (mod.getPlayer().hasStatusEffect(StatusEffects.LEVITATION) &&
+        if (mod.getPlayer() != null && mod.getPlayer().hasStatusEffect(StatusEffects.LEVITATION) &&
                 !mod.getPlayer().getItemCooldownManager().isCoolingDown(chorusFruitStack) &&
+                mod.getPlayer().getActiveStatusEffects().get(StatusEffects.LEVITATION) != null &&
                 mod.getPlayer().getActiveStatusEffects().get(StatusEffects.LEVITATION).getDuration() <= 70 &&
                 mod.getItemStorage().hasItemInventoryOnly(Items.CHORUS_FRUIT) &&
                 !mod.getItemStorage().hasItemInventoryOnly(Items.WATER_BUCKET)) {
@@ -134,6 +135,7 @@ public class MLGBucketFallChain extends SingleTaskChain implements ITaskOverride
         if (!mod.getModSettings().shouldAutoMLGBucket()) {
             return false;
         }
+        if (mod.getPlayer() == null) return false;
         if (mod.getPlayer().isSwimming() || mod.getPlayer().isTouchingWater() || mod.getPlayer().isOnGround() || mod.getPlayer().isClimbing()) {
             // We're grounded.
             return false;

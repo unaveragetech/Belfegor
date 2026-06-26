@@ -122,10 +122,12 @@ public class ContainerSubTracker extends Tracker {
                 ContainerType interactType = ContainerType.getFromBlock(containerBlock);
                 ContainerCache newCache = new ContainerCache(WorldHelper.getCurrentDimension(), containerPos, interactType);
                 dimCache.put(containerPos, newCache);
-                // Special ender chest cache
                 if (interactType == ContainerType.ENDER_CHEST) {
                     _enderChestCache = newCache;
                 }
+                adris.altoclef.memory.LocationMemory.getInstance().remember("chest",
+                        containerPos.getX(), containerPos.getY(), containerPos.getZ(),
+                        _mod.getWorld().getRegistryKey().getValue().toString(), interactType.name());
             }
 
             ContainerCache toUpdate = dimCache.get(containerPos);

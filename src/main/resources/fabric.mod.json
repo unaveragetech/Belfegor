@@ -1,20 +1,18 @@
 {
   "schemaVersion": 1,
-  "id": "altoclef",
-  "version": "1.21-beta1",
-  "name": "Alto Clef",
-  "description": "Plays Block Game",
+  "id": "belfegor",
+  "version": "${version}",
+  "name": "Belfegor",
+  "description": "Autonomous Minecraft bot with smart crafting, advanced PvP, and task automation",
   "authors": [
-    "TacoTechnica",
-    "James Green",
-    "Marvion Kirito"
+    "beelzebub4883"
   ],
   "contact": {
-    "homepage": "https://fabricc.net/",
-    "sources": "https://github.com/FabricMC/fabric-example-mod"
+    "homepage": "https://github.com/unaveragetech/belfegor",
+    "sources": "https://github.com/unaveragetech/belfegor"
   },
-  "license": "CC0-1.0",
-  "icon": "assets/altoclef/icon.png",
+  "license": "MIT",
+  "icon": "assets/belfegor/icon.png",
   "environment": "*",
   "entrypoints": {
     "main": [
@@ -22,6 +20,6 @@
     ]
   },
   "mixins": [
-    "altoclef.mixins.json"
+    "belfegor.mixins.json"
   ]
 }

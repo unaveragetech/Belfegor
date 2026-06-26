@@ -6,6 +6,7 @@ import adris.altoclef.tasks.AbstractDoToClosestObjectTask;
 import adris.altoclef.tasks.ResourceTask;
 import adris.altoclef.tasks.construction.DestroyBlockTask;
 import adris.altoclef.tasks.movement.PickupDroppedItemTask;
+import adris.altoclef.tasks.movement.TimeoutWanderTask;
 import adris.altoclef.tasksystem.Task;
 import adris.altoclef.util.ItemTarget;
 import adris.altoclef.util.MiningRequirement;
@@ -158,6 +159,7 @@ public class MineAndCollectTask extends ResourceTask {
         private final Set<BlockPos> _blacklist = new HashSet<>();
         private final MovementProgressChecker _progressChecker = new MovementProgressChecker();
         private final Task _pickupTask;
+        private Task _cachedWanderTask = null;
         private BlockPos _miningPos;
 
         public MineOrCollectTask(Block[] blocks, ItemTarget[] targets) {
@@ -212,6 +214,13 @@ public class MineAndCollectTask extends ResourceTask {
 
         @Override
         protected Task onTick(AltoClef mod) {
+            // If we're actively mining a block, lock the target so we don't switch
+            if (_miningPos != null) {
+                lockTarget();
+            } else {
+                unlockTarget();
+            }
+
             if (mod.getClientBaritone().getPathingBehavior().isPathing()) {
                 _progressChecker.reset();
             }
@@ -222,6 +231,7 @@ public class MineAndCollectTask extends ResourceTask {
                 _blacklist.add(_miningPos);
                 _miningPos = null;
                 _progressChecker.reset();
+                unlockTarget();
             }
             return super.onTick(mod);
         }
@@ -268,6 +278,14 @@ public class MineAndCollectTask extends ResourceTask {
         @Override
         protected void onStop(AltoClef mod, Task interruptTask) {
 
+        }
+
+        @Override
+        protected Task getWanderTask(AltoClef mod) {
+            if (_cachedWanderTask == null || _cachedWanderTask.stopped()) {
+                _cachedWanderTask = new TimeoutWanderTask(true);
+            }
+            return _cachedWanderTask;
         }
 
         @Override

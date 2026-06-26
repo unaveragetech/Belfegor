@@ -42,13 +42,17 @@ public class CommandExecutor {
         }
         Command command = commands[index];
         String part = parts[index];
-        try {
-            if (command == null) {
-                getException.accept(new CommandException("Invalid command:" + part));
+        if (command == null) {
+            if (part.trim().isEmpty()) {
                 executeRecursive(commands, parts, index + 1, onFinish, getException);
             } else {
-                command.run(_mod, part, () -> executeRecursive(commands, parts, index + 1, onFinish, getException));
+                getException.accept(new CommandException("Invalid command: " + part));
+                executeRecursive(commands, parts, index + 1, onFinish, getException);
             }
+            return;
+        }
+        try {
+            command.run(_mod, part, () -> executeRecursive(commands, parts, index + 1, onFinish, getException));
         } catch (CommandException ae) {
             getException.accept(new CommandException(ae.getMessage() + "\nUsage: " + command.getHelpRepresentation(), ae));
         }

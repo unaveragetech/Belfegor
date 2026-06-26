@@ -4,6 +4,8 @@ import adris.altoclef.AltoClef;
 import adris.altoclef.Debug;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 
 public class TaskRunner {
 
@@ -66,6 +68,10 @@ public class TaskRunner {
 
     public TaskChain getCurrentTaskChain() {
         return _cachedCurrentTaskChain;
+    }
+
+    public List<TaskChain> getAllChains() {
+        return Collections.unmodifiableList(_chains);
     }
 
     // Kinda jank ngl

@@ -2,6 +2,7 @@ package adris.altoclef.tasks.container;
 
 import adris.altoclef.AltoClef;
 import adris.altoclef.tasks.slot.EnsureFreeInventorySlotTask;
+import adris.altoclef.tasksystem.ITaskCanForce;
 import adris.altoclef.tasksystem.Task;
 import adris.altoclef.trackers.storage.ContainerCache;
 import adris.altoclef.util.ItemTarget;
@@ -21,7 +22,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.function.Function;
 
-public class PickupFromContainerTask extends AbstractDoToStorageContainerTask {
+public class PickupFromContainerTask extends AbstractDoToStorageContainerTask implements ITaskCanForce {
 
     private final BlockPos _targetContainer;
     private final ItemTarget[] _targets;
@@ -99,6 +100,22 @@ public class PickupFromContainerTask extends AbstractDoToStorageContainerTask {
     @Override
     public boolean isFinished(AltoClef mod) {
         return Arrays.stream(_targets).allMatch(target -> mod.getItemStorage().getItemCountInventoryOnly(target.getMatches()) >= target.getTargetCount());
+    }
+
+    @Override
+    public boolean shouldForce(AltoClef mod, Task interruptingCandidate) {
+        if (isFinished(mod)) return false;
+        boolean cursorHeld = !StorageHelper.getItemStackInCursorSlot().isEmpty();
+        boolean screenOpen = net.minecraft.client.MinecraftClient.getInstance().currentScreen != null;
+        if (cursorHeld || screenOpen) {
+            adris.altoclef.debug.DebugLogger.getInstance().logImmediate("CONTAINER-FORCE",
+                    "continuing pickup target=" + _targetContainer
+                            + " targets=" + Arrays.toString(_targets)
+                            + " cursor=" + StorageHelper.getItemStackInCursorSlot()
+                            + " interrupt="
+                            + (interruptingCandidate == null ? "null" : interruptingCandidate.toString()));
+        }
+        return cursorHeld || screenOpen;
     }
 
     @Override

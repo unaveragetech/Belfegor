@@ -36,7 +36,11 @@ public class CraftWithMatchingPlanksTask extends CraftWithMatchingMaterialsTask 
             Item log = ItemHelper.planksToLog(plankToGet);
             // Convert logs to planks
             if (mod.getItemStorage().getItemCount(log) >= 1) {
-                return TaskCatalogue.getItemTask(plankToGet, 1);//new CraftInInventoryTask(new ItemTarget(plankToGet, 1), CraftingRecipe.newShapedRecipe("planks", new ItemTarget[]{new ItemTarget(log, 1), empty, empty, empty}, 4), false, true);
+                int plankCount = mod.getItemStorage().getItemCount(plankToGet);
+                int logCount = mod.getItemStorage().getItemCount(log);
+                int requestCount = plankCount + logCount * 4;
+                Debug.logMessage("CraftWithMatchingPlanks: requesting " + requestCount + " " + plankToGet + " (have " + plankCount + " planks + " + logCount + " logs)");
+                return TaskCatalogue.getItemTask(plankToGet, requestCount);
             }
         }
         Debug.logError("CraftWithMatchingPlanks: Should never happen!");

@@ -683,22 +683,69 @@ public class TaskCatalogue {
     public static ResourceTask getItemTask(String name, int count) {
 
         if (!taskExists(name)) {
+            // FALLBACK: Try RecipeRegistry for items not explicitly registered
+            ResourceTask registryTask = getRecipeRegistryTask(name, count);
+            if (registryTask != null) {
+                return registryTask;
+            }
             Debug.logWarning("Task " + name + " does not exist. Error possibly.");
             Debug.logStack();
             return null;
         }
 
-        return _nameToResourceTask.get(name).getResource(count);
+        CataloguedResource resource = _nameToResourceTask.get(name);
+        if (resource == null) {
+            Debug.logWarning("Task resource for " + name + " is null. Error possibly.");
+            return null;
+        }
+
+        // Wrap with EnsureWoodSupplyTask for ANY task that uses a crafting table
+        // (CraftInTableTask). All 3x3 recipes need sticks/planks/logs, and without
+        // pre-gathering these materials, the bot tries to craft sticks mid-craft
+        // via CraftInInventoryTask which causes a screen-open loop.
+        ResourceTask baseTask = resource.getResource(count);
+        if (baseTask != null) {
+            if (baseTask instanceof adris.altoclef.tasks.container.CraftInTableTask) {
+                return new adris.altoclef.tasks.resources.EnsureWoodSupplyTask(baseTask, count);
+            }
+            if (isWoodenToolOrArmor(name)) {
+                return new adris.altoclef.tasks.resources.EnsureWoodSupplyTask(baseTask, count);
+            }
+        }
+        return baseTask;
+    }
+
+    /**
+     * Checks if a resource name is a wooden tool or armor piece that needs planks/sticks.
+     */
+    private static boolean isWoodenToolOrArmor(String name) {
+        return name.startsWith("wooden_") && (
+            name.endsWith("_pickaxe") || name.endsWith("_shovel") ||
+            name.endsWith("_sword") || name.endsWith("_axe") || name.endsWith("_hoe") ||
+            name.endsWith("_helmet") || name.endsWith("_chestplate") ||
+            name.endsWith("_leggings") || name.endsWith("_boots") ||
+            name.equals("crafting_table")
+        );
     }
 
     public static ResourceTask getItemTask(Item item, int count) {
         if (!taskExists(item)) {
+            // FALLBACK: Try RecipeRegistry for items not explicitly registered
+            ResourceTask registryTask = getRecipeRegistryTask(item, count);
+            if (registryTask != null) {
+                return registryTask;
+            }
             Debug.logWarning("Task " + item + " does not exist. Error possibly.");
             Debug.logStack();
             return null;
         }
 
-        return _itemToResourceTask.get(item).getResource(count);
+        CataloguedResource resource = _itemToResourceTask.get(item);
+        if (resource == null) {
+            Debug.logWarning("Task resource for item " + item + " is null. Error possibly.");
+            return null;
+        }
+        return resource.getResource(count);
     }
 
     public static ResourceTask getItemTask(ItemTarget target) {
@@ -707,7 +754,14 @@ public class TaskCatalogue {
         } else if (target.getMatches().length == 1) {
             return getItemTask(target.getMatches()[0], target.getTargetCount());
         } else {
-            return getSquashedItemTask(target);
+            for (Item match : target.getMatches()) {
+                if (taskExists(match)) {
+                    return getItemTask(match, target.getTargetCount());
+                }
+            }
+            Debug.logWarning("No catalogue task exists for multi-match target " + target + ". Refusing recursive fallback.");
+            Debug.logStack();
+            return null;
         }
     }
 
@@ -721,6 +775,43 @@ public class TaskCatalogue {
 
     public static Collection<String> resourceNames() {
         return _nameToResourceTask.keySet();
+    }
+
+    /**
+     * Create a crafting task from RecipeRegistry for an item not in the static catalogue.
+     * Returns null if no recipe is found.
+     */
+    private static ResourceTask getRecipeRegistryTask(String name, int count) {
+        // Try to resolve the name to an Item
+        Item item = adris.altoclef.util.RecipeRegistry.getItemByName("minecraft:" + name);
+        if (item == null) {
+            // Try without minecraft: prefix
+            item = adris.altoclef.util.RecipeRegistry.getItemByName(name);
+        }
+        if (item == null) return null;
+        return getRecipeRegistryTask(item, count);
+    }
+
+    /**
+     * Create a crafting task from RecipeRegistry for an Item not in the static catalogue.
+     * Returns null if no recipe is found.
+     */
+    private static ResourceTask getRecipeRegistryTask(Item item, int count) {
+        adris.altoclef.util.RecipeRegistry registry = adris.altoclef.util.RecipeRegistry.getInstance();
+        adris.altoclef.util.RecipeRegistry.RecipeEntry entry = registry.getRecipe(item);
+        if (entry == null) return null;
+
+        // Create a RecipeTarget
+        RecipeTarget target = new RecipeTarget(item, count, entry.recipe);
+
+        // Determine if this is a 2x2 (inventory) or 3x3 (table) recipe
+        if (entry.recipe.isBig()) {
+            // 3x3 recipe - needs crafting table
+            return new adris.altoclef.tasks.container.CraftInTableTask(target);
+        } else {
+            // 2x2 recipe - can craft in inventory
+            return new adris.altoclef.tasks.CraftInInventoryTask(target);
+        }
     }
 
     private static CataloguedResource simple(String name, Item[] matches, Function<Integer, ResourceTask> getTask) {

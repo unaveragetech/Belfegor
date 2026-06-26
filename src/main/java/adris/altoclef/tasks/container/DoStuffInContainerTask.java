@@ -31,12 +31,12 @@ public abstract class DoStuffInContainerTask extends Task {
     private final ItemTarget _containerTarget;
     private final Block[] _containerBlocks;
 
-    private final PlaceBlockNearbyTask _placeTask;
+    protected final PlaceBlockNearbyTask _placeTask;
     // If we decided on placing, force place for at least 10 seconds
     private final TimerGame _placeForceTimer = new TimerGame(10);
     // If we just placed something, stop placing and try going to the nearest container.
     private final TimerGame _justPlacedTimer = new TimerGame(3);
-    private BlockPos _cachedContainerPosition = null;
+    protected BlockPos _cachedContainerPosition = null;
     private Task _openTableTask;
 
     public DoStuffInContainerTask(Block[] containerBlocks, ItemTarget containerTarget) {
@@ -92,11 +92,11 @@ public abstract class DoStuffInContainerTask extends Task {
             nearest = mod.getBlockTracker().getNearestTracking(currentPos, blockPos -> WorldHelper.canReach(mod, blockPos), _containerBlocks);
         }
         if (nearest.isEmpty()) {
-            // If all else fails, try using our placed task
+            // If all else fails, trust our placed task directly.
+            // We just placed this block, so we KNOW it's there.
+            // blockIsValid often returns false because the block tracker
+            // hasn't scanned the newly placed block yet.
             nearest = Optional.ofNullable(_placeTask.getPlaced());
-            if (nearest.isPresent() && !mod.getBlockTracker().blockIsValid(nearest.get(), _containerBlocks)) {
-                nearest = Optional.empty();
-            }
         }
         if (nearest.isPresent()) {
             costToWalk = BaritoneHelper.calculateGenericHeuristic(currentPos, WorldHelper.toVec3d(nearest.get()));

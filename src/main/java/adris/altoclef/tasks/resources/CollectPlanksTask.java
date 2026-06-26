@@ -7,6 +7,7 @@ import adris.altoclef.tasks.ResourceTask;
 import adris.altoclef.tasksystem.Task;
 import adris.altoclef.util.*;
 import adris.altoclef.util.helpers.ItemHelper;
+import adris.altoclef.util.helpers.StorageHelper;
 import net.minecraft.item.Item;
 
 import java.util.ArrayList;
@@ -18,6 +19,11 @@ public class CollectPlanksTask extends ResourceTask {
     private final Item[] _logs;
     private final int _targetCount;
     private boolean _logsInNether;
+
+    private enum Phase { MINING, CRAFTING }
+    private Phase _phase = Phase.MINING;
+    private CraftInInventoryTask _activeCraftTask = null;
+    private MineAndCollectTask _activeMineTask = null;
 
     public CollectPlanksTask(Item[] planks, Item[] logs, int count, boolean logsInNether) {
         super(new ItemTarget(planks, count));
@@ -57,14 +63,39 @@ public class CollectPlanksTask extends ResourceTask {
 
     @Override
     protected void onResourceStart(AltoClef mod) {
-
+        _phase = Phase.MINING;
+        _activeCraftTask = null;
+        _activeMineTask = null;
     }
 
     @Override
     protected Task onResourceTick(AltoClef mod) {
 
+        // Do not replace an in-flight craft while it owns the cursor. Output
+        // arriving can satisfy this task one tick before the remaining log is
+        // returned to inventory.
+        if (_activeCraftTask != null
+                && !_activeCraftTask.stopped()
+                && !StorageHelper.getItemStackInCursorSlot().isEmpty()) {
+            adris.altoclef.debug.DebugLogger.getInstance().logImmediate("CRAFT-HANDOFF",
+                    "holding active plank craft until cursor clears target="
+                            + _activeCraftTask.getRecipeTarget()
+                            + " cursor=" + StorageHelper.getItemStackInCursorSlot());
+            return _activeCraftTask;
+        }
+
         // Craft when we can
         int totalInventoryPlankCount = mod.getItemStorage().getItemCount(_planks);
+
+        // If we already have enough planks, we're done
+        if (totalInventoryPlankCount >= _targetCount) {
+            _phase = Phase.MINING;
+            _activeCraftTask = null;
+            _activeMineTask = null;
+            setDebugState("Already have " + totalInventoryPlankCount + "/" + _targetCount + " planks");
+            return null;
+        }
+
         int potentialPlanks = totalInventoryPlankCount + mod.getItemStorage().getItemCount(_logs) * 4;
         if (potentialPlanks >= _targetCount) {
             for (Item logCheck : _logs) {
@@ -73,15 +104,46 @@ public class CollectPlanksTask extends ResourceTask {
                     Item plankCheck = ItemHelper.logToPlanks(logCheck);
                     if (plankCheck == null) {
                         Debug.logError("Invalid/Un-convertable log: " + logCheck + " (failed to find corresponding plank)");
+                        continue;
                     }
                     int plankCount = mod.getItemStorage().getItemCount(plankCheck);
                     int otherPlankCount = totalInventoryPlankCount - plankCount;
                     int targetTotalPlanks = Math.min(count * 4 + plankCount, _targetCount - otherPlankCount);
                     setDebugState("We have " + logCheck + ", crafting " + targetTotalPlanks + " planks.");
-                    return new CraftInInventoryTask(new RecipeTarget(plankCheck, targetTotalPlanks, generatePlankRecipe(_logs)));
+
+                    // Transition to CRAFTING phase — commit to crafting
+                    _phase = Phase.CRAFTING;
+                    _activeMineTask = null;
+
+                    // If we already have an active crafting task with the same target, reuse it
+                    // to avoid interrupting and restarting every tick
+                    if (_activeCraftTask != null && !_activeCraftTask.isFinished(mod) && !_activeCraftTask.stopped()) {
+                        RecipeTarget newTarget = new RecipeTarget(plankCheck, targetTotalPlanks, generatePlankRecipe(_logs));
+                        if (_activeCraftTask.getRecipeTarget() != null
+                                && _activeCraftTask.getRecipeTarget().getOutputItem().equals(newTarget.getOutputItem())
+                                && _activeCraftTask.getRecipeTarget().getTargetCount() == newTarget.getTargetCount()) {
+                            return _activeCraftTask;
+                        }
+                    }
+
+                    // Create new crafting task
+                    _activeCraftTask = new CraftInInventoryTask(new RecipeTarget(plankCheck, targetTotalPlanks, generatePlankRecipe(_logs)));
+                    return _activeCraftTask;
                 }
             }
         }
+
+        // If we were in CRAFTING phase but logs ran out, go back to mining
+        if (_phase == Phase.CRAFTING) {
+            _phase = Phase.MINING;
+            _activeCraftTask = null;
+        }
+
+        // Reuse mining task instance if still active (prevent constant restarts every tick)
+        if (_activeMineTask != null && !_activeMineTask.isFinished(mod) && !_activeMineTask.stopped()) {
+            return _activeMineTask;
+        }
+        _activeMineTask = null;
 
         // Collect planks and logs
         ArrayList<ItemTarget> blocksTomine = new ArrayList<>(2);
@@ -92,17 +154,19 @@ public class CollectPlanksTask extends ResourceTask {
             //blocksTomine.add(new ItemTarget(ItemUtil.PLANKS));
         }
 
-        ResourceTask mineTask = new MineAndCollectTask(blocksTomine.toArray(ItemTarget[]::new), MiningRequirement.HAND);
+        _activeMineTask = new MineAndCollectTask(blocksTomine.toArray(ItemTarget[]::new), MiningRequirement.HAND);
         // Kinda jank
         if (_logsInNether) {
-            mineTask.forceDimension(Dimension.NETHER);
+            _activeMineTask.forceDimension(Dimension.NETHER);
         }
-        return mineTask;
+        return _activeMineTask;
     }
 
     @Override
     protected void onResourceStop(AltoClef mod, Task interruptTask) {
-
+        _phase = Phase.MINING;
+        _activeCraftTask = null;
+        _activeMineTask = null;
     }
 
     @Override

@@ -15,8 +15,8 @@ import java.util.Objects;
  * <p>
  * This effectively makes the bot function as a servant, or butler.
  * <p>
- * Authorization is defined in "altoclef_butler_whitelist.txt" and "altoclef_butler_blacklist.txt"
- * and depends on the "useButlerWhitelist" and "useButlerBlacklist" settings in "altoclef_settings.json"
+ * Authorization is defined in "belfegor_butler_whitelist.txt" and "belfegor_butler_blacklist.txt"
+ * and depends on the "useButlerWhitelist" and "useButlerBlacklist" settings in "belfegor_settings.json"
  */
 public class Butler {
 
@@ -47,6 +47,7 @@ public class Butler {
 
         // Receive system events
         EventBus.subscribe(ChatMessageEvent.class, evt -> {
+            if (mod.getPlayer() == null) return;
             boolean debug = ButlerConfig.getInstance().whisperFormatDebug;
             String message = evt.messageContent();
             String sender = evt.senderName();

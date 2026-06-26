@@ -25,7 +25,7 @@ import java.util.function.Supplier;
  */
 public class ConfigHelper {
 
-    private static final String ALTO_FOLDER = "altoclef";
+    private static final String ALTO_FOLDER = "belfegor";
     // For reloading
     private static final HashMap<String, Runnable> _loadedConfigs = new HashMap<>();
 

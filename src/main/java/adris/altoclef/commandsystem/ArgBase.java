@@ -49,4 +49,20 @@ public abstract class ArgBase {
         return false;
     }
 
+    public String getName() {
+        return getHelpRepresentation();
+    }
+
+    public String getTypeName() {
+        return "value";
+    }
+
+    public String getExpectedValues() {
+        return "Any valid " + getTypeName() + " value";
+    }
+
+    public String getExampleValue() {
+        return "value";
+    }
+
 }

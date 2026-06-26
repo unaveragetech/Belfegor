@@ -6,6 +6,7 @@ import adris.altoclef.tasks.movement.RunAwayFromPositionTask;
 import adris.altoclef.tasks.movement.SafeRandomShimmyTask;
 import adris.altoclef.tasksystem.ITaskRequiresGrounded;
 import adris.altoclef.tasksystem.Task;
+import adris.altoclef.util.helpers.BaritoneCompat;
 import adris.altoclef.util.helpers.ItemHelper;
 import adris.altoclef.util.helpers.LookHelper;
 import adris.altoclef.util.helpers.StorageHelper;
@@ -231,9 +232,8 @@ public class DestroyBlockTask extends Task implements ITaskRequiresGrounded {
         }
 
         // Reset the move checker if Baritone is currently pathing
-        if (mod.getClientBaritone().getPathingBehavior().isPathing()) {
-            _moveChecker.reset();
-        }
+        // REMOVED: was resetting every tick, preventing progress accumulation
+        // The move checker now accumulates progress naturally while pathing
 
         // Check if the player is in a Nether portal
         if (WorldHelper.isInNetherPortal(mod)) {
@@ -293,7 +293,7 @@ public class DestroyBlockTask extends Task implements ITaskRequiresGrounded {
         Optional<Rotation> reach = LookHelper.getReach(_pos);
         if (reach.isPresent() && (mod.getPlayer().isTouchingWater() || mod.getPlayer().isOnGround())
                 && !mod.getFoodChain().needsToEat() && !WorldHelper.isInNetherPortal(mod)
-                && mod.getClientBaritone().getPathingBehavior().isSafeToCancel()) {
+                && BaritoneCompat.isSafeToCancel(mod.getClientBaritone().getPathingBehavior())) {
             setDebugState("Block in range, mining...");
             stuckCheck.reset();
             isMining = true;

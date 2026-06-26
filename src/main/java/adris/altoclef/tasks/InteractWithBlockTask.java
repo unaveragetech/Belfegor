@@ -9,6 +9,7 @@ import adris.altoclef.tasksystem.Task;
 import adris.altoclef.util.ItemTarget;
 import adris.altoclef.util.baritone.GoalAnd;
 import adris.altoclef.util.baritone.GoalBlockSide;
+import adris.altoclef.util.helpers.BaritoneCompat;
 import adris.altoclef.util.helpers.ItemHelper;
 import adris.altoclef.util.helpers.LookHelper;
 import adris.altoclef.util.helpers.StorageHelper;
@@ -400,7 +401,7 @@ public class InteractWithBlockTask extends Task {
         }
 
         Optional<Rotation> reachable = getCurrentReach();
-        if (reachable.isPresent() && mod.getClientBaritone().getPathingBehavior().isSafeToCancel()) {
+        if (reachable.isPresent() && BaritoneCompat.isSafeToCancel(mod.getClientBaritone().getPathingBehavior())) {
             if (LookHelper.isLookingAt(mod, _target)) {
                 if (_toUse != null) {
                     mod.getSlotHandler().forceEquipItem(_toUse, false);

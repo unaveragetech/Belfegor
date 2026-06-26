@@ -22,11 +22,11 @@ public class MovementProgressChecker {
     }
 
     public MovementProgressChecker(int attempts) {
-        this(6, 0.1, 0.5, 0.001, attempts);
+        this(15, 0.1, 5, 0.001, attempts);
     }
 
     public MovementProgressChecker() {
-        this(1);
+        this(3);
     }
 
     public boolean check(AltoClef mod) {

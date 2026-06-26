@@ -2,6 +2,7 @@ package adris.altoclef.chains;
 
 import adris.altoclef.AltoClef;
 import adris.altoclef.Debug;
+import adris.altoclef.tasksystem.ITaskCanForce;
 import adris.altoclef.tasksystem.Task;
 import adris.altoclef.tasksystem.TaskChain;
 import adris.altoclef.tasksystem.TaskRunner;
@@ -12,6 +13,7 @@ public abstract class SingleTaskChain extends TaskChain {
     private final Stopwatch _taskStopwatch = new Stopwatch();
     protected Task _mainTask = null;
     private boolean _interrupted = false;
+    private boolean _actuallyInterrupted = false;
 
     private AltoClef _mod;
 
@@ -26,9 +28,12 @@ public abstract class SingleTaskChain extends TaskChain {
 
         if (_interrupted) {
             _interrupted = false;
-            if (_mainTask != null) {
+            // Only reset the task if it was actually interrupted (not forced).
+            // Forced tasks survive chain-level interrupts with state intact.
+            if (_actuallyInterrupted && _mainTask != null) {
                 _mainTask.reset();
             }
+            _actuallyInterrupted = false;
         }
 
         if (_mainTask != null) {
@@ -72,13 +77,28 @@ public abstract class SingleTaskChain extends TaskChain {
         }
         // Stop our task. When we're started up again, let our task know we need to run.
         _interrupted = true;
+        _actuallyInterrupted = false;
         if (_mainTask != null && _mainTask.isActive()) {
-            _mainTask.interrupt(mod, null);
+            // If the task or any child declares shouldForce(), do NOT interrupt it.
+            // Interrupting resets _first=true which causes onStart() to re-run on
+            // resume, destroying phase progress (e.g. shulker PLACE→OPEN→TRANSFER).
+            boolean canInterrupt = _mainTask.thisOrChildSatisfies(task -> {
+                if (task instanceof ITaskCanForce canForce) {
+                    return !canForce.shouldForce(mod, null);
+                }
+                return true;
+            });
+            if (canInterrupt) {
+                _mainTask.interrupt(mod, null);
+                _actuallyInterrupted = true;
+            }
+            // else: task survives interrupt with state intact; _interrupted flag
+            // is set but _actuallyInterrupted is false → tick() won't call reset().
         }
     }
 
     protected boolean isCurrentlyRunning(AltoClef mod) {
-        return !_interrupted && _mainTask.isActive() && !_mainTask.isFinished(mod);
+        return !_interrupted && _mainTask != null && _mainTask.isActive() && !_mainTask.isFinished(mod);
     }
 
     public Task getCurrentTask() {

@@ -134,6 +134,10 @@ public class EquipArmorTask extends Task {
                         }
 
                         assert armorSlot != null;
+                        if (armorSlot == null) {
+                            Debug.logWarning("Unknown armor slot for item " + item.getTranslationKey());
+                            return null;
+                        }
                         Slot toMove = PlayerSlot.getEquipSlot(armorSlot);
 
                         if (toMove == null) {

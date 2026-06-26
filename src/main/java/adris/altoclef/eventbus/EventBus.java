@@ -17,42 +17,43 @@ public class EventBus {
 
     private static final HashMap<Class, List<Subscription>> _topics = new HashMap<>();
     private static final List<Pair<Class, Subscription>> _toAdd = new ArrayList<>();
+    private static final List<Subscription> _toDelete = new ArrayList<>();
     private static boolean _lock;
 
     public static <T> void publish(T event) {
         Class type = event.getClass();
 
-        // Add all subscriptions we need to add
-        for (Pair<Class, Subscription> toAdd : _toAdd) {
-            subscribeInternal(toAdd.getLeft(), toAdd.getRight());
-        }
-        _toAdd.clear();
-
-        if (_topics.containsKey(type)) {
-            List<Subscription> subscribers = _topics.get(type);
-
-            // Subscriptions can be deleted while they're called
-            List<Subscription> toDelete = new ArrayList<>();
-
-            // Go through our subscription list. We shouldn't modify the list while we're iterating it.
-            _lock = true;
-            for (Subscription subRaw : subscribers) {
-                Subscription<T> sub;
-                try {
-                    sub = (Subscription<T>) subRaw;
-                    if (sub.shouldDelete()) {
-                        toDelete.add(sub);
-                    } else {
-                        sub.accept(event);
-                    }
-                } catch (ClassCastException e) {
-                    System.err.println("TRIED PUBLISHING MISMAPPED EVENT: " + event);
-                    e.printStackTrace();
-                }
+        if (!_toAdd.isEmpty()) {
+            for (int i = 0, size = _toAdd.size(); i < size; i++) {
+                Pair<Class, Subscription> pair = _toAdd.get(i);
+                subscribeInternal(pair.getLeft(), pair.getRight());
             }
-            // Delete all subscriptions
-            _lock = false;
+            _toAdd.clear();
         }
+
+        List<Subscription> subscribers = _topics.get(type);
+        if (subscribers == null) return;
+
+        _lock = true;
+        for (int i = 0, size = subscribers.size(); i < size; i++) {
+            Subscription<T> sub;
+            try {
+                sub = (Subscription<T>) subscribers.get(i);
+                if (sub.shouldDelete()) {
+                    _toDelete.add(sub);
+                } else {
+                    sub.accept(event);
+                }
+            } catch (ClassCastException e) {
+                System.err.println("TRIED PUBLISHING MISMAPPED EVENT: " + event);
+                e.printStackTrace();
+            }
+        }
+        if (!_toDelete.isEmpty()) {
+            subscribers.removeAll(_toDelete);
+            _toDelete.clear();
+        }
+        _lock = false;
     }
 
     private static <T> void subscribeInternal(Class<T> type, Subscription<T> sub) {

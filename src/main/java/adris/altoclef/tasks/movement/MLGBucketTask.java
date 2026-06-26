@@ -69,7 +69,7 @@ public class MLGBucketTask extends Task {
      */
     private static boolean canTravelToInAir(BlockPos pos) {
         Entity player = MinecraftClient.getInstance().player;
-        assert player != null;
+        if (player == null) return false;
         double verticalDist = player.getPos().getY() - pos.getY() - 1;
         double verticalVelocity = -1 * player.getVelocity().y;
         double grav = EntityHelper.ENTITY_GRAVITY;
@@ -86,13 +86,13 @@ public class MLGBucketTask extends Task {
 
     private static boolean isFallDeadly(BlockPos pos) {
         PlayerEntity player = MinecraftClient.getInstance().player;
+        if (player == null) return false;
         double damage = calculateFallDamageToLandOn(pos);
-        assert MinecraftClient.getInstance().world != null;
+        if (MinecraftClient.getInstance().world == null) return false;
         Block b = MinecraftClient.getInstance().world.getBlockState(pos).getBlock();
         if (b == Blocks.HAY_BLOCK) {
             damage *= 0.2f;
         }
-        assert player != null;
         double resultingHealth = player.getHealth() - (float) damage;
         return resultingHealth < _config.preferLavaWhenFallDropsHealthBelowThreshold;
     }
@@ -100,12 +100,12 @@ public class MLGBucketTask extends Task {
     private static double calculateFallDamageToLandOn(BlockPos pos) {
         ClientWorld world = MinecraftClient.getInstance().world;
         PlayerEntity player = MinecraftClient.getInstance().player;
-        assert player != null;
+        if (player == null) return 0;
         double totalFallDistance = player.fallDistance + (player.getY() - pos.getY() - 1);
         // Copied from living entity I think, somewhere idk you get the picture.
         double baseFallDamage = MathHelper.ceil(totalFallDistance - 3.0F);
         // Be a bit conservative, assume MORE damage
-        assert world != null;
+        if (world == null) return baseFallDamage;
         return EntityHelper.calculateResultingPlayerDamage(player, world.getDamageSources().fall(), baseFallDamage);
     }
 
@@ -387,13 +387,13 @@ public class MLGBucketTask extends Task {
 
     private RaycastContext castDown(Vec3d origin) {
         Entity player = MinecraftClient.getInstance().player;
-        assert player != null;
+        if (player == null) return null;
         return new RaycastContext(origin, origin.add(0, -1 * _config.castDownDistance, 0), RaycastContext.ShapeType.COLLIDER, RaycastContext.FluidHandling.ANY, player);
     }
 
     private RaycastContext castCone(double yaw, double pitch) {
         Entity player = MinecraftClient.getInstance().player;
-        assert player != null;
+        if (player == null) return null;
         Vec3d origin = player.getPos();
         double dy = _config.epicClutchConeCastHeight;
         double dH = dy * Math.sin(Math.toRadians(pitch)); // horizontal distance

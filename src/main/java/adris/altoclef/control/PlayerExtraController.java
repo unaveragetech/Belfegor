@@ -44,10 +44,12 @@ public class PlayerExtraController {
     }
 
     public boolean inRange(Entity entity) {
+        if (_mod.getPlayer() == null) return false;
         return _mod.getPlayer().isInRange(entity, _mod.getModSettings().getEntityReachRange());
     }
 
     public void attack(Entity entity) {
+        if (_mod.getPlayer() == null) return;
         if (inRange(entity)) {
             _mod.getController().attackEntity(_mod.getPlayer(), entity);
             _mod.getPlayer().swingHand(Hand.MAIN_HAND);

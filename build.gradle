@@ -14,8 +14,8 @@ group = project.maven_group
 repositories {
     mavenCentral()
     maven {
-        name = "MarvionKiritoRepo"
-        url = "https://marvionkirito.github.io/maven/"
+        name = "unaveragetech"
+        url = "https://unaveragetech.github.io/maven/"
     }
     maven {
         name = 'babbaj-repo'
@@ -50,14 +50,8 @@ dependencies {
     shadow('com.fasterxml.jackson.core:jackson-databind:2.17.2')
 
     // Thank you georgeagostino for fixing my garbage
-    if (getProject().hasProperty("altoclef.development")) {
-        // Must run build from baritone-plus once
-        modImplementation 'baritone-api-fabric:baritone-unoptimized-fabric-1.21.4'
-        include "baritone-api-fabric:baritone-unoptimized-fabric-1.21.4"
-    } else {
-        modImplementation "cabaletta:baritone-unoptimized-fabric-1.21.4"
-        include "cabaletta:baritone-unoptimized-fabric-1.21.4"
-    }
+    // Local dev: use the baritone jar from the sibling baritone/dist folder
+    modImplementation files('../baritone/dist/baritone-api.jar')
     //modImplementation 'baritone-api-fabric:baritone-api-fabric:1.6.3'
     //implementation files('baritone-plus/build/libs/baritone-unoptimized-fabric-1.6.3.jar')
 }

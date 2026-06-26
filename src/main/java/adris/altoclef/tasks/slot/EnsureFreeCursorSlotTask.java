@@ -28,20 +28,19 @@ public class EnsureFreeCursorSlotTask extends Task {
             Optional<Slot> moveTo = mod.getItemStorage().getSlotThatCanFitInPlayerInventory(cursor, false);
             if (moveTo.isPresent()) {
                 setDebugState("Moving cursor stack back");
-                mod.getSlotHandler().clickSlot(moveTo.get(), 0, SlotActionType.PICKUP);
+                mod.getSlotHandler().clickSlotForce(moveTo.get(), 0, SlotActionType.PICKUP);
                 return null;
             }
             if (ItemHelper.canThrowAwayStack(mod, cursor)) {
                 setDebugState("Incompatible cursor stack, throwing");
-                mod.getSlotHandler().clickSlot(Slot.UNDEFINED, 0, SlotActionType.PICKUP);
+                mod.getSlotHandler().clickSlotForce(Slot.UNDEFINED, 0, SlotActionType.PICKUP);
             } else {
                 Optional<Slot> garbage = StorageHelper.getGarbageSlot(mod);
                 if (garbage.isPresent()) {
-                    // Pick up garbage so we throw it out next frame
                     setDebugState("Picking up garbage");
-                    mod.getSlotHandler().clickSlot(garbage.get(), 0, SlotActionType.PICKUP);
+                    mod.getSlotHandler().clickSlotForce(garbage.get(), 0, SlotActionType.PICKUP);
                 } else {
-                    mod.getSlotHandler().clickSlot(Slot.UNDEFINED, 0, SlotActionType.PICKUP);
+                    mod.getSlotHandler().clickSlotForce(Slot.UNDEFINED, 0, SlotActionType.PICKUP);
                 }
             }
             return null;

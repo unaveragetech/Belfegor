@@ -527,8 +527,10 @@ public interface LookHelper {
         }
 
         // Set the player's yaw and pitch
-        mod.getPlayer().setYaw(rotation.getYaw());
-        mod.getPlayer().setPitch(rotation.getPitch());
+        if (mod.getPlayer() != null) {
+            mod.getPlayer().setYaw(rotation.getYaw());
+            mod.getPlayer().setPitch(rotation.getPitch());
+        }
     }
 
     /**
@@ -542,8 +544,10 @@ public interface LookHelper {
         mod.getClientBaritone().getLookBehavior().updateTarget(rotation, true);
 
         // Set the player's yaw and pitch
-        mod.getPlayer().setYaw(rotation.getYaw());
-        mod.getPlayer().setPitch(rotation.getPitch());
+        if (mod.getPlayer() != null) {
+            mod.getPlayer().setYaw(rotation.getYaw());
+            mod.getPlayer().setPitch(rotation.getPitch());
+        }
     }
 
     /**

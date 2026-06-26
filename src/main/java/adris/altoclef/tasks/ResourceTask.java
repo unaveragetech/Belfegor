@@ -2,6 +2,7 @@ package adris.altoclef.tasks;
 
 import adris.altoclef.AltoClef;
 import adris.altoclef.tasks.container.PickupFromContainerTask;
+import adris.altoclef.tasks.container.ShulkerInteractionTask;
 import adris.altoclef.tasks.movement.DefaultGoToDimensionTask;
 import adris.altoclef.tasks.movement.PickupDroppedItemTask;
 import adris.altoclef.tasks.resources.MineAndCollectTask;
@@ -49,6 +50,8 @@ public abstract class ResourceTask extends Task implements ITaskCanForce {
     private boolean _forceDimension = false;
     private Dimension _targetDimension;
     private BlockPos _mineLastClosest = null;
+    private MineAndCollectTask _mineIfPresentTask = null;
+    private ShulkerInteractionTask _shulkerRetrieveTask = null;
 
     public ResourceTask(ItemTarget[] itemTargets) {
         _itemTargets = itemTargets;
@@ -78,7 +81,10 @@ public abstract class ResourceTask extends Task implements ITaskCanForce {
 
     @Override
     protected void onStart(AltoClef mod) {
+        _mineIfPresentTask = null;
+        _shulkerRetrieveTask = null;
         mod.getBehaviour().push();
+        mod.getBehaviour().addProtectedItems(ItemTarget.getMatches(_itemTargets));
         //removeThrowawayItems(_itemTargets);
         if (_mineIfPresent != null) {
             mod.getBlockTracker().trackBlock(_mineIfPresent);
@@ -88,7 +94,6 @@ public abstract class ResourceTask extends Task implements ITaskCanForce {
 
     @Override
     protected Task onTick(AltoClef mod) {
-        mod.getBehaviour().addProtectedItems(ItemTarget.getMatches(_itemTargets));
         // If we have an item in an INACCESSIBLE inventory slot
         if (!(thisOrChildSatisfies(task -> task instanceof ITaskUsesCraftingGrid)) || _ensureFreeCraftingGridTask.isActive()) {
             for (ItemTarget target : _itemTargets) {
@@ -147,6 +152,31 @@ public abstract class ResourceTask extends Task implements ITaskCanForce {
             }
         }
 
+        // A carried shulker is the nearest storage tier. Withdraw from it before
+        // walking to chests, mining, or crafting a replacement.
+        if (_shulkerRetrieveTask != null
+                && !_shulkerRetrieveTask.isFinished(mod)
+                && !_shulkerRetrieveTask.stopped()) {
+            setDebugState("Continuing active carried shulker withdrawal");
+            return _shulkerRetrieveTask;
+        }
+        ItemTarget[] missingInInventory = Arrays.stream(_itemTargets)
+                .filter(target -> mod.getItemStorage().getItemCountInventoryOnly(target.getMatches())
+                        < target.getTargetCount())
+                .filter(target -> ShulkerInteractionTask.carriedShulkerContains(mod, target))
+                .toArray(ItemTarget[]::new);
+        if (missingInInventory.length > 0) {
+            if (_shulkerRetrieveTask == null
+                    || _shulkerRetrieveTask.stopped()
+                    || _shulkerRetrieveTask.isFinished(mod)) {
+                _shulkerRetrieveTask = new ShulkerInteractionTask(
+                        ShulkerInteractionTask.Mode.RETRIEVE, missingInInventory);
+            }
+            setDebugState("Withdrawing from carried shulker");
+            return _shulkerRetrieveTask;
+        }
+        _shulkerRetrieveTask = null;
+
         // Check for chests and grab resources from them.
         if (_currentContainer == null) {
             List<ContainerCache> containersWithItem = mod.getItemStorage().getContainersWithItem(Arrays.stream(_itemTargets).reduce(new Item[0], (items, target) -> ArrayUtils.addAll(items, target.getMatches()), ArrayUtils::addAll));
@@ -184,7 +214,11 @@ public abstract class ResourceTask extends Task implements ITaskCanForce {
                     }
                     if (_mineLastClosest != null) {
                         if (_mineLastClosest.isWithinDistance(mod.getPlayer().getPos(), mod.getModSettings().getResourceMineRange() * 1.5 + 20)) {
-                            return new MineAndCollectTask(_itemTargets, _mineIfPresent, MiningRequirement.HAND);
+                            if (_mineIfPresentTask != null) {
+                        return _mineIfPresentTask;
+                    }
+                    _mineIfPresentTask = new MineAndCollectTask(_itemTargets, _mineIfPresent, MiningRequirement.HAND);
+                    return _mineIfPresentTask;
                         }
                     }
                 }

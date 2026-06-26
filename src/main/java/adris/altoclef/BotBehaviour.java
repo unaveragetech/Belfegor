@@ -3,7 +3,6 @@ package adris.altoclef;
 import adris.altoclef.util.slots.Slot;
 import baritone.altoclef.AltoClefSettings;
 import baritone.api.Settings;
-import baritone.api.utils.RayTraceUtils;
 import net.minecraft.block.BlockState;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.entity.Entity;
@@ -162,8 +161,33 @@ public class BotBehaviour {
     }
 
     public boolean isProtected(Item item) {
-        // For now nothing is protected.
         return current().protectedItems.contains(item);
+    }
+
+    // === PLACEMENT PROTECTION ===
+    // Items in this set will never be placed as blocks by the bot.
+    // Useful for reserving crafting materials.
+
+    public void addPlacementProtectedItems(Item... items) {
+        Collections.addAll(current().placementProtectedItems, items);
+        current().applyState();
+    }
+
+    public void removePlacementProtectedItems(Item... items) {
+        current().placementProtectedItems.removeAll(Arrays.asList(items));
+        current().applyState();
+    }
+
+    public boolean isPlacementProtected(Item item) {
+        return current().placementProtectedItems.contains(item);
+    }
+
+    // === PLACED BLOCK TRACKING ===
+    // Blocks the bot has placed — will never be mined.
+
+    public void addPlacedBlock(BlockPos pos) {
+        current().placedBlocks.add(pos);
+        current().applyState();
     }
 
     public boolean shouldForceFieldPlayers() {
@@ -238,12 +262,14 @@ public class BotBehaviour {
     public State pop() {
         if (_states.isEmpty()) {
             Debug.logError("State stack is empty. This shouldn't be happening.");
-            return null;
+            push();
+            return _states.peek();
         }
         State popped = _states.pop();
         if (_states.isEmpty()) {
             Debug.logError("State stack is empty after pop. This shouldn't be happening.");
-            return null;
+            push();
+            return popped;
         }
         _states.peek().applyState();
         return popped;
@@ -285,6 +311,11 @@ public class BotBehaviour {
         public List<BiFunction<Double, BlockPos, Double>> globalHeuristics = new ArrayList<>();
         public boolean _allowWalkThroughFlowingWater = false;
 
+        // Placement blacklist: items reserved for crafting, never place as blocks
+        public List<Item> placementProtectedItems = new ArrayList<>();
+        // Blocks the bot has placed — never mine these
+        public HashSet<BlockPos> placedBlocks = new HashSet<>();
+
         // Minecraft config
         public boolean pauseOnLostFocus = true;
 
@@ -314,6 +345,8 @@ public class BotBehaviour {
                 conversionSlots.addAll(toCopy.conversionSlots);
                 forceFieldPlayers = toCopy.forceFieldPlayers;
                 escapeLava = toCopy.escapeLava;
+                placementProtectedItems.addAll(toCopy.placementProtectedItems);
+                placedBlocks.addAll(toCopy.placedBlocks);
             }
         }
 
@@ -356,7 +389,7 @@ public class BotBehaviour {
             }
             _allowWalkThroughFlowingWater = settings.isFlowingWaterPassAllowed();
 
-            rayFluidHandling = RayTraceUtils.fluidHandling;
+            rayFluidHandling = RaycastContext.FluidHandling.ANY;
         }
 
         private void readMinecraftState() {
@@ -407,7 +440,7 @@ public class BotBehaviour {
             sa.allowSwimThroughLava(swimThroughLava);
 
             // Extra / hard coded
-            RayTraceUtils.fluidHandling = rayFluidHandling;
+            // RayTraceUtils.fluidHandling not available in baritone v1.13.1
 
             // Minecraft
             MinecraftClient.getInstance().options.pauseOnLostFocus = pauseOnLostFocus;

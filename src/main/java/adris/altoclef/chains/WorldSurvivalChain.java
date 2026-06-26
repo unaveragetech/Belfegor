@@ -63,7 +63,8 @@ public class WorldSurvivalChain extends SingleTaskChain {
 
         // Extinguish with water
         if (mod.getModSettings().shouldExtinguishSelfWithWater()) {
-            if (!(_mainTask instanceof EscapeFromLavaTask && isCurrentlyRunning(mod)) && mod.getPlayer().isOnFire() && !mod.getPlayer().hasStatusEffect(StatusEffects.FIRE_RESISTANCE) && !mod.getWorld().getDimension().ultrawarm()) {
+            if (mod.getPlayer() == null) return Float.NEGATIVE_INFINITY;
+            if (!(_mainTask instanceof EscapeFromLavaTask && isCurrentlyRunning(mod)) && mod.getPlayer() != null && mod.getPlayer().isOnFire() && !mod.getPlayer().hasStatusEffect(StatusEffects.FIRE_RESISTANCE) && mod.getWorld() != null && !mod.getWorld().getDimension().ultrawarm()) {
                 // Extinguish ourselves
                 if (mod.getItemStorage().hasItem(Items.WATER_BUCKET)) {
                     BlockPos targetWaterPos = mod.getPlayer().getBlockPos();
@@ -113,6 +114,7 @@ public class WorldSurvivalChain extends SingleTaskChain {
     }
 
     private void handleDrowning(AltoClef mod) {
+        if (mod.getPlayer() == null) return;
         // Swim
         boolean avoidedDrowning = false;
         if (mod.getModSettings().shouldAvoidDrowning()) {
@@ -135,6 +137,7 @@ public class WorldSurvivalChain extends SingleTaskChain {
     }
 
     private boolean isInLavaOhShit(AltoClef mod) {
+        if (mod.getPlayer() == null) return false;
         if (mod.getPlayer().isInLava() && !mod.getPlayer().hasStatusEffect(StatusEffects.FIRE_RESISTANCE)) {
             _wasInLavaTimer.reset();
             return true;
@@ -143,8 +146,10 @@ public class WorldSurvivalChain extends SingleTaskChain {
     }
 
     private boolean isInFire(AltoClef mod) {
+        if (mod.getPlayer() == null) return false;
         if (mod.getPlayer().isOnFire() && !mod.getPlayer().hasStatusEffect(StatusEffects.FIRE_RESISTANCE)) {
             for (BlockPos pos : WorldHelper.getBlocksTouchingPlayer(mod)) {
+                if (mod.getWorld() == null) return false;
                 Block b = mod.getWorld().getBlockState(pos).getBlock();
                 if (b instanceof AbstractFireBlock) {
                     return true;
@@ -155,7 +160,8 @@ public class WorldSurvivalChain extends SingleTaskChain {
     }
 
     private boolean isStuckInNetherPortal(AltoClef mod) {
-        return WorldHelper.isInNetherPortal(mod) && !mod.getUserTaskChain().getCurrentTask().thisOrChildSatisfies(task -> task instanceof EnterNetherPortalTask);
+        var currentTask = mod.getUserTaskChain().getCurrentTask();
+        return WorldHelper.isInNetherPortal(mod) && currentTask != null && !currentTask.thisOrChildSatisfies(task -> task instanceof EnterNetherPortalTask);
     }
 
     @Override

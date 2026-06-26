@@ -6,23 +6,33 @@ import adris.altoclef.commandsystem.CommandExecutor;
 import adris.altoclef.control.InputControls;
 import adris.altoclef.control.PlayerExtraController;
 import adris.altoclef.control.SlotHandler;
+import adris.altoclef.debug.DebugLogger;
 import adris.altoclef.eventbus.EventBus;
 import adris.altoclef.eventbus.events.ClientRenderEvent;
 import adris.altoclef.eventbus.events.ClientTickEvent;
 import adris.altoclef.eventbus.events.SendChatEvent;
 import adris.altoclef.eventbus.events.TitleScreenEntryEvent;
+import adris.altoclef.macros.MacroRunner;
+import adris.altoclef.macros.MacroStorage;
+import adris.altoclef.memory.CraftingMemory;
+import adris.altoclef.memory.DecisionEngine;
+import adris.altoclef.memory.LocationMemory;
+import adris.altoclef.memory.ShulkerMemory;
+import adris.altoclef.tasksystem.CraftingPathRegistry;
 import adris.altoclef.tasksystem.Task;
 import adris.altoclef.tasksystem.TaskRunner;
 import adris.altoclef.trackers.*;
 import adris.altoclef.trackers.storage.ContainerSubTracker;
 import adris.altoclef.trackers.storage.ItemStorageTracker;
+import adris.altoclef.ui.AltoclefScreen;
 import adris.altoclef.ui.CommandStatusOverlay;
 import adris.altoclef.ui.MessagePriority;
 import adris.altoclef.ui.MessageSender;
+import adris.altoclef.util.ItemTarget;
 import adris.altoclef.util.helpers.InputHelper;
-import baritone.Baritone;
 import baritone.altoclef.AltoClefSettings;
 import baritone.api.BaritoneAPI;
+import baritone.api.IBaritone;
 import baritone.api.Settings;
 import net.fabricmc.api.ModInitializer;
 import net.minecraft.block.Blocks;
@@ -33,6 +43,7 @@ import net.minecraft.client.util.math.MatrixStack;
 import net.minecraft.client.world.ClientWorld;
 import net.minecraft.item.Item;
 import net.minecraft.item.Items;
+import net.minecraft.screen.slot.SlotActionType;
 import org.lwjgl.glfw.GLFW;
 
 import java.util.ArrayDeque;
@@ -77,6 +88,14 @@ public class AltoClef implements ModInitializer {
     private SlotHandler _slotHandler;
     // Butler
     private Butler _butler;
+    // Macro system
+    private MacroRunner _macroRunner;
+    private AltoclefScreen _altoclefScreen;
+    // Tick counter for periodic saves
+    private int _tickCount = 0;
+    private boolean _abortKeyWasDown = false;
+    private long _lastAutoShulkerSortMs = 0;
+    private String _lastAutoShulkerFingerprint = "";
 
     // Are we in game (playing in a server/world)
     public static boolean inGame() {
@@ -119,6 +138,7 @@ public class AltoClef implements ModInitializer {
         _mlgBucketChain = new MLGBucketFallChain(_taskRunner);
         new WorldSurvivalChain(_taskRunner);
         _foodChain = new FoodChain(_taskRunner);
+        new ToolRequirementChain(_taskRunner);
 
         // Trackers
         _storageTracker = new ItemStorageTracker(this, _trackerManager, container -> _containerSubTracker = container);
@@ -136,6 +156,50 @@ public class AltoClef implements ModInitializer {
         _slotHandler = new SlotHandler(this);
 
         _butler = new Butler(this);
+
+        // Macro system
+        _macroRunner = new MacroRunner(this);
+        _altoclefScreen = new AltoclefScreen(this);
+        try {
+            MacroStorage.init(new java.io.File("."));
+        } catch (Exception e) {
+            Debug.logWarning("Failed to initialize macro storage: " + e.getMessage());
+        }
+        try {
+            LocationMemory.init(new java.io.File("."));
+        } catch (Exception e) {
+            Debug.logWarning("Failed to initialize location memory: " + e.getMessage());
+        }
+        try {
+            CraftingMemory.init(new java.io.File("."));
+        } catch (Exception e) {
+            Debug.logWarning("Failed to initialize crafting memory: " + e.getMessage());
+        }
+        try {
+            ShulkerMemory.init(new java.io.File("."));
+        } catch (Exception e) {
+            Debug.logWarning("Failed to initialize shulker memory: " + e.getMessage());
+        }
+        try {
+            CraftingPathRegistry.init(new java.io.File("."));
+        } catch (Exception e) {
+            Debug.logWarning("Failed to initialize crafting path registry: " + e.getMessage());
+        }
+        // DecisionEngine uses CraftingMemory, no separate init needed
+
+        // Initialize debug logger
+        try {
+            DebugLogger.getInstance().init(new java.io.File("."));
+        } catch (Exception e) {
+            Debug.logWarning("Failed to initialize debug logger: " + e.getMessage());
+        }
+
+        // Load comprehensive recipe database from PrismarineJS data
+        try {
+            adris.altoclef.util.RecipeRegistry.getInstance().load();
+        } catch (Exception e) {
+            Debug.logWarning("Failed to load recipe registry: " + e.getMessage());
+        }
 
         initializeCommands();
 
@@ -172,7 +236,13 @@ public class AltoClef implements ModInitializer {
         // Tick with the client
         EventBus.subscribe(ClientTickEvent.class, evt -> onClientTick());
         // Render
-        EventBus.subscribe(ClientRenderEvent.class, evt -> onClientRenderOverlay(evt.stack));
+        EventBus.subscribe(ClientRenderEvent.class, evt -> onClientRenderOverlay(evt.context));
+
+        // Track placed blocks so we never mine them
+        EventBus.subscribe(adris.altoclef.eventbus.events.BlockPlaceEvent.class, evt -> {
+            _botBehaviour.avoidBlockBreaking(evt.blockPos);
+            _botBehaviour.addPlacedBlock(evt.blockPos);
+        });
 
         // Playground
         Playground.IDLE_TEST_INIT_FUNCTION(this);
@@ -187,17 +257,54 @@ public class AltoClef implements ModInitializer {
 
         _inputControls.onTickPre();
 
-        // Cancel shortcut
+        // Global abort: keypad '+' or Shift+'='. This polling runs regardless
+        // of which Minecraft screen currently owns keyboard focus.
+        boolean abortKeyDown = InputHelper.isKeyPressed(GLFW.GLFW_KEY_KP_ADD)
+                || ((InputHelper.isKeyPressed(GLFW.GLFW_KEY_LEFT_SHIFT)
+                || InputHelper.isKeyPressed(GLFW.GLFW_KEY_RIGHT_SHIFT))
+                && InputHelper.isKeyPressed(GLFW.GLFW_KEY_EQUAL));
+        if (abortKeyDown && !_abortKeyWasDown) {
+            abortAllAutomation();
+        }
+        _abortKeyWasDown = abortKeyDown;
+
+        // Legacy cancel shortcut
         if (InputHelper.isKeyPressed(GLFW.GLFW_KEY_LEFT_CONTROL) && InputHelper.isKeyPressed(GLFW.GLFW_KEY_K)) {
-            _userTaskChain.cancel(this);
-            if (_taskRunner.getCurrentTaskChain() != null) {
-                _taskRunner.getCurrentTaskChain().stop(this);
+            abortAllAutomation();
+        }
+
+        // Open AltoClef menu with 'C' key (only when no screen is open)
+        if (InputHelper.isKeyPressed(GLFW.GLFW_KEY_C) && MinecraftClient.getInstance().currentScreen == null && inGame()) {
+            MinecraftClient.getInstance().setScreen(_altoclefScreen);
+        }
+
+        // Macro runner tick
+        if (_macroRunner != null) {
+            _macroRunner.tick();
+        }
+
+        // Auto-sort only while no explicit command or macro owns the user lane.
+        if (_tickCount % 20 == 0
+                && inGame()
+                && _settings != null
+                && _settings.shouldAutoShulkerMode()
+                && !_userTaskChain.isActive()
+                && (_macroRunner == null || !_macroRunner.isRunning())
+                && adris.altoclef.tasks.container.ShulkerInteractionTask.hasCarriedShulker(this)) {
+            var targets = adris.altoclef.tasks.container.ShulkerInteractionTask.getAutoStoreTargets(this);
+            if (targets.length > 0 && shouldRunAutoShulkerSort(targets)) {
+                _lastAutoShulkerSortMs = System.currentTimeMillis();
+                _lastAutoShulkerFingerprint = autoShulkerFingerprint(targets);
+                runUserTask(new adris.altoclef.tasks.container.ShulkerInteractionTask(
+                        adris.altoclef.tasks.container.ShulkerInteractionTask.Mode.STORE, targets));
             }
         }
 
         // TODO: should this go here?
         _storageTracker.setDirty();
-        _containerSubTracker.onServerTick();
+        if (_containerSubTracker != null) {
+            _containerSubTracker.onServerTick();
+        }
         _miscBlockTracker.tick();
 
         _trackerManager.tick();
@@ -205,16 +312,158 @@ public class AltoClef implements ModInitializer {
         _taskRunner.tick();
         _blockTracker.postTickTask();
 
+        // Scan nearby blocks for notable ores and record in LocationMemory
+        if (_tickCount % 100 == 0 && getPlayer() != null && getWorld() != null) {
+            scanNotableBlocks();
+            adris.altoclef.tasks.container.ShulkerInteractionTask.syncCarriedShulkerMemory(this);
+        }
+
         _butler.tick();
         _messageSender.tick();
+
+        // Save location memory periodically (every 30 seconds)
+        if (_tickCount % 600 == 0) {
+            LocationMemory.getInstance().save();
+            CraftingMemory.getInstance().save();
+            CraftingPathRegistry.getInstance().save();
+        }
+        _tickCount++;
+
+        // Flush debug log to disk
+        DebugLogger.getInstance().flush();
 
         _inputControls.onTickPost();
     }
 
+    private boolean shouldRunAutoShulkerSort(ItemTarget[] targets) {
+        String mode = _settings.getAutoShulkerSortMode();
+        long now = System.currentTimeMillis();
+        if ("timer".equals(mode)) {
+            return now - _lastAutoShulkerSortMs >= _settings.getAutoShulkerTimerSeconds() * 1000L;
+        }
+
+        int occupied = getOccupiedMainInventorySlots();
+        int threshold = _settings.getAutoShulkerInventoryThreshold();
+        int occupiedPercent = (int) Math.ceil(occupied * 100.0 / 36.0);
+        if (occupiedPercent < threshold) {
+            return false;
+        }
+        String fingerprint = autoShulkerFingerprint(targets);
+        return !fingerprint.equals(_lastAutoShulkerFingerprint)
+                || now - _lastAutoShulkerSortMs >= 10_000L;
+    }
+
+    private int getOccupiedMainInventorySlots() {
+        if (getPlayer() == null) return 0;
+        int occupied = 0;
+        for (var stack : getPlayer().getInventory().main) {
+            if (!stack.isEmpty()) occupied++;
+        }
+        return occupied;
+    }
+
+    private String autoShulkerFingerprint(ItemTarget[] targets) {
+        return Arrays.stream(targets)
+                .map(target -> Arrays.toString(target.getMatches()) + "x" + target.getTargetCount())
+                .sorted()
+                .reduce("", (a, b) -> a + "|" + b);
+    }
+
+    public void abortAllAutomation() {
+        DebugLogger.getInstance().logImmediate("GLOBAL-ABORT", "Emergency abort key pressed");
+        if (_macroRunner != null && _macroRunner.isRunning()) {
+            _macroRunner.stop();
+        }
+        if (_userTaskChain != null) {
+            _userTaskChain.cancel(this);
+        }
+        if (_taskRunner != null) {
+            _taskRunner.disable();
+        }
+        getClientBaritone().getPathingBehavior().cancelEverything();
+        getClientBaritone().getInputOverrideHandler().clearAllKeys();
+        if (_inputControls != null) {
+            _inputControls.releaseAll();
+        }
+        if (getPlayer() != null
+                && !adris.altoclef.util.helpers.StorageHelper.getItemStackInCursorSlot().isEmpty()) {
+            var cursor = adris.altoclef.util.helpers.StorageHelper.getItemStackInCursorSlot();
+            getItemStorage().getSlotThatCanFitInPlayerInventory(cursor, true)
+                    .ifPresent(slot -> getSlotHandler().clickSlotForce(
+                            slot, 0, SlotActionType.PICKUP));
+        }
+        adris.altoclef.util.helpers.StorageHelper.closeScreen();
+        log("Automation aborted with +", MessagePriority.TIMELY);
+    }
+
+    public void reloadModSettings() {
+        adris.altoclef.Settings.load(settings -> _settings = settings);
+    }
+
+    /**
+     * Scans nearby blocks for notable ores and structures, recording them in LocationMemory
+     * so the bot can find them later without wandering.
+     */
+    private void scanNotableBlocks() {
+        var player = getPlayer();
+        if (player == null) return;
+        var world = getWorld();
+        if (world == null) return;
+
+        int cx = player.getBlockX();
+        int cy = player.getBlockY();
+        int cz = player.getBlockZ();
+        int radius = 16;
+        String dim = adris.altoclef.util.helpers.WorldHelper.getCurrentDimension().name();
+
+        for (int x = cx - radius; x <= cx + radius; x += 4) {
+            for (int y = cy - 8; y <= cy + 8; y += 4) {
+                for (int z = cz - radius; z <= cz + radius; z += 4) {
+                    var state = world.getBlockState(net.minecraft.util.math.BlockPos.ORIGIN.add(x, y, z));
+                    var block = state.getBlock();
+                    String category = getNotableBlockCategory(block);
+                    if (category != null) {
+                        LocationMemory.getInstance().remember(category, x, y, z, dim, "");
+                    }
+                }
+            }
+        }
+    }
+
+    private static String getNotableBlockCategory(net.minecraft.block.Block block) {
+        var id = net.minecraft.registry.Registries.BLOCK.getId(block);
+        String name = id.getPath();
+        if (name.contains("iron_ore") || name.contains("gold_ore") || name.contains("diamond_ore")
+                || name.contains("coal_ore") || name.contains("redstone_ore") || name.contains("lapis_ore")
+                || name.contains("emerald_ore") || name.contains("copper_ore")) return "ore";
+        if (name.contains("deepslate") && name.contains("ore")) return "ore";
+        if (block == net.minecraft.block.Blocks.CRAFTING_TABLE) return "crafting_table";
+        if (block == net.minecraft.block.Blocks.FURNACE) return "furnace";
+        if (block == net.minecraft.block.Blocks.BLAST_FURNACE) return "blast_furnace";
+        if (block == net.minecraft.block.Blocks.SMOKER) return "smoker";
+        if (block == net.minecraft.block.Blocks.CHEST || block == net.minecraft.block.Blocks.BARREL) return "chest";
+        if (block == net.minecraft.block.Blocks.ENDER_CHEST) return "ender_chest";
+        return null;
+    }
+
     /// GETTERS AND SETTERS
 
-    private void onClientRenderOverlay(MatrixStack matrixStack) {
-        _commandStatusOverlay.render(this, matrixStack);
+    private void onClientRenderOverlay(net.minecraft.client.gui.DrawContext drawContext) {
+        _commandStatusOverlay.render(this, drawContext);
+    }
+
+    /**
+     * Reapply baritone settings from current AltoClef settings.
+     * Call this after changing settings from the GUI.
+     */
+    public void reapplyBaritoneSettings() {
+        if (_settings != null) {
+            getClientBaritoneSettings().allowParkour.value = _settings.isAllowParkour();
+            getClientBaritoneSettings().allowParkourAscend.value = _settings.isAllowParkour();
+            getClientBaritoneSettings().allowParkourPlace.value = _settings.isAllowParkour();
+            getClientBaritoneSettings().allowDiagonalDescend.value = _settings.isAllowDiagonalDescend();
+            getClientBaritoneSettings().allowDiagonalAscend.value = _settings.isAllowDiagonalAscend();
+        }
     }
 
     private void initializeBaritoneSettings() {
@@ -223,11 +472,35 @@ public class AltoClef implements ModInitializer {
         getClientBaritoneSettings().overshootTraverse.value = false;
         getClientBaritoneSettings().allowOvershootDiagonalDescend.value = true;
         getClientBaritoneSettings().allowInventory.value = true;
-        getClientBaritoneSettings().allowParkour.value = false;
-        getClientBaritoneSettings().allowParkourAscend.value = false;
-        getClientBaritoneSettings().allowParkourPlace.value = false;
-        getClientBaritoneSettings().allowDiagonalDescend.value = false;
-        getClientBaritoneSettings().allowDiagonalAscend.value = false;
+        // Allow breaking blocks for pathing (escaping holes, etc.)
+        getClientBaritoneSettings().allowBreak.value = true;
+
+        // Avoid water: add water source blocks to blocksToAvoid so baritone
+        // paths around them instead of swimming through them. This prevents the bot
+        // from getting stuck in water, drowning, or taking unnecessary swim paths.
+        if (_settings == null || _settings.shouldAvoidWaterSources()) {
+            getExtraBaritoneSettings().getForceAvoidWalkThroughPredicates().add(pos -> {
+                if (MinecraftClient.getInstance().world == null) return false;
+                var state = MinecraftClient.getInstance().world.getBlockState(pos);
+                return !state.getFluidState().isEmpty()
+                        && (state.getFluidState().getFluid() == net.minecraft.fluid.Fluids.WATER
+                        || state.getFluidState().getFluid() == net.minecraft.fluid.Fluids.LAVA);
+            });
+        }
+        // Apply user pathfinding settings
+        if (_settings != null) {
+            getClientBaritoneSettings().allowParkour.value = _settings.isAllowParkour();
+            getClientBaritoneSettings().allowParkourAscend.value = _settings.isAllowParkour();
+            getClientBaritoneSettings().allowParkourPlace.value = _settings.isAllowParkour();
+            getClientBaritoneSettings().allowDiagonalDescend.value = _settings.isAllowDiagonalDescend();
+            getClientBaritoneSettings().allowDiagonalAscend.value = _settings.isAllowDiagonalAscend();
+        } else {
+            getClientBaritoneSettings().allowParkour.value = false;
+            getClientBaritoneSettings().allowParkourAscend.value = false;
+            getClientBaritoneSettings().allowParkourPlace.value = false;
+            getClientBaritoneSettings().allowDiagonalDescend.value = false;
+            getClientBaritoneSettings().allowDiagonalAscend.value = false;
+        }
         getClientBaritoneSettings().blocksToAvoid.value = List.of(Blocks.FLOWERING_AZALEA, Blocks.AZALEA,
                 Blocks.POWDER_SNOW, Blocks.BIG_DRIPLEAF, Blocks.BIG_DRIPLEAF_STEM, Blocks.CAVE_VINES,
                 Blocks.CAVE_VINES_PLANT, Blocks.TWISTING_VINES, Blocks.TWISTING_VINES_PLANT, Blocks.SWEET_BERRY_BUSH,
@@ -245,6 +518,10 @@ public class AltoClef implements ModInitializer {
 
         // Water bucket placement will be handled by us exclusively
         getExtraBaritoneSettings().configurePlaceBucketButDontFall(true);
+
+        // Avoid water: don't let baritone path through water source blocks.
+        // The bot should go around water rather than swimming through it.
+        getExtraBaritoneSettings().setFlowingWaterPass(false);
 
         // For render smoothing
         getClientBaritoneSettings().randomLooking.value = 0.0;
@@ -329,18 +606,22 @@ public class AltoClef implements ModInitializer {
     /**
      * Baritone access (could just be static honestly)
      */
-    public Baritone getClientBaritone() {
+    public IBaritone getClientBaritone() {
         if (getPlayer() == null) {
-            return (Baritone) BaritoneAPI.getProvider().getPrimaryBaritone();
+            return BaritoneAPI.getProvider().getPrimaryBaritone();
         }
-        return (Baritone) BaritoneAPI.getProvider().getBaritoneForPlayer(getPlayer());
+        ClientPlayerEntity player = getPlayer();
+        if (player == null) {
+            return BaritoneAPI.getProvider().getPrimaryBaritone();
+        }
+        return BaritoneAPI.getProvider().getBaritoneForPlayer(player);
     }
 
     /**
      * Baritone settings access (could just be static honestly)
      */
     public Settings getClientBaritoneSettings() {
-        return Baritone.settings();
+        return BaritoneAPI.getSettings();
     }
 
     /**
@@ -456,6 +737,36 @@ public class AltoClef implements ModInitializer {
         return _mlgBucketChain;
     }
 
+    /**
+     * Macro runner for executing reusable command chains
+     */
+    public MacroRunner getMacroRunner() {
+        return _macroRunner;
+    }
+
+    /**
+     * AltoClef control panel screen
+     */
+    public AltoclefScreen getAltoclefScreen() {
+        return _altoclefScreen;
+    }
+
+    /**
+     * Location memory - remembers significant locations
+     */
+    public LocationMemory getMemory() {
+        return LocationMemory.getInstance();
+    }
+
+    /**
+     * Open the AltoClef control panel
+     */
+    public void openScreen() {
+        if (inGame()) {
+            MinecraftClient.getInstance().setScreen(_altoclefScreen);
+        }
+    }
+
     public void log(String message) {
         log(message, MessagePriority.TIMELY);
     }
@@ -465,7 +776,9 @@ public class AltoClef implements ModInitializer {
      */
     public void log(String message, MessagePriority priority) {
         Debug.logMessage(message);
-        _butler.onLog(message, priority);
+        if (_butler != null) {
+            _butler.onLog(message, priority);
+        }
     }
 
     public void logWarning(String message) {
@@ -477,7 +790,9 @@ public class AltoClef implements ModInitializer {
      */
     public void logWarning(String message, MessagePriority priority) {
         Debug.logWarning(message);
-        _butler.onLogWarning(message, priority);
+        if (_butler != null) {
+            _butler.onLogWarning(message, priority);
+        }
     }
 
     private void runEnqueuedPostInits() {

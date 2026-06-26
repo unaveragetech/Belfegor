@@ -13,6 +13,7 @@ import adris.altoclef.tasks.movement.TimeoutWanderTask;
 import adris.altoclef.tasksystem.Task;
 import adris.altoclef.util.Dimension;
 import adris.altoclef.util.ItemTarget;
+import adris.altoclef.util.helpers.BaritoneCompat;
 import adris.altoclef.util.helpers.LookHelper;
 import adris.altoclef.util.helpers.WorldHelper;
 import adris.altoclef.util.progresscheck.MovementProgressChecker;
@@ -67,8 +68,8 @@ public class CollectBucketLiquidTask extends ResourceTask {
         mod.getBehaviour().setRayTracingFluidHandling(RaycastContext.FluidHandling.SOURCE_ONLY);
 
         // Avoid breaking / placing blocks at our liquid
-        mod.getBehaviour().avoidBlockBreaking((pos) -> MinecraftClient.getInstance().world.getBlockState(pos).getBlock() == _toCollect);
-        mod.getBehaviour().avoidBlockPlacing((pos) -> MinecraftClient.getInstance().world.getBlockState(pos).getBlock() == _toCollect);
+        mod.getBehaviour().avoidBlockBreaking((pos) -> MinecraftClient.getInstance().world != null && MinecraftClient.getInstance().world.getBlockState(pos).getBlock() == _toCollect);
+        mod.getBehaviour().avoidBlockPlacing((pos) -> MinecraftClient.getInstance().world != null && MinecraftClient.getInstance().world.getBlockState(pos).getBlock() == _toCollect);
 
         //_blacklist.clear();
 
@@ -161,7 +162,7 @@ public class CollectBucketLiquidTask extends ResourceTask {
                     }
                     // We can reach the block.
                     if (LookHelper.getReach(blockPos).isPresent() &&
-                            mod.getClientBaritone().getPathingBehavior().isSafeToCancel()) {
+                            BaritoneCompat.isSafeToCancel(mod.getClientBaritone().getPathingBehavior())) {
                         return new InteractWithBlockTask(new ItemTarget(Items.BUCKET, 1), blockPos, _toCollect != Blocks.LAVA);
                     }
                     // Get close enough.

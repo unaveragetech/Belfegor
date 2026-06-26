@@ -83,7 +83,7 @@ public class DeathMenuChain extends TaskChain {
                 if (shouldAutoRespawn(mod)) {
                     _deathCount++;
                     Debug.logMessage("RESPAWNING... (this is death #" + _deathCount + ")");
-                    assert MinecraftClient.getInstance().player != null;
+                    if (MinecraftClient.getInstance().player == null) return Float.NEGATIVE_INFINITY;
                     Text screenMessage = ((DeathScreenAccessor) screen).getMessage();
                     String deathMessage = screenMessage != null ? screenMessage.getString() : "Unknown"; //"(not implemented yet)"; //screen.children().toString();
                     MinecraftClient.getInstance().player.requestRespawn();
@@ -91,7 +91,8 @@ public class DeathMenuChain extends TaskChain {
                     for (String i : mod.getModSettings().getDeathCommand().split(" & ")) {
                         String command = i.replace("{deathmessage}", deathMessage);
                         String prefix = mod.getModSettings().getCommandPrefix();
-                        while (MinecraftClient.getInstance().player.isAlive()) ;
+                        while (MinecraftClient.getInstance().player != null && MinecraftClient.getInstance().player.isAlive()) ;
+                        if (MinecraftClient.getInstance().player == null) break;
                         if (!command.isEmpty()) {
                             if (command.startsWith(prefix)) {
                                 AltoClef.getCommandExecutor().execute(command, () -> {

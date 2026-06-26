@@ -68,6 +68,17 @@ public class InputControls {
         return inputToKeyBinding(input).isPressed();
     }
 
+    public void releaseAll() {
+        for (Input input : Input.values()) {
+            try {
+                inputToKeyBinding(input).setPressed(false);
+            } catch (IllegalArgumentException ignored) {
+            }
+        }
+        _toUnpress.clear();
+        _waitForRelease.clear();
+    }
+
     public void forceLook(float yaw, float pitch) {
         if (MinecraftClient.getInstance().player != null) {
             MinecraftClient.getInstance().player.setYaw(yaw);

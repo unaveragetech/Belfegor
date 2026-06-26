@@ -69,7 +69,29 @@ public class SpreadItemToSlotsTask extends Task {
                         }
                     }
                     if (toPlace.isEmpty()) {
-                        Debug.logError("Called SpreadItemToSlots when item/not enough item is available! valid items: " + StlHelper.toString(validItems, Item::getTranslationKey));
+                        // Materials not available - count how many we actually have
+                        int haveCount = 0;
+                        for (Slot movableSlot : _getMovableSlots.apply(mod)) {
+                            ItemStack stack = StorageHelper.getItemStackInSlot(movableSlot);
+                            if (_toMove.matches(stack.getItem())) {
+                                haveCount += stack.getCount();
+                            }
+                        }
+                        // Also count items already placed in target slots
+                        for (Slot tgtSlot : _slotsToSpreadTo) {
+                            ItemStack atTgt = StorageHelper.getItemStackInSlot(tgtSlot);
+                            if (_toMove.matches(atTgt.getItem())) {
+                                haveCount += atTgt.getCount();
+                            }
+                        }
+                        // Check if we actually have enough total
+                        int totalNeeded = _toMove.getTargetCount() * _slotsToSpreadTo.length;
+                        if (haveCount >= totalNeeded) {
+                            // Items exist but aren't accessible - return null to wait
+                            return null;
+                        }
+                        // Not enough items at all - signal failure by finishing
+                        Debug.logWarning("SpreadItemToSlots: Not enough " + _toMove + " available (have " + haveCount + ", need " + totalNeeded + ")");
                         return null;
                     }
                     mod.getSlotHandler().clickSlot(toPlace.get(), 0, SlotActionType.PICKUP);

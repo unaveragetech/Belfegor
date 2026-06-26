@@ -6,6 +6,7 @@ import adris.altoclef.tasks.movement.GetToEntityTask;
 import adris.altoclef.tasks.movement.TimeoutWanderTask;
 import adris.altoclef.tasksystem.ITaskRequiresGrounded;
 import adris.altoclef.tasksystem.Task;
+import adris.altoclef.util.helpers.BaritoneCompat;
 import adris.altoclef.util.helpers.ItemHelper;
 import adris.altoclef.util.helpers.LookHelper;
 import adris.altoclef.util.helpers.StorageHelper;
@@ -113,7 +114,7 @@ public abstract class AbstractDoToEntityTask extends Task implements ITaskRequir
                     result.getType() == HitResult.Type.ENTITY && !mod.getFoodChain().needsToEat() &&
                     !mod.getMLGBucketChain().isFallingOhNo(mod) && mod.getMLGBucketChain().doneMLG() &&
                     !mod.getMLGBucketChain().isChorusFruiting() &&
-                    mod.getClientBaritone().getPathingBehavior().isSafeToCancel() &&
+                    BaritoneCompat.isSafeToCancel(mod.getClientBaritone().getPathingBehavior()) &&
                     mod.getPlayer().isOnGround()) {
                 _progress.reset();
                 return onEntityInteract(mod, entity);
@@ -128,7 +129,7 @@ public abstract class AbstractDoToEntityTask extends Task implements ITaskRequir
                 return new GetToEntityTask(entity, maintainDistance);
             }
         }
-        if (!mod.getClientBaritone().getPathingBehavior().isSafeToCancel()) {
+        if (!BaritoneCompat.isSafeToCancel(mod.getClientBaritone().getPathingBehavior())) {
             return null;
         }
         return new TimeoutWanderTask();

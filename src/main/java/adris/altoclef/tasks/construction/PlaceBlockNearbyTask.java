@@ -14,11 +14,12 @@ import adris.altoclef.util.helpers.WorldHelper;
 import adris.altoclef.util.progresscheck.MovementProgressChecker;
 import adris.altoclef.util.slots.Slot;
 import adris.altoclef.util.time.TimerGame;
+import adris.altoclef.util.helpers.BaritoneCompat;
 import baritone.api.utils.IPlayerContext;
 import baritone.api.utils.input.Input;
-import baritone.pathing.movement.MovementHelper;
 import net.minecraft.block.Block;
 import net.minecraft.client.MinecraftClient;
+import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.screen.slot.SlotActionType;
 import net.minecraft.util.ActionResult;
@@ -114,7 +115,16 @@ public class PlaceBlockNearbyTask extends Task {
         BlockPos current = getCurrentlyLookingBlockPlace(mod);
         if (current != null && _canPlaceHere.test(current)) {
             setDebugState("Placing since we can...");
-            if (mod.getSlotHandler().forceEquipItem(ItemHelper.blocksToItems(_toPlace))) {
+            Item[] placeItems = ItemHelper.blocksToItems(_toPlace);
+            // Skip if any placement-protected items (reserved for crafting)
+            boolean anyProtected = false;
+            for (Item item : placeItems) {
+                if (mod.getBehaviour().isPlacementProtected(item)) {
+                    anyProtected = true;
+                    break;
+                }
+            }
+            if (!anyProtected && mod.getSlotHandler().forceEquipItem(placeItems)) {
                 if (place(mod, current)) {
                     return null;
                 }
@@ -192,7 +202,7 @@ public class PlaceBlockNearbyTask extends Task {
             BlockPos bpos = bhit.getBlockPos();//.subtract(bhit.getSide().getVector());
             //Debug.logMessage("TEMP: A: " + bpos);
             IPlayerContext ctx = mod.getClientBaritone().getPlayerContext();
-            if (MovementHelper.canPlaceAgainst(ctx, bpos)) {
+            if (BaritoneCompat.canPlaceAgainst(ctx, bpos)) {
                 BlockPos placePos = bhit.getBlockPos().add(bhit.getSide().getVector());
                 // Don't place inside the player.
                 if (WorldHelper.isInsidePlayer(mod, placePos)) {

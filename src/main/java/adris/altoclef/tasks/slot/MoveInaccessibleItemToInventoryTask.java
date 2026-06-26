@@ -6,6 +6,7 @@ import adris.altoclef.util.ItemTarget;
 import adris.altoclef.util.helpers.ItemHelper;
 import adris.altoclef.util.helpers.StorageHelper;
 import adris.altoclef.util.slots.CursorSlot;
+import adris.altoclef.util.slots.PlayerSlot;
 import adris.altoclef.util.slots.Slot;
 import net.minecraft.item.ItemStack;
 import net.minecraft.screen.slot.SlotActionType;
@@ -16,6 +17,7 @@ import java.util.Optional;
 public class MoveInaccessibleItemToInventoryTask extends Task {
 
     private final ItemTarget _target;
+    private boolean _clearedGrid = false;
 
     public MoveInaccessibleItemToInventoryTask(ItemTarget target) {
         _target = target;
@@ -23,7 +25,7 @@ public class MoveInaccessibleItemToInventoryTask extends Task {
 
     @Override
     protected void onStart(AltoClef mod) {
-
+        _clearedGrid = false;
     }
 
     @Override
@@ -35,20 +37,19 @@ public class MoveInaccessibleItemToInventoryTask extends Task {
             if (!cursorStack.isEmpty()) {
                 Optional<Slot> moveTo = mod.getItemStorage().getSlotThatCanFitInPlayerInventory(cursorStack, false);
                 if (moveTo.isPresent()) {
-                    mod.getSlotHandler().clickSlot(moveTo.get(), 0, SlotActionType.PICKUP);
+                    mod.getSlotHandler().clickSlotForce(moveTo.get(), 0, SlotActionType.PICKUP);
                     return null;
                 }
                 if (ItemHelper.canThrowAwayStack(mod, cursorStack)) {
-                    mod.getSlotHandler().clickSlot(Slot.UNDEFINED, 0, SlotActionType.PICKUP);
+                    mod.getSlotHandler().clickSlotForce(Slot.UNDEFINED, 0, SlotActionType.PICKUP);
                     return null;
                 }
                 Optional<Slot> garbage = StorageHelper.getGarbageSlot(mod);
-                // Try throwing away cursor slot if it's garbage
                 if (garbage.isPresent()) {
-                    mod.getSlotHandler().clickSlot(garbage.get(), 0, SlotActionType.PICKUP);
+                    mod.getSlotHandler().clickSlotForce(garbage.get(), 0, SlotActionType.PICKUP);
                     return null;
                 }
-                mod.getSlotHandler().clickSlot(Slot.UNDEFINED, 0, SlotActionType.PICKUP);
+                mod.getSlotHandler().clickSlotForce(Slot.UNDEFINED, 0, SlotActionType.PICKUP);
             } else {
                 StorageHelper.closeScreen();
             }
@@ -73,12 +74,19 @@ public class MoveInaccessibleItemToInventoryTask extends Task {
             Optional<Slot> toMoveTo = mod.getItemStorage().getSlotThatCanFitInPlayerInventory(stack, false);
             if (toMoveTo.isPresent()) {
                 setDebugState("Moving slot " + toMove + " to inventory");
-                // Pick up & move
+                // Use clickSlotForce for rapid clearing — this task should complete
+                // in 1-2 ticks, not 20 seconds. The original used regular clickSlot
+                // which is timer-gated and extremely slow.
                 if (Slot.isCursor(toMove)) {
-                    mod.getSlotHandler().clickSlot(toMoveTo.get(), 0, SlotActionType.PICKUP);
+                    mod.getSlotHandler().clickSlotForce(toMoveTo.get(), 0, SlotActionType.PICKUP);
                 } else {
-                    mod.getSlotHandler().clickSlot(toMove, 0, SlotActionType.PICKUP);
+                    mod.getSlotHandler().clickSlotForce(toMove, 0, SlotActionType.PICKUP);
                 }
+                return null;
+            } else if (!Slot.isCursor(toMove) && isInCraftingGrid(toMove)) {
+                // Crafting grid slot with no room in inventory — try shift-click
+                // to move directly (this handles partial stacks etc.)
+                mod.getSlotHandler().clickSlotForce(toMove, 0, SlotActionType.QUICK_MOVE);
                 return null;
             } else {
                 setDebugState("Free up inventory first.");
@@ -88,6 +96,13 @@ public class MoveInaccessibleItemToInventoryTask extends Task {
         }
         setDebugState("NONE FOUND");
         return null;
+    }
+
+    private boolean isInCraftingGrid(Slot slot) {
+        for (Slot craftSlot : PlayerSlot.CRAFT_INPUT_SLOTS) {
+            if (craftSlot.equals(slot)) return true;
+        }
+        return false;
     }
 
     @Override
