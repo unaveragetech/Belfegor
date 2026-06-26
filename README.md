@@ -1,72 +1,181 @@
 # Belfegor
 
-Belfegor is a Fabric client-side Minecraft automation mod for **Minecraft 1.21.4**. It is a production-focused fork and evolution of AltoClef/Baritone-style task automation with stronger inventory handling, safer crafting, managed shulker-box sub-inventories, PvP loadout automation, an in-game command UI, persistent memory, and better debug logs for diagnosing hard inventory/crafting failures.
+Belfegor is a Fabric client-side Minecraft automation mod for **Minecraft 1.21.4**. It is a production-focused evolution of AltoClef/Baritone-style task automation with safer crafting, stronger inventory recovery, managed shulker-box sub-inventories, PvP loadout automation, persistent memory, a richer in-game UI, and detailed debugging for the kinds of Minecraft inventory bugs that usually make bots fall apart.
 
-The goal is simple: give a Minecraft client an extensible task system that can gather resources, craft items, manage storage, survive, travel, and execute higher-level routines from compact commands such as `@get diamond_shovel`, `@stacked`, `@shulker store diamond 3`, or `@player`.
+At its simplest, Belfegor lets you type commands like:
+
+```text
+@get diamond_shovel
+@toolset iron
+@stacked
+@shulker store diamond 3
+@shulker retrieve stick 8
+@player
+```
+
+Behind that small command surface is a task engine that can gather resources, mine, craft, smelt, loot containers, use carried shulkers as storage, path with Baritone, survive hazards, and chain smaller behaviors into larger goals.
 
 ## Current release
 
-- Minecraft: `1.21.4`
-- Mod version: `1.21.4-beta1`
-- Built jar: [`releases/belfegor-1.21.4-beta1.jar`](releases/belfegor-1.21.4-beta1.jar)
-- Jar SHA256: `C3B24C02E960F059686D1B779B998F6680413945424A153BF97684DD775D85F1`
-- Mod id: `belfegor`
-- Default command prefix: `@`
-- In-game UI key: `C`
-- Global abort key while a task is running: `+`
+| Field | Value |
+|---|---|
+| Minecraft | `1.21.4` |
+| Mod version | `1.21.4-beta1` |
+| Built jar | [`releases/belfegor-1.21.4-beta1.jar`](releases/belfegor-1.21.4-beta1.jar) |
+| Jar SHA256 | `C3B24C02E960F059686D1B779B998F6680413945424A153BF97684DD775D85F1` |
+| Mod id | `belfegor` |
+| Command prefix | `@` |
+| In-game UI | `C` |
+| Global abort key | `+` while a task is running |
 
-## What Belfegor does
+## What Belfegor is trying to be
 
-Belfegor runs a stack of Minecraft automation tasks:
+Belfegor is not just a macro runner. The long-term goal is an extensible Minecraft agent that can:
 
-- Gets resources and crafted items with `@get`, including multi-step recipes.
-- Crafts in the player inventory and crafting tables with cursor recovery and transaction guards.
-- Uses containers and carried shulker boxes as extended storage.
-- Catalogs shulker contents and can retrieve needed crafting supplies from them.
-- Sorts non-tool inventory items into shulkers in automatic timer or detection modes.
-- Runs PvP preparation commands such as `@stacked`, `@toolset`, and `@pvp`.
-- Provides `@player`, an autonomous exploration/learning mode that sets a home base, builds a small campsite, gathers resources, practices crafts, and uses shulkers as sub-inventories.
-- Exposes a richer `C` UI with task state, command help, settings, logs, and shulker memory.
-- Writes detailed debug logs for inventory/crafting/shulker problems.
+- understand high-level goals through commands;
+- break those goals into smaller tasks;
+- choose between inventory, shulker, container, crafting, mining, smelting, and hunting sources;
+- preserve safe inventory state even when interrupted;
+- remember useful storage and crafting information;
+- expose enough logs and UI state that failures are diagnosable;
+- eventually learn better routes through repeated play.
 
-## How it works
+It is currently beta software, with the most active engineering effort focused on the hard part: **Minecraft inventory correctness**. Cursor state, slot mappings, screen handlers, shulker NBT, and task interruption are the gremlins. Belfegor’s task system is built to cage those gremlins rather than pretending they do not exist.
 
-Belfegor is built around composable tasks:
+## Feature overview
 
-1. A command parses user intent, for example `@get diamond_shovel`.
-2. The task catalogue resolves the requested item into a resource/crafting task.
-3. Resource tasks prefer nearby dropped items, inventory, carried shulkers, remembered containers, then mining/crafting.
-4. Crafting tasks collect missing recipe materials, open the correct grid, move ingredients, receive output, and recover the cursor.
-5. Shulker transactions place a carried shulker, ensure the block above is open, transfer exact quantities, catalog contents twice, close it, mine it, pick it up, and restore it to its original inventory slot when possible.
-6. Memory systems persist useful state such as shulker contents, learned crafting paths, and home-base locations.
+| Feature | What it means in-game |
+|---|---|
+| Resource gathering | `@get` can obtain catalogued blocks/items using collection, mining, crafting, smelting, and containers. |
+| Safer crafting | Inventory and table crafting include cursor recovery, screen diagnostics, and transaction guards. |
+| Managed shulkers | Carried shulkers are treated as sub-inventories that can be placed, opened, scanned, used, mined, and picked back up. |
+| Auto shulker sorting | Eligible non-tool items can be deposited into shulkers by timer or inventory-fill detection. |
+| PvP prep | `@stacked`, `@toolset`, and `@pvp` automate gear and combat preparation. |
+| Player mode | `@player` starts an autonomous explore/gather/craft/home-base loop. |
+| UI | Press `C` for task state, commands, settings, shulker memory, and logs. |
+| Debug logs | Detailed runtime logs are written to `.minecraft/belfegor/belfegor_debug.log`. |
 
-The key design rule is that inventory transactions should be atomic: once Belfegor starts moving items in a shulker/container/crafting UI, other tasks should not interrupt it mid-click and leave the cursor stuck.
+## System model
+
+```mermaid
+flowchart TD
+    User["User command, UI action, or Butler message"] --> Parser["Command parser"]
+    Parser --> Catalogue["Task catalogue / command task"]
+    Catalogue --> Chain["User task chain"]
+    Chain --> Resource["Resource tasks"]
+    Chain --> Craft["Crafting tasks"]
+    Chain --> Move["Movement tasks"]
+    Chain --> Combat["Combat/survival tasks"]
+    Resource --> Sources{"Best source?"}
+    Sources --> Inv["Inventory"]
+    Sources --> Shulker["Carried shulker"]
+    Sources --> Container["Known container"]
+    Sources --> Ground["Dropped item"]
+    Sources --> Mine["Mine/gather"]
+    Sources --> SubCraft["Craft prerequisite"]
+    Craft --> SlotGuard["Inventory/cursor transaction guard"]
+    Shulker --> ShulkerTxn["Place -> open -> transfer -> catalog -> break -> pickup"]
+    Move --> Baritone["Baritone pathing"]
+    Chain --> Memory["Persistent memory"]
+    Memory --> ShulkerMem["Shulker contents"]
+    Memory --> CraftMem["Crafting paths"]
+    Memory --> LocationMem["Home/stash/location memory"]
+```
+
+## How `@get diamond_shovel` works
+
+A command like `@get diamond_shovel` becomes a small planning problem:
+
+```mermaid
+flowchart LR
+    A["@get diamond_shovel"] --> B["Find task/recipe"]
+    B --> C{"Already have output?"}
+    C -- yes --> Done["Finish"]
+    C -- no --> D["Need diamond + sticks + crafting table"]
+    D --> E{"Ingredient source"}
+    E --> Inv["Inventory"]
+    E --> Shu["Carried shulker"]
+    E --> Chest["Container"]
+    E --> Gather["Mine/craft/gather"]
+    Shu --> Txn["Shulker retrieve transaction"]
+    Chest --> Pickup["Container pickup transaction"]
+    Gather --> Sub["Subtask, e.g. craft sticks"]
+    Txn --> F["Ingredients in inventory"]
+    Pickup --> F
+    Sub --> F
+    Inv --> F
+    F --> G["Open table or inventory grid"]
+    G --> H["Move recipe slots"]
+    H --> I["Take output"]
+    I --> Done
+```
+
+The important detail is that shulker/container/crafting interactions are treated as transactions. A competing task should not interrupt a half-finished click sequence and strand an item on the cursor.
 
 ## Install
 
-1. Install Fabric Loader for Minecraft `1.21.4`.
-2. Install Fabric API for Minecraft `1.21.4`.
-3. Put [`releases/belfegor-1.21.4-beta1.jar`](releases/belfegor-1.21.4-beta1.jar) in your `.minecraft/mods` folder.
-4. Ensure your environment has the compatible Baritone/Fabric API setup used by this project.
-5. Launch Minecraft once. Belfegor creates its config folder at:
+### 1. Install Minecraft/Fabric prerequisites
 
-   ```text
-   .minecraft/belfegor/
-   ```
+You need:
+
+- Minecraft `1.21.4`;
+- Fabric Loader `0.16.10` or compatible;
+- Fabric API for `1.21.4`;
+- the Belfegor jar from this repo.
+
+### 2. Download the jar
+
+Use:
+
+```text
+releases/belfegor-1.21.4-beta1.jar
+```
+
+### 3. Copy the jar to your instance
+
+For a normal launcher:
+
+```text
+.minecraft/mods/belfegor-1.21.4-beta1.jar
+```
+
+For MultiMC/Prism Launcher, put it in that instance’s `.minecraft/mods` folder.
+
+### 4. Launch once
+
+On first launch, Belfegor creates:
+
+```text
+.minecraft/belfegor/
+```
 
 Important generated files:
 
-- `belfegor_settings.json` — user settings.
-- `belfegor_debug.log` — detailed runtime diagnostics.
-- `belfegor_shulker_memory.json` — remembered shulker-box contents.
+| File | Purpose |
+|---|---|
+| `belfegor_settings.json` | Main settings. |
+| `belfegor_debug.log` | Debug log. |
+| `belfegor_shulker_memory.json` | Catalogued shulker contents. |
 
-## Quick start
+### 5. Verify in game
 
-Open chat and run commands with `@`:
+Open chat and run:
+
+```text
+@help
+@status
+@get crafting_table
+```
+
+Press `C` to open the UI.
+
+## Quick start examples
 
 ```text
 @help
 @help shulker
+@list
+@get oak_log 16
 @get crafting_table
 @get diamond_shovel
 @toolset iron
@@ -75,38 +184,54 @@ Open chat and run commands with `@`:
 @shulker store diamond 3
 @shulker retrieve stick 8
 @shulker auto on
+@shulker auto detection
 @player
 @stop
 ```
 
-Press `C` to open the Belfegor UI. The command tab includes real examples that can be run by double-clicking them.
+## The `C` UI
 
-Press `+` while a task is running to globally abort the active automation.
+The Belfegor UI is meant to make the agent inspectable while it works:
+
+| Tab | Purpose |
+|---|---|
+| Tasks | Active chains, current task, progress/debug state. |
+| Macros | Macro runner state. |
+| Commands | Full interactive command reference with examples. Double-click examples to run them. |
+| Settings | Runtime toggles and configuration visibility. |
+| Shulkers | Indexed shulker memory and auto-sort mode. |
+| Log | Recent runtime/debug events. |
 
 ## Documentation
 
+- [Architecture](docs/ARCHITECTURE.md)
+- [Installation guide](docs/INSTALLATION.md)
 - [Full command reference](docs/COMMANDS.md)
 - [Shulker-box management](docs/SHULKER_MANAGEMENT.md)
+- [Beat-the-game and autonomous gameplay](docs/BEAT_THE_GAME.md)
 - [Settings and generated files](docs/CONFIGURATION.md)
+- [Troubleshooting](docs/TROUBLESHOOTING.md)
 - [Build and development guide](docs/DEVELOPMENT.md)
 - [Roadmap](docs/ROADMAP.md)
 
 ## Production assets
 
-- Built jar: [`releases/belfegor-1.21.4-beta1.jar`](releases/belfegor-1.21.4-beta1.jar)
-- Mod icon: [`src/main/resources/assets/belfegor/icon.png`](src/main/resources/assets/belfegor/icon.png)
-- Fabric metadata: [`src/main/resources/fabric.mod.json`](src/main/resources/fabric.mod.json)
-- Mixin config: [`src/main/resources/belfegor.mixins.json`](src/main/resources/belfegor.mixins.json)
-- Recipe registry data: [`src/main/resources/belfegor_recipes.json`](src/main/resources/belfegor_recipes.json)
+| Asset | Path |
+|---|---|
+| Built jar | [`releases/belfegor-1.21.4-beta1.jar`](releases/belfegor-1.21.4-beta1.jar) |
+| Mod icon | [`src/main/resources/assets/belfegor/icon.png`](src/main/resources/assets/belfegor/icon.png) |
+| Fabric metadata | [`src/main/resources/fabric.mod.json`](src/main/resources/fabric.mod.json) |
+| Mixin config | [`src/main/resources/belfegor.mixins.json`](src/main/resources/belfegor.mixins.json) |
+| Recipe registry data | [`src/main/resources/belfegor_recipes.json`](src/main/resources/belfegor_recipes.json) |
 
 ## Build
 
 Requirements:
 
-- Java 21
-- Gradle wrapper from this repo
-- Minecraft/Fabric dependencies from `gradle.properties`
-- Local Baritone API jar at `../baritone/dist/baritone-api.jar` for development builds
+- Java 21;
+- Gradle wrapper from this repo;
+- Minecraft/Fabric dependencies from `gradle.properties`;
+- local Baritone API jar at `../baritone/dist/baritone-api.jar` for development builds.
 
 Build:
 
@@ -114,7 +239,7 @@ Build:
 .\gradlew.bat build
 ```
 
-The remapped jar is produced at:
+Output:
 
 ```text
 build/libs/belfegor-1.21.4-beta1.jar
@@ -122,11 +247,11 @@ build/libs/belfegor-1.21.4-beta1.jar
 
 ## Project status
 
-Belfegor is beta software. Core command execution, resource gathering, crafting, UI, shulker storage, and PvP preparation are active. The hardest ongoing area is Minecraft inventory correctness: cursor state, slot mappings, screen transitions, shulker NBT, container sync, and task interruption. The current code includes extensive debug logging to make those failures diagnosable.
+Belfegor is actively evolving. Core command execution, item acquisition, crafting, shulker management, PvP preparation, autonomous player mode, and UI inspection are implemented. Expect continued iteration around edge cases, especially container sync and complex inventory states.
 
 ## Credits
 
-Belfegor builds on the AltoClef-style Minecraft automation architecture and Baritone pathing concepts, with additional Belfegor-specific work around Minecraft `1.21.4`, managed shulkers, UI, crafting stability, PvP tooling, autonomous player mode, and debugging.
+Belfegor builds on AltoClef-style Minecraft automation ideas and Baritone pathing, with additional Belfegor-specific work around Minecraft `1.21.4`, managed shulkers, UI, crafting stability, PvP tooling, autonomous player mode, memory, and debugging.
 
 ## License
 
