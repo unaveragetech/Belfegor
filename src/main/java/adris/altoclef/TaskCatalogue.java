@@ -34,9 +34,9 @@ import java.util.function.Function;
 @SuppressWarnings({"rawtypes"})
 public class TaskCatalogue {
 
-    private static final HashMap<String, Item[]> _nameToItemMatches = new HashMap<>();
-    private static final HashMap<String, CataloguedResource> _nameToResourceTask = new HashMap<>();
-    private static final HashMap<Item, CataloguedResource> _itemToResourceTask = new HashMap<>();
+    private static final LinkedHashMap<String, Item[]> _nameToItemMatches = new LinkedHashMap<>();
+    private static final LinkedHashMap<String, CataloguedResource> _nameToResourceTask = new LinkedHashMap<>();
+    private static final LinkedHashMap<Item, CataloguedResource> _itemToResourceTask = new LinkedHashMap<>();
     private static final HashSet<Item> _resourcesObtainable = new HashSet<>();
 
     static {

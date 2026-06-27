@@ -4,12 +4,12 @@ import adris.altoclef.AltoClef;
 import adris.altoclef.Debug;
 
 import java.util.Collection;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.function.Consumer;
 
 public class CommandExecutor {
 
-    private final HashMap<String, Command> _commandSheet = new HashMap<>();
+    private final LinkedHashMap<String, Command> _commandSheet = new LinkedHashMap<>();
     private final AltoClef _mod;
 
     public CommandExecutor(AltoClef mod) {

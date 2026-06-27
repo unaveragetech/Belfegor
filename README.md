@@ -11,6 +11,7 @@ At its simplest, Belfegor lets you type commands like:
 @shulker store diamond 3
 @shulker retrieve stick 8
 @player
+@ai "what should I do next?"
 @craftaudit anvil
 ```
 
@@ -25,7 +26,7 @@ Behind that small command surface is a task engine that can gather resources, mi
 | Built jar | [`releases/belfegor-1.21.4-beta1.jar`](releases/belfegor-1.21.4-beta1.jar) |
 | Runtime bundle | [`releases/belfegor-1.21.4-beta1-runtime.zip`](releases/belfegor-1.21.4-beta1-runtime.zip) |
 | Release notes | [`docs/RELEASE_v1.21.4-beta1.md`](docs/RELEASE_v1.21.4-beta1.md) |
-| Jar SHA256 | `391EA0F77A46796B8EEAB97772A08DB10518BD7C2B2BDA17E4BB032647D3FF20` |
+| Jar SHA256 | `A2671E95C939575B6AB24F11E294C7155C8F9FB3121C518F5035BBACABDBB761` |
 | Mod id | `belfegor` |
 | Command prefix | `@` |
 | In-game UI | `C` |
@@ -59,6 +60,7 @@ It is currently beta software, with the most active engineering effort focused o
 | Craft audit harness | `@craftaudit` gives normalized leaf resources in a cheat-enabled test world, crafts through the real task system, stores outputs, and logs pass/fail results. |
 | PvP prep | `@stacked`, `@toolset`, and `@pvp` automate gear and combat preparation. |
 | Player mode | `@player` starts an autonomous explore/gather/craft/home-base loop. |
+| Local AI advisor | Packaged Ollama advisor can use `lfm2.5-thinking:1.2b` to answer `@ai` prompts and choose validated next commands during `@player`. |
 | Beat-the-game routes | `@gamer` and `@marvion` run classic autonomous completion routes. |
 | Butler | Authorized players can command the bot by whisper/private message. |
 | UI | Press `C` for task state, commands, settings, shulker memory, and logs. |
@@ -80,6 +82,7 @@ Belfegor can already do a lot of practical survival automation:
 - plan normal craftable items from a bundled offline recipe catalogue;
 - run developer craft audits with `@craftaudit` to test recipes end-to-end;
 - run experimental autonomous play with `@player`;
+- ask the packaged Ollama advisor for context-aware help with `@ai`;
 - run classic beat-the-game style routines through `@gamer` / `@marvion`;
 - let authorized players command the bot by whisper through the Butler system.
 
@@ -363,6 +366,24 @@ The Belfegor UI is meant to make the agent inspectable while it works:
 | Shulkers | Indexed shulker memory and auto-sort mode. |
 | Log | Recent runtime/debug events. |
 
+## Packaged Ollama advisor
+
+Belfegor includes an optional local AI advisor inside the mod jar. It uses Ollama as the runtime and defaults to the installed thinking model:
+
+```text
+lfm2.5-thinking:1.2b
+```
+
+When enabled, the advisor exports the live command catalogue, context, prompt, response, and action/reaction log to `.minecraft/belfegor/`.
+
+Use:
+
+```text
+@ai "what should I do next?"
+```
+
+In `@player`, the advisor can suggest the next Belfegor command, but only if the command exists in the live registry and is not a denied control/developer command. If Ollama is unavailable or the model times out, Belfegor continues with normal deterministic player-mode logic.
+
 ## Documentation
 
 - [Whitepaper](docs/WHITEPAPER.md)
@@ -373,6 +394,7 @@ The Belfegor UI is meant to make the agent inspectable while it works:
 - [Shulker-box management](docs/SHULKER_MANAGEMENT.md)
 - [Beat-the-game, `@player`, and autonomous gameplay](docs/BEAT_THE_GAME.md)
 - [Settings and generated files](docs/CONFIGURATION.md)
+- [Local Ollama LLM advisor](docs/LLM_ADVISOR.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
 - [Build and development guide](docs/DEVELOPMENT.md)
 - [Roadmap](docs/ROADMAP.md)
@@ -387,6 +409,7 @@ The Belfegor UI is meant to make the agent inspectable while it works:
 | Mixin config | [`src/main/resources/belfegor.mixins.json`](src/main/resources/belfegor.mixins.json) |
 | Recipe registry data | [`src/main/resources/belfegor_recipes.json`](src/main/resources/belfegor_recipes.json) |
 | Craft audit command | [`src/main/java/adris/altoclef/commands/CraftAuditCommand.java`](src/main/java/adris/altoclef/commands/CraftAuditCommand.java) |
+| Ollama advisor | [`src/main/java/adris/altoclef/llm/LlmAdvisor.java`](src/main/java/adris/altoclef/llm/LlmAdvisor.java) |
 
 ## Build
 

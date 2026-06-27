@@ -531,6 +531,56 @@ public class Settings implements IFailableConfigFile {
      */
     private int homeBaseDefenseRadius = 32;
 
+    // ============ EMBEDDED AI ADVISOR ============
+
+    /**
+     * If true, Belfegor may call a local Ollama model for high-level advice.
+     * This is disabled by default because it launches an external local process.
+     */
+    private boolean llmAdvisorEnabled = false;
+
+    /**
+     * If true, @player may ask the LLM advisor what Belfegor command should run next.
+     */
+    private boolean llmAdvisorInPlayerMode = false;
+
+    /**
+     * If true, the advisor may answer chat-facing prompts through @ai.
+     */
+    private boolean llmAdvisorCanChat = true;
+
+    /**
+     * Ollama executable used for local model calls.
+     */
+    private String llmOllamaExecutable = "ollama";
+
+    /**
+     * Ollama model used by the advisor. Default is the small local thinking model
+     * expected from `ollama list`.
+     */
+    private String llmOllamaModel = "lfm2.5-thinking:1.2b";
+
+    /**
+     * Minimum seconds between automatic player-mode LLM requests.
+     */
+    private int llmAdvisorCooldownSeconds = 90;
+
+    /**
+     * Maximum seconds to wait for Ollama before falling back to normal logic.
+     */
+    private int llmAdvisorTimeoutSeconds = 45;
+
+    /**
+     * Requested context window for the model prompt. Ollama may clamp/ignore this
+     * depending on model/runtime support.
+     */
+    private int llmContextSize = 8192;
+
+    /**
+     * Maximum generated tokens for the advisor response.
+     */
+    private int llmMaxTokens = 384;
+
     // ============ LOGGING & DEBUG ============
 
     /**
@@ -818,6 +868,42 @@ public class Settings implements IFailableConfigFile {
 
     public void setHomeBaseDefenseRadius(int radius) {
         homeBaseDefenseRadius = Math.max(4, radius);
+    }
+
+    public boolean isLlmAdvisorEnabled() {
+        return llmAdvisorEnabled;
+    }
+
+    public boolean isLlmAdvisorInPlayerMode() {
+        return llmAdvisorEnabled && llmAdvisorInPlayerMode;
+    }
+
+    public boolean canLlmAdvisorChat() {
+        return llmAdvisorEnabled && llmAdvisorCanChat;
+    }
+
+    public String getLlmOllamaExecutable() {
+        return llmOllamaExecutable == null || llmOllamaExecutable.isBlank() ? "ollama" : llmOllamaExecutable.trim();
+    }
+
+    public String getLlmOllamaModel() {
+        return llmOllamaModel == null || llmOllamaModel.isBlank() ? "lfm2.5-thinking:1.2b" : llmOllamaModel.trim();
+    }
+
+    public int getLlmAdvisorCooldownSeconds() {
+        return Math.max(10, llmAdvisorCooldownSeconds);
+    }
+
+    public int getLlmAdvisorTimeoutSeconds() {
+        return Math.max(5, llmAdvisorTimeoutSeconds);
+    }
+
+    public int getLlmContextSize() {
+        return Math.max(2048, llmContextSize);
+    }
+
+    public int getLlmMaxTokens() {
+        return Math.max(64, llmMaxTokens);
     }
 
     @Override

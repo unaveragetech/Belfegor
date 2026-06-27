@@ -38,6 +38,13 @@ For multiplayer, read [Butler and multiplayer guide](BUTLER_AND_SERVERS.md). The
 | `returnHomeOnIdle` | Returns to home base when idle. |
 | `defendHomeBase` | Defends the remembered home base. |
 | `homeBaseDefenseRadius` | Radius for home-base defense behavior. |
+| `llmAdvisorEnabled` | Enables the packaged local Ollama advisor. Defaults to `false`. |
+| `llmAdvisorInPlayerMode` | Lets `@player` ask Ollama for the next safe command on a cooldown. |
+| `llmAdvisorCanChat` | Allows `@ai` chat-style advisor prompts. |
+| `llmOllamaExecutable` | Ollama command path, default `ollama`. |
+| `llmOllamaModel` | Ollama model name, default `lfm2.5-thinking:1.2b`. |
+| `llmAdvisorCooldownSeconds` | Minimum seconds between automatic player-mode advisor calls. |
+| `llmAdvisorTimeoutSeconds` | Maximum seconds to wait before falling back to deterministic logic. |
 
 After editing settings, run:
 

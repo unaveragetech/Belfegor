@@ -193,6 +193,11 @@ public class AltoClef implements ModInitializer {
         } catch (Exception e) {
             Debug.logWarning("Failed to initialize debug logger: " + e.getMessage());
         }
+        try {
+            adris.altoclef.llm.LlmAdvisor.getInstance().init(new java.io.File("."));
+        } catch (Exception e) {
+            Debug.logWarning("Failed to initialize LLM advisor: " + e.getMessage());
+        }
 
         // Load comprehensive recipe database from PrismarineJS data
         try {
@@ -219,6 +224,7 @@ public class AltoClef implements ModInitializer {
             // Don't break blocks or place blocks where we are explicitly protected.
             getExtraBaritoneSettings().avoidBlockBreak(blockPos -> _settings.isPositionExplicitlyProtected(blockPos));
             getExtraBaritoneSettings().avoidBlockPlace(blockPos -> _settings.isPositionExplicitlyProtected(blockPos));
+            adris.altoclef.llm.LlmAdvisor.getInstance().exportCommandCatalogue(this);
         });
 
         // Receive + cancel chat

@@ -4,6 +4,8 @@ This folder contains the runtime files for Belfegor on Minecraft `1.21.4`.
 
 This runtime package has been refreshed with the current craft-audit build. It includes the offline recipe catalogue and the developer command `@craftaudit`.
 
+It also includes the packaged Ollama advisor code. To use it, install Ollama, make sure `ollama list` includes `lfm2.5-thinking:1.2b`, enable `llmAdvisorEnabled` in `belfegor_settings.json`, and run `@ai "what should I do next?"`.
+
 ## Included jars
 
 Copy these files into your Minecraft instance's `.minecraft/mods/` folder:

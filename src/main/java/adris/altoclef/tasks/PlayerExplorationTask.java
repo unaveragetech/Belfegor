@@ -5,6 +5,7 @@ import adris.altoclef.Debug;
 import adris.altoclef.Settings;
 import adris.altoclef.TaskCatalogue;
 import adris.altoclef.memory.LocationMemory;
+import adris.altoclef.llm.LlmAdvisor;
 import adris.altoclef.tasks.construction.BuildCampsiteTask;
 import adris.altoclef.tasks.container.ShulkerInteractionTask;
 import adris.altoclef.tasks.movement.GetToBlockTask;
@@ -93,6 +94,7 @@ public class PlayerExplorationTask extends Task {
     protected Task onTick(AltoClef mod) {
         if (shouldFleeDanger(mod)) {
             setDebugState("Fleeing danger!");
+            LlmAdvisor.getInstance().recordAction("player_mode:flee_danger", "nearby danger or low health");
             return new TimeoutWanderTask(true);
         }
 
@@ -106,11 +108,17 @@ public class PlayerExplorationTask extends Task {
         Task shulkerTask = maybeUseShulkers(mod);
         if (shulkerTask != null) {
             setDebugState("Managing carried shulker inventory");
+            LlmAdvisor.getInstance().recordAction("player_mode:shulker_sort", "inventory pressure triggered shulker management");
             return shulkerTask;
+        }
+
+        if (maybeUseAdvisor(mod)) {
+            return null;
         }
 
         if (!mod.getItemStorage().hasItem(Items.WOODEN_PICKAXE)) {
             setDebugState("Getting first pickaxe");
+            LlmAdvisor.getInstance().recordAction("player_mode:get_wooden_pickaxe", "required starter tool missing");
             return TaskCatalogue.getItemTask(Items.WOODEN_PICKAXE, 1);
         }
 
@@ -141,6 +149,7 @@ public class PlayerExplorationTask extends Task {
         }
 
         setDebugState("Exploring #" + _explorationCounter);
+        LlmAdvisor.getInstance().setPlannedAction("wander/explore nearby terrain");
         return new TimeoutWanderTask(true);
     }
 
@@ -148,18 +157,21 @@ public class PlayerExplorationTask extends Task {
         Task pickupTask = findPickupTask(mod);
         if (pickupTask != null) {
             setDebugState("Picking up items");
+            LlmAdvisor.getInstance().recordAction("player_mode:pickup_items", "valuable or food drops nearby");
             return pickupTask;
         }
 
         Task killTask = findKillTask(mod);
         if (killTask != null) {
             setDebugState("Hunting mobs");
+            LlmAdvisor.getInstance().recordAction("player_mode:hunt_mobs", "useful mob target nearby");
             return killTask;
         }
 
         Task mineTask = findMineTask(mod);
         if (mineTask != null) {
             setDebugState("Mining blocks");
+            LlmAdvisor.getInstance().recordAction("player_mode:mine_blocks", "useful tracked ore/block nearby");
             return mineTask;
         }
 
@@ -189,6 +201,8 @@ public class PlayerExplorationTask extends Task {
                     setDebugState("Testing craft: " + item);
                     Task craftTask = TaskCatalogue.getItemTask(item, 1);
                     if (craftTask != null) {
+                        LlmAdvisor.getInstance().recordAction("player_mode:practice_craft " + item,
+                                "craft target selected from curated practice list");
                         return craftTask;
                     }
                 }
@@ -206,11 +220,13 @@ public class PlayerExplorationTask extends Task {
         if (_homeBase != null && mod.getPlayer() != null
                 && _homeBase.getSquaredDistance(mod.getPlayer().getBlockPos()) > 48 * 48) {
             setDebugState("Returning to home base");
+            LlmAdvisor.getInstance().recordAction("player_mode:return_home", "too far from home base");
             return cacheTask("goto-home:" + _homeBase, new GetToBlockTask(_homeBase));
         }
 
         if (!mod.getItemStorage().hasItem(Items.CRAFTING_TABLE)) {
             setDebugState("Preparing campsite crafting table");
+            LlmAdvisor.getInstance().recordAction("player_mode:prepare_crafting_table", "home base lacks crafting table");
             return TaskCatalogue.getItemTask("crafting_table", 1);
         }
         if (!mod.getItemStorage().hasItem(Items.FURNACE)
@@ -244,6 +260,8 @@ public class PlayerExplorationTask extends Task {
         Task build = cacheTask("camp:" + radius + ":" + _homeBase, new BuildCampsiteTask(_homeBase, radius));
         if (!build.isFinished(mod)) {
             setDebugState("Building/expanding home campsite radius " + radius);
+            LlmAdvisor.getInstance().recordAction("player_mode:build_campsite radius=" + radius,
+                    "expanding remembered home base");
             return build;
         }
 
@@ -259,6 +277,7 @@ public class PlayerExplorationTask extends Task {
         }
 
         setDebugState("Getting food");
+        LlmAdvisor.getInstance().recordAction("player_mode:get_food", "hunger below threshold");
         Task foodTask = TaskCatalogue.getItemTask("cooked_beef", 1);
         if (foodTask != null) {
             return foodTask;
@@ -269,10 +288,12 @@ public class PlayerExplorationTask extends Task {
     private Task doTools(AltoClef mod) {
         if (!mod.getItemStorage().hasItem(Items.STONE_PICKAXE) && mod.getItemStorage().hasItem(Items.WOODEN_PICKAXE)) {
             setDebugState("Upgrading to stone pickaxe");
+            LlmAdvisor.getInstance().recordAction("player_mode:upgrade_stone_pickaxe", "wooden pickaxe exists");
             return TaskCatalogue.getItemTask(Items.STONE_PICKAXE, 1);
         }
         if (!mod.getItemStorage().hasItem(Items.IRON_PICKAXE) && mod.getItemStorage().hasItem(Items.STONE_PICKAXE)) {
             setDebugState("Upgrading to iron pickaxe");
+            LlmAdvisor.getInstance().recordAction("player_mode:upgrade_iron_pickaxe", "stone pickaxe exists");
             return TaskCatalogue.getItemTask(Items.IRON_PICKAXE, 1);
         }
 
@@ -293,6 +314,34 @@ public class PlayerExplorationTask extends Task {
         if (targets.length == 0) return null;
         String key = "player-shulker-store:" + Arrays.toString(targets);
         return cacheTask(key, new ShulkerInteractionTask(ShulkerInteractionTask.Mode.STORE, targets));
+    }
+
+    private boolean maybeUseAdvisor(AltoClef mod) {
+        var decision = LlmAdvisor.getInstance().pollDecision();
+        if (decision.isPresent()) {
+            var result = decision.get();
+            if (!result.goal().isBlank()) {
+                LlmAdvisor.getInstance().setGoal(result.goal());
+            }
+            if (!result.chat().isBlank()) {
+                mod.log("AI: " + result.chat());
+            }
+            if (result.valid() && !result.command().isBlank()) {
+                mod.log("AI selected next command: " + result.command());
+                LlmAdvisor.getInstance().recordAction("llm_execute " + result.command(), result.reason());
+                mod.getCommandExecutor().execute(result.command());
+                return true;
+            }
+        }
+        String fallback = switch (_phase) {
+            case EXPLORE -> "wander/explore nearby terrain";
+            case GATHER -> "pick up items, hunt useful mobs, or mine tracked resources";
+            case CRAFT -> "practice useful starter crafts";
+            case SURVIVE -> "get/eat food and avoid danger";
+            case TOOLS -> "upgrade tools";
+            case HOME -> "return home and build/expand campsite";
+        };
+        return LlmAdvisor.getInstance().requestAutomaticPlayerDecision(mod, _phase.name(), fallback);
     }
 
     private Task cacheTask(String key, Task task) {

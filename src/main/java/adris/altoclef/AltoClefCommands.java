@@ -45,6 +45,7 @@ public class AltoClefCommands {
                 new StoreCommand(),
                 new RetrieveCommand(),
                 new ShulkerCommand(),
+                new AiCommand(),
                 new CraftAuditCommand()
         );
     }

@@ -32,9 +32,7 @@ public class HelpCommand extends Command {
 
         mod.log("########## BELFEGOR COMMAND REFERENCE ##########", MessagePriority.OPTIONAL);
         mod.log("Use " + prefix + "help <command> for full argument details.", MessagePriority.OPTIONAL);
-        var commands = new java.util.ArrayList<>(mod.getCommandExecutor().allCommands());
-        commands.sort(java.util.Comparator.comparing(Command::getName));
-        for (Command command : commands) {
+        for (Command command : mod.getCommandExecutor().allCommands()) {
             mod.log(prefix + command.getHelpRepresentation(), MessagePriority.OPTIONAL);
             mod.log("  " + command.getDetailedDescription(), MessagePriority.OPTIONAL);
             mod.log("  Examples: " + String.join(" | ", command.getExamples()),

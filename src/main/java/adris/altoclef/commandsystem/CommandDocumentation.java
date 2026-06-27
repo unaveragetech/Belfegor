@@ -2,6 +2,7 @@ package adris.altoclef.commandsystem;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Collection;
 
 public final class CommandDocumentation {
     private static final Map<String, List<String>> EXAMPLES = Map.ofEntries(
@@ -40,6 +41,7 @@ public final class CommandDocumentation {
             Map.entry("retrieve", List.of("@retrieve diamond 3")),
             Map.entry("shulker", List.of("@shulker list", "@shulker store diamond 3",
                     "@shulker retrieve stick 8", "@shulker auto on")),
+            Map.entry("ai", List.of("@ai \"what should I do next?\"", "@ai \"why am I stuck?\"")),
             Map.entry("craftaudit", List.of("@craftaudit anvil", "@craftaudit all 25"))
     );
 
@@ -57,8 +59,39 @@ public final class CommandDocumentation {
             case "retrieve" -> "Retrieves requested item quantities from known nearby storage.";
             case "stacked" -> "Sequentially gathers the complete configured PvP equipment and supply loadout.";
             case "toolset" -> "Crafts one pickaxe, axe, shovel, sword, and hoe at the requested material tier.";
+            case "ai" -> "Asks the local Ollama advisor for a chat response or high-level command suggestion using current context, command docs, inventory, shulker memory, goal, and action log. Defaults to llmOllamaModel=lfm2.5-thinking:1.2b when llmAdvisorEnabled is true.";
             case "craftaudit" -> "Developer-only offline recipe audit. Uses bundled recipe data, /give @s leaf resources, crafts each target through Belfegor, stores outputs, and writes belfegor/craft_audit_*.log. Requires cheats/op.";
             default -> fallback;
         };
+    }
+
+    public static String exportMarkdown(Collection<Command> commands, String prefix) {
+        StringBuilder result = new StringBuilder();
+        result.append("# Belfegor command catalogue\n\n");
+        result.append("Use only these commands when returning a command decision. ");
+        result.append("The prefix is `").append(prefix).append("`.\n\n");
+        for (Command command : commands) {
+            result.append("## ").append(prefix).append(command.getHelpRepresentation()).append("\n\n");
+            result.append(command.getDetailedDescription()).append("\n\n");
+            result.append("Arguments:\n\n");
+            ArgBase[] args = command.getArguments();
+            if (args.length == 0) {
+                result.append("- none\n\n");
+            } else {
+                for (ArgBase arg : args) {
+                    result.append("- `").append(arg.getName()).append("`: ")
+                            .append(arg.getTypeName()).append("; ")
+                            .append(arg.hasDefault() ? "optional" : "required")
+                            .append("; expected ").append(arg.getExpectedValues()).append("\n");
+                }
+                result.append("\n");
+            }
+            result.append("Runnable examples:\n\n");
+            for (String example : command.getExamples()) {
+                result.append("- `").append(example).append("`\n");
+            }
+            result.append("\n");
+        }
+        return result.toString();
     }
 }

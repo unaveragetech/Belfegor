@@ -66,6 +66,7 @@ build_and_install.bat
 | `util/RecipeRegistry.java` | Offline recipe catalogue loader, output/input indexes, recursive craft plans, and leaf-resource expansion. |
 | `commands/CraftAuditCommand.java` | Developer command entry point for recipe audit runs. |
 | `tasks/container/CraftAuditTask.java` | Cheat-enabled craft audit task that provisions resources, crafts through real tasks, stores outputs, and logs results. |
+| `llm/LlmAdvisor.java` | Packaged Ollama advisor bridge, command export, context snapshot, action log, response validation, and player-mode decision requests. |
 
 ## Debugging inventory issues
 
@@ -129,6 +130,36 @@ Recommended test-world workflow:
 ```
 
 The audit should fail loudly rather than loop forever. A failure usually points at one of four areas: bad recipe data, missing ingredient-group normalization, missing source/acquisition support, or an unsafe inventory transaction during the real craft.
+
+## Local Ollama advisor development
+
+The advisor is packaged in Java and calls Ollama directly:
+
+```text
+ollama run lfm2.5-thinking:1.2b
+```
+
+It writes inspectable files under `.minecraft/belfegor/`:
+
+```text
+llm_commands.md
+llm_context.json
+llm_prompt.txt
+llm_response.json
+llm_actions.log
+```
+
+Test flow:
+
+1. Confirm `ollama list` includes `lfm2.5-thinking:1.2b`.
+2. Set `llmAdvisorEnabled=true`.
+3. Run:
+
+```text
+@ai "what should I do next?"
+```
+
+For player-mode testing, set `llmAdvisorInPlayerMode=true` and run `@player`. Returned commands must exist in the command registry and cannot be control/dev commands such as `@stop`, `@reload_settings`, `@craftaudit`, `@test`, `@ai`, or `@player`.
 
 ## Packaging release artifacts
 

@@ -206,7 +206,7 @@ public class CraftAuditTask extends Task {
     }
 
     private List<Item> selectItems() {
-        List<Item> all = _registry.getSortedCraftableItems();
+        List<Item> all = getCraftableItemsInListOrder();
         List<Item> selected = new ArrayList<>();
         if ("all".equalsIgnoreCase(_target)) {
             selected.addAll(all);
@@ -220,6 +220,21 @@ public class CraftAuditTask extends Task {
             return new ArrayList<>(selected.subList(0, _limit));
         }
         return selected;
+    }
+
+    private List<Item> getCraftableItemsInListOrder() {
+        LinkedHashMap<Item, Item> ordered = new LinkedHashMap<>();
+        for (String resourceName : TaskCatalogue.resourceNames()) {
+            for (Item item : TaskCatalogue.getItemMatches(resourceName)) {
+                if (item != null && _registry.isCraftable(item)) {
+                    ordered.putIfAbsent(item, item);
+                }
+            }
+        }
+        for (Item item : _registry.getSortedCraftableItems()) {
+            ordered.putIfAbsent(item, item);
+        }
+        return new ArrayList<>(ordered.keySet());
     }
 
     private Map<Item, Integer> normalizeGiveResources(RecipeRegistry.CraftPlan plan) {

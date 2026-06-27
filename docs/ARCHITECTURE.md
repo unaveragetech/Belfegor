@@ -21,6 +21,10 @@ flowchart TD
     Inventory --> SlotHandler["SlotHandler"]
     Movement --> Baritone["Baritone processes"]
     Storage --> Memory["Memory files"]
+    Runner --> Advisor["Optional Ollama advisor"]
+    Advisor --> CommandDocs["llm_commands.md"]
+    Advisor --> Context["llm_context.json"]
+    Advisor --> ActionLog["llm_actions.log"]
 ```
 
 ## Task lifecycle
@@ -144,6 +148,26 @@ flowchart TD
 ```
 
 Memory files live in `.minecraft/belfegor/` and are intentionally human-readable JSON where practical.
+
+## Packaged Ollama advisor
+
+The local LLM advisor is packaged as Java code inside the mod and calls Ollama directly. It is deliberately outside the slot-clicking path:
+
+```mermaid
+flowchart TD
+    PlayerMode["@player decision point or @ai prompt"] --> Snapshot["Build context snapshot"]
+    Commands["Live command registry"] --> Export["llm_commands.md"]
+    Snapshot --> Prompt["llm_prompt.txt"]
+    ActionLog["llm_actions.log"] --> Prompt
+    Export --> Prompt
+    Prompt --> Ollama["ollama run lfm2.5-thinking:1.2b"]
+    Ollama --> Response["llm_response.json"]
+    Response --> Validate["Validate command against registry/denylist"]
+    Validate -- valid --> Execute["Execute selected Belfegor command"]
+    Validate -- invalid/timeout --> Fallback["Continue deterministic logic"]
+```
+
+The model can suggest high-level commands or chat text, but it cannot directly move the cursor, click slots, or bypass command validation.
 
 ## Recipe registry and craft audit loop
 
