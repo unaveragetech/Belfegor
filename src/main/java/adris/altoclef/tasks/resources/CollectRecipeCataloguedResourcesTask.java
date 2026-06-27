@@ -66,6 +66,8 @@ public class CollectRecipeCataloguedResourcesTask extends Task implements ITaskU
         // Stuff to get, both catalogued + individual items.
         HashMap<String, Integer> catalogueCount = new HashMap<>();
         HashMap<Item, Integer> itemCount = new HashMap<>();
+        HashMap<String, ItemTarget> groupTargets = new HashMap<>();
+        HashMap<String, Integer> groupCount = new HashMap<>();
 
         for (RecipeTarget target : _targets) {
             // Ignore this recipe if we have its item.
@@ -85,12 +87,9 @@ public class CollectRecipeCataloguedResourcesTask extends Task implements ITaskU
                     int numberOfRepeats = (int) Math.floor(-0.1 + (double) weNeed / target.getRecipe().outputCount()) + 1;
                     if (!slot.isCatalogueItem()) {
                         if (slot.getMatches().length != 1) {
-                            if (!_ignoreUncataloguedSlots) {
-                                Debug.logWarning("Recipe collection for recipe " + recipe + " slot " + i
-                                        + " is not catalogued. Please define an explicit"
-                                        + " collectRecipeSubTask() function for this item target:" + slot
-                                );
-                            }
+                            String key = groupKey(slot);
+                            groupTargets.putIfAbsent(key, new ItemTarget(slot.getMatches(), 1));
+                            groupCount.put(key, groupCount.getOrDefault(key, 0) + numberOfRepeats);
                         } else {
                             Item item = slot.getMatches()[0];
                             itemCount.put(item, itemCount.getOrDefault(item, 0) + numberOfRepeats);
@@ -104,6 +103,33 @@ public class CollectRecipeCataloguedResourcesTask extends Task implements ITaskU
             }
         }
 
+        for (String groupKey : groupTargets.keySet()) {
+            int count = groupCount.get(groupKey);
+            ItemTarget groupedTarget = new ItemTarget(groupTargets.get(groupKey), count);
+            if (!StorageHelper.itemTargetsMet(mod, groupedTarget)) {
+                String key = "group:" + groupKey + ":" + count;
+                if (ShulkerInteractionTask.carriedShulkerContains(mod, groupedTarget)) {
+                    if (_shulkerRetrieveTask != null
+                            && key.equals(_shulkerRetrieveKey)
+                            && !_shulkerRetrieveTask.isFinished(mod)
+                            && !_shulkerRetrieveTask.stopped()) {
+                        return _shulkerRetrieveTask;
+                    }
+                    _shulkerRetrieveKey = key;
+                    _shulkerRetrieveTask = new ShulkerInteractionTask(
+                            ShulkerInteractionTask.Mode.RETRIEVE, groupedTarget);
+                    setDebugState("Retrieving grouped ingredient " + groupedTarget + " from carried shulker");
+                    return _shulkerRetrieveTask;
+                }
+                if (_activeSubTask != null && key.equals(_activeSubTaskKey)) {
+                    return _activeSubTask;
+                }
+                _activeSubTaskKey = key;
+                _activeSubTask = TaskCatalogue.getItemTask(groupedTarget);
+                setDebugState("Getting grouped ingredient " + groupedTarget);
+                return _activeSubTask;
+            }
+        }
 
         // (Cache this with the above stuff!!)
         // Grab materials — sort by CraftingPathRegistry difficulty (easiest first)
@@ -261,5 +287,12 @@ public class CollectRecipeCataloguedResourcesTask extends Task implements ITaskU
         if (name.equals("apple") || name.equals("golden_apple")) return 10;
         // Default — medium difficulty
         return 6;
+    }
+
+    private static String groupKey(ItemTarget target) {
+        return Arrays.stream(target.getMatches())
+                .map(item -> net.minecraft.registry.Registries.ITEM.getId(item).toString())
+                .sorted()
+                .reduce("", (a, b) -> a + "|" + b);
     }
 }

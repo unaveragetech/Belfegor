@@ -1,6 +1,7 @@
 package adris.altoclef.util;
 
 import adris.altoclef.Debug;
+import adris.altoclef.util.helpers.ItemHelper;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -107,9 +108,9 @@ public class RecipeRegistry {
 
         CraftingRecipe recipe;
         if ("shaped".equals(type) && obj.has("pattern")) {
-            recipe = parseShapedRecipe(obj.getAsJsonArray("pattern"));
+            recipe = parseShapedRecipe(obj.getAsJsonArray("pattern"), outputCount);
         } else if ("shapeless".equals(type) && obj.has("ingredients")) {
-            recipe = parseShapelessRecipe(obj.getAsJsonArray("ingredients"));
+            recipe = parseShapelessRecipe(obj.getAsJsonArray("ingredients"), outputCount);
         } else {
             return null;
         }
@@ -119,7 +120,7 @@ public class RecipeRegistry {
         return new RecipeEntry(outputItem, outputCount, recipe, type);
     }
 
-    private CraftingRecipe parseShapedRecipe(JsonArray pattern) {
+    private CraftingRecipe parseShapedRecipe(JsonArray pattern, int outputCount) {
         int height = pattern.size();
         if (height == 0) return null;
 
@@ -142,7 +143,7 @@ public class RecipeRegistry {
                     String ingredientName = cell.getAsString();
                     Item ingredient = getItemByName(ingredientName);
                     if (ingredient != null) {
-                        slots[y * 3 + x] = new ItemTarget(ingredient);
+                        slots[y * 3 + x] = new ItemTarget(expandSimilarIngredient(ingredient));
                     }
                 }
             }
@@ -157,13 +158,13 @@ public class RecipeRegistry {
             slots2x2[1] = slots[1]; // top-right
             slots2x2[2] = slots[3]; // mid-left
             slots2x2[3] = slots[4]; // mid-right
-            return CraftingRecipe.newShapedRecipe(slots2x2, 1);
+            return CraftingRecipe.newShapedRecipe(slots2x2, outputCount);
         }
 
-        return CraftingRecipe.newShapedRecipe(slots, 1);
+        return CraftingRecipe.newShapedRecipe(slots, outputCount);
     }
 
-    private CraftingRecipe parseShapelessRecipe(JsonArray ingredients) {
+    private CraftingRecipe parseShapelessRecipe(JsonArray ingredients, int outputCount) {
         if (ingredients.size() > 9) return null;
 
         ItemTarget[] slots = new ItemTarget[9];
@@ -175,12 +176,12 @@ public class RecipeRegistry {
                 String ingredientName = elem.getAsString();
                 Item ingredient = getItemByName(ingredientName);
                 if (ingredient != null) {
-                    slots[i] = new ItemTarget(ingredient);
+                    slots[i] = new ItemTarget(expandSimilarIngredient(ingredient));
                 }
             }
         }
 
-        return CraftingRecipe.newShapedRecipe(slots, 1);
+        return CraftingRecipe.newShapedRecipe(slots, outputCount);
     }
 
     /**
@@ -255,4 +256,21 @@ public class RecipeRegistry {
         if (id == null) return null;
         return Registries.ITEM.get(id);
     }
+
+    private Item[] expandSimilarIngredient(Item ingredient) {
+        if (contains(ItemHelper.WOOD_SLAB, ingredient)) return ItemHelper.WOOD_SLAB;
+        if (contains(ItemHelper.PLANKS, ingredient)) return ItemHelper.PLANKS;
+        if (contains(ItemHelper.LOG, ingredient)) return ItemHelper.LOG;
+        if (contains(ItemHelper.WOOL, ingredient)) return ItemHelper.WOOL;
+        if (contains(ItemHelper.CARPET, ingredient)) return ItemHelper.CARPET;
+        return new Item[]{ingredient};
+    }
+
+    private boolean contains(Item[] group, Item item) {
+        for (Item candidate : group) {
+            if (candidate == item) return true;
+        }
+        return false;
+    }
+
 }

@@ -224,8 +224,23 @@ public class PlayerExplorationTask extends Task {
             Task chest = TaskCatalogue.getItemTask("chest", 1);
             if (chest != null) return chest;
         }
+        if (!mod.getItemStorage().hasItem(Items.WHEAT_SEEDS)) {
+            Task seeds = TaskCatalogue.getItemTask("wheat_seeds", 8);
+            if (seeds != null) {
+                setDebugState("Preparing starter farm seeds");
+                return seeds;
+            }
+        }
+        if (!mod.getItemStorage().hasItem(Items.WOODEN_HOE, Items.STONE_HOE, Items.IRON_HOE,
+                Items.GOLDEN_HOE, Items.DIAMOND_HOE, Items.NETHERITE_HOE)) {
+            Task hoe = TaskCatalogue.getItemTask("wooden_hoe", 1);
+            if (hoe != null) {
+                setDebugState("Preparing starter farm hoe");
+                return hoe;
+            }
+        }
 
-        int radius = Math.min(8, 4 + _campBuildCount);
+        int radius = Math.min(10, 4 + _campBuildCount);
         Task build = cacheTask("camp:" + radius + ":" + _homeBase, new BuildCampsiteTask(_homeBase, radius));
         if (!build.isFinished(mod)) {
             setDebugState("Building/expanding home campsite radius " + radius);

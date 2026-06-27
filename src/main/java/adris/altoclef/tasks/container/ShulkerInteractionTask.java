@@ -30,12 +30,19 @@ import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 /**
  * Treats a carried shulker as a reusable sub-inventory:
  * select, place, open, transfer, catalog twice, close, break, and pick up.
  */
 public class ShulkerInteractionTask extends Task implements ITaskCanForce {
+
+    private static UUID ACTIVE_TRANSACTION = null;
+    private static long ACTIVE_TRANSACTION_STARTED_MS = 0;
+    private static final long TRANSACTION_STALE_MS = 60_000L;
+    private static final long OPEN_RETRY_COOLDOWN_MS = 750L;
+    private static final int MAX_OPEN_ATTEMPTS = 8;
 
     public enum Mode { STORE, RETRIEVE }
 
@@ -65,6 +72,9 @@ public class ShulkerInteractionTask extends Task implements ITaskCanForce {
     private int _transferRemaining;
     private Map<String, Integer> _verifiedContents = new HashMap<>();
     private PickupDroppedItemTask _pickupTask;
+    private UUID _transactionId = UUID.randomUUID();
+    private long _lastOpenAttemptMs = 0;
+    private int _openAttempts = 0;
 
     public ShulkerInteractionTask(Mode mode, ItemTarget... targets) {
         _mode = mode;
@@ -152,6 +162,9 @@ public class ShulkerInteractionTask extends Task implements ITaskCanForce {
         clearTransfer();
         _verifiedContents = new HashMap<>();
         _pickupTask = null;
+        _transactionId = UUID.randomUUID();
+        _lastOpenAttemptMs = 0;
+        _openAttempts = 0;
         mod.getBehaviour().push();
         mod.getBehaviour().avoidWalkingThrough(pos ->
                 _placePos != null && (pos.equals(_placePos) || pos.equals(_placePos.up())));
@@ -161,6 +174,10 @@ public class ShulkerInteractionTask extends Task implements ITaskCanForce {
 
     @Override
     protected Task onTick(AltoClef mod) {
+        if (!acquireTransactionLock(mod)) {
+            setDebugState("Waiting for active shulker transaction lock");
+            return null;
+        }
         switch (_phase) {
             case GET_SHULKER: {
                 if (requestAlreadySatisfied(mod)) {
@@ -184,6 +201,7 @@ public class ShulkerInteractionTask extends Task implements ITaskCanForce {
             case PLACE: {
                 if (_placeTask != null && _placeTask.isFinished(mod)) {
                     _placePos = _placeTask.getPlaced();
+                    rememberPlacedPosition("placed-by-task");
                     _noProgressTicks = 0;
                     transition(Phase.OPEN, mod, "placed at " + _placePos);
                     return null;
@@ -192,6 +210,7 @@ public class ShulkerInteractionTask extends Task implements ITaskCanForce {
                     BlockPos nearby = findNearbyShulker(mod);
                     if (nearby != null) {
                         _placePos = nearby;
+                        rememberPlacedPosition("found-nearby-after-place");
                         _noProgressTicks = 0;
                         transition(Phase.OPEN, mod,
                                 "selected shulker left inventory; found placed shulker at " + nearby);
@@ -223,6 +242,7 @@ public class ShulkerInteractionTask extends Task implements ITaskCanForce {
                 }
                 if (_placeTask.isFinished(mod)) {
                     _placePos = _placeTask.getPlaced();
+                    rememberPlacedPosition("placed-by-task");
                     transition(Phase.OPEN, mod, "placed at " + _placePos);
                     return null;
                 }
@@ -232,6 +252,7 @@ public class ShulkerInteractionTask extends Task implements ITaskCanForce {
 
             case OPEN: {
                 if (isShulkerOpen()) {
+                    _openAttempts = 0;
                     transition(Phase.TRANSFER, mod, "shulker screen open");
                     return null;
                 }
@@ -241,6 +262,22 @@ public class ShulkerInteractionTask extends Task implements ITaskCanForce {
                 if (_placePos == null) {
                     transition(Phase.PLACE, mod, "placed shulker not found");
                     _placeTask = null;
+                    return null;
+                }
+                rememberPlacedPosition("open-phase");
+                if (_openAttempts >= MAX_OPEN_ATTEMPTS) {
+                    DebugLogger.getInstance().logImmediate("SHULKER-ERROR",
+                            "open retry limit reached pos=" + _placePos
+                                    + " attempts=" + _openAttempts
+                                    + " selected=" + (_selectedShulker == null ? "none"
+                                    : ItemHelper.stripItemName(_selectedShulker)));
+                    transition(Phase.BREAK, mod, "open retry limit reached");
+                    return null;
+                }
+                long now = System.currentTimeMillis();
+                if (now - _lastOpenAttemptMs < OPEN_RETRY_COOLDOWN_MS) {
+                    setDebugState("Waiting before shulker open retry "
+                            + _openAttempts + "/" + MAX_OPEN_ATTEMPTS);
                     return null;
                 }
                 if (!WorldHelper.isAir(mod, _placePos.up())) {
@@ -259,6 +296,12 @@ public class ShulkerInteractionTask extends Task implements ITaskCanForce {
                 }
                 if (_openTask == null || _openTask.stopped()) {
                     _openTask = new InteractWithBlockTask(_placePos);
+                    _lastOpenAttemptMs = now;
+                    _openAttempts++;
+                    DebugLogger.getInstance().logImmediate("SHULKER-OPEN",
+                            "attempt=" + _openAttempts + "/" + MAX_OPEN_ATTEMPTS
+                                    + " pos=" + _placePos
+                                    + " above=" + _placePos.up());
                 }
                 setDebugState("Opening shulker at " + _placePos.toShortString());
                 return _openTask;
@@ -266,6 +309,7 @@ public class ShulkerInteractionTask extends Task implements ITaskCanForce {
 
             case TRANSFER: {
                 if (!isShulkerOpen()) {
+                    _lastOpenAttemptMs = System.currentTimeMillis();
                     transition(Phase.OPEN, mod, "screen closed during transfer");
                     _openTask = null;
                     return null;
@@ -285,6 +329,7 @@ public class ShulkerInteractionTask extends Task implements ITaskCanForce {
 
             case CATALOG: {
                 if (!isShulkerOpen()) {
+                    _lastOpenAttemptMs = System.currentTimeMillis();
                     transition(Phase.OPEN, mod, "screen closed before catalog");
                     _openTask = null;
                     return null;
@@ -355,6 +400,7 @@ public class ShulkerInteractionTask extends Task implements ITaskCanForce {
             }
 
             case DONE:
+                releaseTransactionLock();
                 return null;
         }
         return null;
@@ -395,6 +441,7 @@ public class ShulkerInteractionTask extends Task implements ITaskCanForce {
         }
         syncCarriedShulkerMemory(mod);
         mod.getBehaviour().pop();
+        releaseTransactionLock();
     }
 
     @Override
@@ -712,6 +759,47 @@ public class ShulkerInteractionTask extends Task implements ITaskCanForce {
         ShulkerMemory.getInstance().save();
     }
 
+    private boolean acquireTransactionLock(AltoClef mod) {
+        long now = System.currentTimeMillis();
+        if (ACTIVE_TRANSACTION == null
+                || ACTIVE_TRANSACTION.equals(_transactionId)
+                || now - ACTIVE_TRANSACTION_STARTED_MS > TRANSACTION_STALE_MS) {
+            if (ACTIVE_TRANSACTION == null || !ACTIVE_TRANSACTION.equals(_transactionId)) {
+                ACTIVE_TRANSACTION = _transactionId;
+                ACTIVE_TRANSACTION_STARTED_MS = now;
+                DebugLogger.getInstance().logImmediate("SHULKER-LOCK",
+                        "acquired id=" + _transactionId
+                                + " mode=" + _mode
+                                + " targets=" + Arrays.toString(_targets));
+            }
+            return true;
+        }
+        DebugLogger.getInstance().logImmediate("SHULKER-LOCK",
+                "waiting active=" + ACTIVE_TRANSACTION
+                        + " requester=" + _transactionId
+                        + " mode=" + _mode
+                        + " targets=" + Arrays.toString(_targets));
+        return false;
+    }
+
+    private void releaseTransactionLock() {
+        if (ACTIVE_TRANSACTION != null && ACTIVE_TRANSACTION.equals(_transactionId)) {
+            DebugLogger.getInstance().logImmediate("SHULKER-LOCK",
+                    "released id=" + _transactionId
+                            + " mode=" + _mode);
+            ACTIVE_TRANSACTION = null;
+            ACTIVE_TRANSACTION_STARTED_MS = 0;
+        }
+    }
+
+    private void rememberPlacedPosition(String reason) {
+        if (_placePos == null) return;
+        ShulkerMemory.getInstance().rememberPlacement(_placePos,
+                _selectedShulker == null ? "" : ItemHelper.stripItemName(_selectedShulker),
+                reason);
+        ShulkerMemory.getInstance().save();
+    }
+
     public static void syncCarriedShulkerMemory(AltoClef mod) {
         if (mod.getPlayer() == null) return;
         InventoryManager inventory = new InventoryManager(mod);
@@ -736,6 +824,9 @@ public class ShulkerInteractionTask extends Task implements ITaskCanForce {
                         ? "none" : ItemHelper.stripItemName(_selectedShulker)));
         _phase = next;
         setDebugState(next + ": " + reason);
+        if (next == Phase.DONE) {
+            releaseTransactionLock();
+        }
     }
 
     private void logState(String reason, AltoClef mod) {

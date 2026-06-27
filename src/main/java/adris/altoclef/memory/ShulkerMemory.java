@@ -42,6 +42,7 @@ public class ShulkerMemory {
         public String location = "world";
         public int inventorySlot = -1;
         public String shulkerItem = "";
+        public String lastPlacementReason = "";
 
         public ShulkerEntry() {}
 
@@ -105,12 +106,30 @@ public class ShulkerMemory {
      * Remember or update the contents of a shulker at a position.
      */
     public void rememberContents(BlockPos pos, Map<String, Integer> contents) {
-        ShulkerEntry entry = new ShulkerEntry(pos);
+        String key = posKey(pos);
+        ShulkerEntry entry = _shulkers.getOrDefault(key, new ShulkerEntry(pos));
+        entry.location = "world";
         entry.contents = contents.entrySet().stream()
                 .map(e -> new ShulkerItem(e.getKey(), e.getValue()))
                 .collect(Collectors.toList());
         entry.lastUpdated = System.currentTimeMillis();
+        _shulkers.put(key, entry);
+        _dirty = true;
+    }
+
+    /**
+     * Remember that a carried shulker was placed at a world position even
+     * before its contents are scanned. This gives diagnostics and future tasks
+     * a stable "managed shulker block" position instead of rediscovering it by
+     * nearest-block guesses every tick.
+     */
+    public void rememberPlacement(BlockPos pos, String shulkerItem, String reason) {
         String key = posKey(pos);
+        ShulkerEntry entry = _shulkers.getOrDefault(key, new ShulkerEntry(pos));
+        entry.location = "world";
+        entry.shulkerItem = shulkerItem == null ? "" : shulkerItem;
+        entry.lastPlacementReason = reason == null ? "" : reason;
+        entry.lastUpdated = System.currentTimeMillis();
         _shulkers.put(key, entry);
         _dirty = true;
     }

@@ -481,10 +481,9 @@ public class AltoClef implements ModInitializer {
         if (_settings == null || _settings.shouldAvoidWaterSources()) {
             getExtraBaritoneSettings().getForceAvoidWalkThroughPredicates().add(pos -> {
                 if (MinecraftClient.getInstance().world == null) return false;
-                var state = MinecraftClient.getInstance().world.getBlockState(pos);
-                return !state.getFluidState().isEmpty()
-                        && (state.getFluidState().getFluid() == net.minecraft.fluid.Fluids.WATER
-                        || state.getFluidState().getFluid() == net.minecraft.fluid.Fluids.LAVA);
+                return isFluidHazardForWalking(pos)
+                        || isFluidHazardForWalking(pos.up())
+                        || isFluidHazardForWalking(pos.down());
             });
         }
         // Apply user pathfinding settings
@@ -534,6 +533,19 @@ public class AltoClef implements ModInitializer {
         getClientBaritoneSettings().planAheadFailureTimeoutMS.reset();
         // Was 100
         getClientBaritoneSettings().movementTimeoutTicks.reset();
+    }
+
+    private static boolean isFluidHazardForWalking(net.minecraft.util.math.BlockPos pos) {
+        var world = MinecraftClient.getInstance().world;
+        if (world == null || pos == null) return false;
+        var fluidState = world.getBlockState(pos).getFluidState();
+        if (fluidState.isEmpty()) return false;
+        return fluidState.isIn(net.minecraft.registry.tag.FluidTags.WATER)
+                || fluidState.isIn(net.minecraft.registry.tag.FluidTags.LAVA)
+                || fluidState.getFluid() == net.minecraft.fluid.Fluids.WATER
+                || fluidState.getFluid() == net.minecraft.fluid.Fluids.FLOWING_WATER
+                || fluidState.getFluid() == net.minecraft.fluid.Fluids.LAVA
+                || fluidState.getFluid() == net.minecraft.fluid.Fluids.FLOWING_LAVA;
     }
 
     // List all command sources here.
