@@ -22,11 +22,15 @@ Behind that small command surface is a task engine that can gather resources, mi
 | Minecraft | `1.21.4` |
 | Mod version | `1.21.4-beta1` |
 | Built jar | [`releases/belfegor-1.21.4-beta1.jar`](releases/belfegor-1.21.4-beta1.jar) |
+| Runtime bundle | [`releases/belfegor-1.21.4-beta1-runtime.zip`](releases/belfegor-1.21.4-beta1-runtime.zip) |
+| Release notes | [`docs/RELEASE_v1.21.4-beta1.md`](docs/RELEASE_v1.21.4-beta1.md) |
 | Jar SHA256 | `C3B24C02E960F059686D1B779B998F6680413945424A153BF97684DD775D85F1` |
 | Mod id | `belfegor` |
 | Command prefix | `@` |
 | In-game UI | `C` |
 | Global abort key | `+` while a task is running |
+
+The runtime bundle includes the current Belfegor jar, the Fabric API jar from the working `1.21.4` instance, the Baritone API jar from the working instance, release notes, checksums, and documentation.
 
 ## What Belfegor is trying to be
 
@@ -271,10 +275,24 @@ You need:
 
 ### 2. Download the jar
 
-Use:
+For the easiest install, download and extract the runtime bundle:
+
+```text
+releases/belfegor-1.21.4-beta1-runtime.zip
+```
+
+Then copy the three jars from its `mods/` folder into your instance's `.minecraft/mods/` folder.
+
+If you only want the Belfegor jar, use:
 
 ```text
 releases/belfegor-1.21.4-beta1.jar
+```
+
+The full release asset folder is:
+
+```text
+releases/v1.21.4-beta1/
 ```
 
 ### 3. Copy the jar to your instance

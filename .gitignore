@@ -122,3 +122,6 @@ run/
 # Belfegor release artifacts that are intentionally shipped with the repo.
 !releases/
 !releases/*.jar
+!releases/**/*.jar
+!releases/*.zip
+!releases/**/*.zip
