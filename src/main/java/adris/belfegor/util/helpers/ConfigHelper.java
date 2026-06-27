@@ -25,7 +25,7 @@ import java.util.function.Supplier;
  */
 public class ConfigHelper {
 
-    private static final String ALTO_FOLDER = "belfegor";
+    private static final String BELFEGOR_FOLDER = "belfegor";
     // For reloading
     private static final HashMap<String, Runnable> _loadedConfigs = new HashMap<>();
 
@@ -36,8 +36,8 @@ public class ConfigHelper {
      * @return The File object representing the configuration file.
      */
     private static File getConfigFile(String path) {
-        // Get the full path by concatenating the ALTO_FOLDER and the given path
-        String fullPath = ALTO_FOLDER + File.separator + path;
+        // Get the full path by concatenating the Belfegor folder and the given path
+        String fullPath = BELFEGOR_FOLDER + File.separator + path;
 
         // Create a new File object using the full path
         return new File(fullPath);

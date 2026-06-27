@@ -6,6 +6,8 @@ import net.minecraft.item.Item;
 import net.minecraft.util.math.BlockPos;
 
 import java.io.File;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -27,6 +29,7 @@ public class ShulkerMemory {
     private static ShulkerMemory INSTANCE = new ShulkerMemory();
     private static final String FOLDER = "belfegor";
     private static final String FILE_NAME = "belfegor_shulker_memory.json";
+    private static final String BACKUP_FILE_NAME = FILE_NAME + ".bak";
 
     private final Map<String, ShulkerEntry> _shulkers = new ConcurrentHashMap<>();
     private boolean _dirty = false;
@@ -96,9 +99,42 @@ public class ShulkerMemory {
             try {
                 com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
                 INSTANCE = mapper.readValue(file, ShulkerMemory.class);
+                return;
             } catch (Exception e) {
-                INSTANCE = new ShulkerMemory();
+                System.err.println("[Belfegor] Failed to load shulker memory from "
+                        + file.getAbsolutePath() + ": " + e.getMessage());
+                quarantineCorruptFile(file);
             }
+        }
+
+        File backup = new File(file.getParentFile() == null ? new File(".") : file.getParentFile(),
+                BACKUP_FILE_NAME);
+        if (backup.exists()) {
+            try {
+                com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+                INSTANCE = mapper.readValue(backup, ShulkerMemory.class);
+                System.err.println("[Belfegor] Recovered shulker memory from backup "
+                        + backup.getAbsolutePath());
+                return;
+            } catch (Exception e) {
+                System.err.println("[Belfegor] Failed to load backup shulker memory from "
+                        + backup.getAbsolutePath() + ": " + e.getMessage());
+            }
+        }
+        INSTANCE = new ShulkerMemory();
+    }
+
+    private static void quarantineCorruptFile(File file) {
+        if (file == null || !file.exists()) return;
+        try {
+            File corrupt = new File(file.getParentFile() == null ? new File(".") : file.getParentFile(),
+                    FILE_NAME + ".corrupt." + System.currentTimeMillis());
+            Files.move(file.toPath(), corrupt.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            System.err.println("[Belfegor] Moved corrupt shulker memory to "
+                    + corrupt.getAbsolutePath());
+        } catch (Exception e) {
+            System.err.println("[Belfegor] Failed to quarantine corrupt shulker memory: "
+                    + e.getMessage());
         }
     }
 
@@ -254,11 +290,25 @@ public class ShulkerMemory {
         try {
             File dir = new File(FOLDER);
             dir.mkdirs();
+            File target = new File(dir, FILE_NAME);
+            File backup = new File(dir, BACKUP_FILE_NAME);
+            File tmp = new File(dir, FILE_NAME + ".tmp");
             com.fasterxml.jackson.databind.ObjectMapper mapper = new com.fasterxml.jackson.databind.ObjectMapper();
-            mapper.writerWithDefaultPrettyPrinter().writeValue(new File(dir, FILE_NAME), this);
+            mapper.writerWithDefaultPrettyPrinter().writeValue(tmp, this);
+            if (target.exists()) {
+                Files.copy(target.toPath(), backup.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            }
+            try {
+                Files.move(tmp.toPath(), target.toPath(),
+                        StandardCopyOption.REPLACE_EXISTING,
+                        StandardCopyOption.ATOMIC_MOVE);
+            } catch (Exception atomicMoveFailed) {
+                Files.move(tmp.toPath(), target.toPath(),
+                        StandardCopyOption.REPLACE_EXISTING);
+            }
             _dirty = false;
         } catch (Exception e) {
-            // Silently fail
+            System.err.println("[Belfegor] Failed to save shulker memory: " + e.getMessage());
         }
     }
 

@@ -43,6 +43,8 @@ public class ShulkerInteractionTask extends Task implements ITaskCanForce {
     private static final long TRANSACTION_STALE_MS = 60_000L;
     private static final long OPEN_RETRY_COOLDOWN_MS = 750L;
     private static final int MAX_OPEN_ATTEMPTS = 8;
+    private static final long SHULKER_CHECK_LOG_COOLDOWN_MS = 5_000L;
+    private static final Map<String, Long> LAST_SHULKER_CHECK_LOG_MS = new HashMap<>();
 
     public enum Mode { STORE, RETRIEVE }
 
@@ -91,15 +93,53 @@ public class ShulkerInteractionTask extends Task implements ITaskCanForce {
     public static boolean carriedShulkerContains(Belfegor mod, ItemTarget target) {
         if (mod == null || mod.getPlayer() == null || target == null) return false;
         InventoryManager inventory = new InventoryManager(mod);
+        boolean sawShulker = false;
+        ArrayList<String> shulkerSummaries = new ArrayList<>();
         for (ItemStack stack : mod.getPlayer().getInventory().main) {
             if (stack.isEmpty() || !inventory.isShulkerBox(stack.getItem())) continue;
+            sawShulker = true;
             Map<String, Integer> contents = inventory.readShulkerContents(stack);
+            shulkerSummaries.add(ItemHelper.stripItemName(stack.getItem()) + "=" + contents);
             for (Item item : target.getMatches()) {
                 if (inventory.isShulkerBox(item)) continue;
-                if (contents.getOrDefault(ItemHelper.stripItemName(item), 0) > 0) return true;
+                if (contents.getOrDefault(ItemHelper.stripItemName(item), 0) > 0) {
+                    logShulkerCheck(target, true, sawShulker,
+                            shulkerSummaries, buildInventorySummary(mod));
+                    return true;
+                }
             }
         }
+        logShulkerCheck(target, false, sawShulker,
+                shulkerSummaries, buildInventorySummary(mod));
         return false;
+    }
+
+    private static void logShulkerCheck(ItemTarget target, boolean found, boolean sawShulker,
+                                        ArrayList<String> shulkerSummaries,
+                                        String inventorySummary) {
+        String key = target + "|" + found + "|" + sawShulker + "|" + shulkerSummaries;
+        long now = System.currentTimeMillis();
+        long last = LAST_SHULKER_CHECK_LOG_MS.getOrDefault(key, 0L);
+        if (now - last < SHULKER_CHECK_LOG_COOLDOWN_MS) return;
+        LAST_SHULKER_CHECK_LOG_MS.put(key, now);
+        DebugLogger.getInstance().logImmediate("SHULKER-CHECK",
+                "target=" + target
+                        + " result=" + found
+                        + " carriedShulker=" + sawShulker
+                        + " shulkers=" + shulkerSummaries
+                        + " inventory=" + inventorySummary);
+    }
+
+    private static String buildInventorySummary(Belfegor mod) {
+        if (mod == null || mod.getPlayer() == null) return "[]";
+        ArrayList<String> stacks = new ArrayList<>();
+        for (int slot = 0; slot < mod.getPlayer().getInventory().main.size(); slot++) {
+            ItemStack stack = mod.getPlayer().getInventory().main.get(slot);
+            if (stack.isEmpty()) continue;
+            stacks.add(slot + ":" + stack.getCount() + "x"
+                    + ItemHelper.stripItemName(stack.getItem()));
+        }
+        return stacks.toString();
     }
 
     public static ItemTarget[] getAutoStoreTargets(Belfegor mod) {

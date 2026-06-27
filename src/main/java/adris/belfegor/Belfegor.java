@@ -96,6 +96,7 @@ public class Belfegor implements ModInitializer {
     private boolean _abortKeyWasDown = false;
     private long _lastAutoShulkerSortMs = 0;
     private String _lastAutoShulkerFingerprint = "";
+    private boolean _hasInitializedRuntime = false;
 
     // Are we in game (playing in a server/world)
     public static boolean inGame() {
@@ -113,11 +114,20 @@ public class Belfegor implements ModInitializer {
     public void onInitialize() {
         // This code runs as soon as Minecraft is in a mod-load-ready state.
         // However, some things (like resources) may still be uninitialized.
-        // As such, nothing will be loaded here but basic initialization.
+        // The title-screen hook is the preferred runtime entry point, but some
+        // launchers/world shortcuts can jump directly into a save and skip the
+        // title screen entirely. Keep a first-client-tick fallback so commands,
+        // logging, settings migration, and trackers always come online.
         EventBus.subscribe(TitleScreenEntryEvent.class, evt -> onInitializeLoad());
+        EventBus.subscribe(ClientTickEvent.class, evt -> onInitializeLoad());
     }
 
     public void onInitializeLoad() {
+        if (_hasInitializedRuntime) {
+            return;
+        }
+        _hasInitializedRuntime = true;
+
         // This code should be run after Minecraft loads everything else in.
         // This is the actual start point, controlled by a mixin.
 
