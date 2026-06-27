@@ -93,7 +93,7 @@ See [Shulker management](SHULKER_MANAGEMENT.md) for exact behavior and exclusion
 | Command | Usage | What it does | Examples |
 |---|---|---|---|
 | `give` | `@give <username> [item] <count=1>` | Gets an item and gives it to a player. | `@give Steve diamond 3` |
-| `ai` | `@ai <prompt>` | Queues or polls the packaged Ollama advisor. It reads the command catalogue, context snapshot, inventory, shulker memory, goal, and action log, then returns chat text and/or a safe command suggestion. Defaults to `lfm2.5-thinking:1.2b`. | `@ai "what should I do next?"`, `@ai "why am I stuck?"` |
+| `ai` | `@ai <prompt>` | Queues or polls the Packaged llama.cpp advisor. It reads the command catalogue, context snapshot, inventory, shulker memory, goal, and action log, then returns chat text and/or a safe command suggestion. Defaults to `belfegor/models/lfm2.5-thinking.gguf`. | `@ai "what should I do next?"`, `@ai "why am I stuck?"` |
 | `test` | `@test <extra>` | Runs experimental test tasks. | `@test stacked` |
 | `craftaudit` | `@craftaudit <target=all> <limit=0>` | Developer-only recipe audit. Uses bundled offline recipe data, `/give @s` leaf resources, crafts through Belfegor, stores outputs, and logs pass/fail results. Requires cheats/op in a test world. | `@craftaudit anvil`, `@craftaudit all 25` |
 
@@ -105,7 +105,7 @@ See [Shulker management](SHULKER_MANAGEMENT.md) for exact behavior and exclusion
 
 Use `@craftaudit all 25` for a small batch before running the full catalogue. The command intentionally exercises Belfegor's real crafting logic after resources are given, so failures are useful for fixing recipe, inventory, and storage bugs.
 
-`@ai` uses local Ollama. Enable it in `belfegor_settings.json` with `llmAdvisorEnabled=true`. See [Local Ollama LLM advisor](LLM_ADVISOR.md).
+`@ai` uses local llama.cpp. Enable it in `belfegor_settings.json` with `llmAdvisorEnabled=true`. See [Local llama.cpp LLM advisor](LLM_ADVISOR.md).
 
 ## Command chaining
 

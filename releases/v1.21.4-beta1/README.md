@@ -6,7 +6,7 @@ This runtime package has been refreshed with the full Belfegor namespace deploym
 
 It includes the offline recipe catalogue and the developer command `@craftaudit`.
 
-It also includes the packaged Ollama advisor code. To use it, install Ollama, make sure `ollama list` includes `lfm2.5-thinking:1.2b`, enable `llmAdvisorEnabled` in `belfegor_settings.json`, and run `@ai "what should I do next?"`.
+It also includes the packaged llama.cpp advisor code. To use it, place `llama-cli.exe` under `.minecraft/belfegor/llama.cpp/`, place the GGUF model at `.minecraft/belfegor/models/lfm2.5-thinking.gguf`, enable `llmAdvisorEnabled` in `belfegor_settings.json`, and run `@ai "what should I do next?"`.
 
 ## Included jars
 

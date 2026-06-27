@@ -2,7 +2,7 @@
 
 This is the first public Belfegor beta release for Minecraft `1.21.4`.
 
-This release bundle has been refreshed with the current craft-audit and packaged Ollama-advisor build. The jar now includes the offline recipe catalogue improvements, the developer command `@craftaudit`, and the optional local AI advisor for `lfm2.5-thinking:1.2b`.
+This release bundle has been refreshed with the current craft-audit and packaged llama.cpp-advisor build. The jar now includes the offline recipe catalogue improvements, the developer command `@craftaudit`, and the optional local AI advisor for `belfegor/models/lfm2.5-thinking.gguf`.
 
 ## Download
 
@@ -53,7 +53,7 @@ Belfegor is a client-side Minecraft automation agent. It can:
 - manage carried shulker boxes as sub-inventories;
 - plan crafts from the bundled offline `1.21.4` recipe catalogue;
 - run developer recipe audits with `@craftaudit <target=all> <limit=0>`;
-- ask the packaged Ollama advisor for contextual help with `@ai`;
+- ask the Packaged llama.cpp advisor for contextual help with `@ai`;
 - optionally let `@player` ask the advisor for the next validated command;
 - run PvP preparation commands such as `@stacked` and `@toolset`;
 - run autonomous player mode with `@player`;

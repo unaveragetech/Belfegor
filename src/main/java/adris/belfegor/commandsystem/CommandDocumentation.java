@@ -59,7 +59,7 @@ public final class CommandDocumentation {
             case "retrieve" -> "Retrieves requested item quantities from known nearby storage.";
             case "stacked" -> "Sequentially gathers the complete configured PvP equipment and supply loadout.";
             case "toolset" -> "Crafts one pickaxe, axe, shovel, sword, and hoe at the requested material tier.";
-            case "ai" -> "Asks the local Ollama advisor for a chat response or high-level command suggestion using current context, command docs, inventory, shulker memory, goal, and action log. Defaults to llmOllamaModel=lfm2.5-thinking:1.2b when llmAdvisorEnabled is true.";
+            case "ai" -> "Asks the local llama.cpp advisor for a chat response or high-level command suggestion using current context, command docs, inventory, shulker memory, goal, and action log. Defaults to llmLlamaModelPath=belfegor/models/lfm2.5-thinking.gguf when llmAdvisorEnabled is true.";
             case "craftaudit" -> "Developer-only offline recipe audit. Uses bundled recipe data, /give @s leaf resources, crafts each target through Belfegor, stores outputs, and writes belfegor/craft_audit_*.log. Requires cheats/op.";
             default -> fallback;
         };

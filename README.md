@@ -60,7 +60,7 @@ It is currently beta software, with the most active engineering effort focused o
 | Craft audit harness | `@craftaudit` gives normalized leaf resources in a cheat-enabled test world, crafts through the real task system, stores outputs, and logs pass/fail results. |
 | PvP prep | `@stacked`, `@toolset`, and `@pvp` automate gear and combat preparation. |
 | Player mode | `@player` starts an autonomous explore/gather/craft/home-base loop. |
-| Local AI advisor | Packaged Ollama advisor can use `lfm2.5-thinking:1.2b` to answer `@ai` prompts and choose validated next commands during `@player`. |
+| Local AI advisor | Packaged llama.cpp advisor can use `belfegor/models/lfm2.5-thinking.gguf` to answer `@ai` prompts and choose validated next commands during `@player`. |
 | Beat-the-game routes | `@gamer` and `@marvion` run classic autonomous completion routes. |
 | Butler | Authorized players can command the bot by whisper/private message. |
 | UI | Press `C` for task state, commands, settings, shulker memory, and logs. |
@@ -82,7 +82,7 @@ Belfegor can already do a lot of practical survival automation:
 - plan normal craftable items from a bundled offline recipe catalogue;
 - run developer craft audits with `@craftaudit` to test recipes end-to-end;
 - run experimental autonomous play with `@player`;
-- ask the packaged Ollama advisor for context-aware help with `@ai`;
+- ask the Packaged llama.cpp advisor for context-aware help with `@ai`;
 - run classic beat-the-game style routines through `@gamer` / `@marvion`;
 - let authorized players command the bot by whisper through the Butler system.
 
@@ -366,12 +366,12 @@ The Belfegor UI is meant to make the agent inspectable while it works:
 | Shulkers | Indexed shulker memory and auto-sort mode. |
 | Log | Recent runtime/debug events. |
 
-## Packaged Ollama advisor
+## Packaged llama.cpp advisor
 
-Belfegor includes an optional local AI advisor inside the mod jar. It uses Ollama as the runtime and defaults to the installed thinking model:
+Belfegor includes an optional local AI advisor inside the mod jar. It calls a bundled llama.cpp `llama-cli` runtime and defaults to this local GGUF model path:
 
 ```text
-lfm2.5-thinking:1.2b
+belfegor/models/lfm2.5-thinking.gguf
 ```
 
 When enabled, the advisor exports the live command catalogue, context, prompt, response, and action/reaction log to `.minecraft/belfegor/`.
@@ -382,7 +382,7 @@ Use:
 @ai "what should I do next?"
 ```
 
-In `@player`, the advisor can suggest the next Belfegor command, but only if the command exists in the live registry and is not a denied control/developer command. If Ollama is unavailable or the model times out, Belfegor continues with normal deterministic player-mode logic.
+In `@player`, the advisor can suggest the next Belfegor command, but only if the command exists in the live registry and is not a denied control/developer command. Advisor commands are deferred while a task, inventory screen, cursor stack, or slot click is active, so the model cannot inject work into the middle of a craft/shulker transaction. If llama.cpp is unavailable or the model times out, Belfegor continues with normal deterministic player-mode logic.
 
 ## Documentation
 
@@ -394,7 +394,7 @@ In `@player`, the advisor can suggest the next Belfegor command, but only if the
 - [Shulker-box management](docs/SHULKER_MANAGEMENT.md)
 - [Beat-the-game, `@player`, and autonomous gameplay](docs/BEAT_THE_GAME.md)
 - [Settings and generated files](docs/CONFIGURATION.md)
-- [Local Ollama LLM advisor](docs/LLM_ADVISOR.md)
+- [Local llama.cpp LLM advisor](docs/LLM_ADVISOR.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
 - [Build and development guide](docs/DEVELOPMENT.md)
 - [Roadmap](docs/ROADMAP.md)
@@ -409,7 +409,7 @@ In `@player`, the advisor can suggest the next Belfegor command, but only if the
 | Mixin config | [`src/main/resources/belfegor.mixins.json`](src/main/resources/belfegor.mixins.json) |
 | Recipe registry data | [`src/main/resources/belfegor_recipes.json`](src/main/resources/belfegor_recipes.json) |
 | Craft audit command | [`src/main/java/adris/Belfegor/commands/CraftAuditCommand.java`](src/main/java/adris/Belfegor/commands/CraftAuditCommand.java) |
-| Ollama advisor | [`src/main/java/adris/Belfegor/llm/LlmAdvisor.java`](src/main/java/adris/Belfegor/llm/LlmAdvisor.java) |
+| llama.cpp advisor | [`src/main/java/adris/Belfegor/llm/LlmAdvisor.java`](src/main/java/adris/Belfegor/llm/LlmAdvisor.java) |
 
 ## Build
 

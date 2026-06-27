@@ -534,7 +534,7 @@ public class Settings implements IFailableConfigFile {
     // ============ EMBEDDED AI ADVISOR ============
 
     /**
-     * If true, Belfegor may call a local Ollama model for high-level advice.
+     * If true, Belfegor may call the bundled local llama.cpp runtime for high-level advice.
      * This is disabled by default because it launches an external local process.
      */
     private boolean llmAdvisorEnabled = false;
@@ -550,15 +550,16 @@ public class Settings implements IFailableConfigFile {
     private boolean llmAdvisorCanChat = true;
 
     /**
-     * Ollama executable used for local model calls.
+     * llama.cpp executable used for local model calls. If blank, Belfegor looks for
+     * belfegor/llama.cpp/llama-cli.exe on Windows or belfegor/llama.cpp/llama-cli elsewhere.
      */
-    private String llmOllamaExecutable = "ollama";
+    private String llmLlamaCppExecutable = "";
 
     /**
-     * Ollama model used by the advisor. Default is the small local thinking model
-     * expected from `ollama list`.
+     * GGUF model path used by the advisor. Relative paths are resolved from the
+     * Minecraft game directory.
      */
-    private String llmOllamaModel = "lfm2.5-thinking:1.2b";
+    private String llmLlamaModelPath = "belfegor/models/lfm2.5-thinking.gguf";
 
     /**
      * Minimum seconds between automatic player-mode LLM requests.
@@ -566,12 +567,12 @@ public class Settings implements IFailableConfigFile {
     private int llmAdvisorCooldownSeconds = 90;
 
     /**
-     * Maximum seconds to wait for Ollama before falling back to normal logic.
+     * Maximum seconds to wait for llama.cpp before falling back to normal logic.
      */
     private int llmAdvisorTimeoutSeconds = 45;
 
     /**
-     * Requested context window for the model prompt. Ollama may clamp/ignore this
+     * Requested context window for the model prompt. llama.cpp may clamp/ignore this
      * depending on model/runtime support.
      */
     private int llmContextSize = 8192;
@@ -882,12 +883,14 @@ public class Settings implements IFailableConfigFile {
         return llmAdvisorEnabled && llmAdvisorCanChat;
     }
 
-    public String getLlmOllamaExecutable() {
-        return llmOllamaExecutable == null || llmOllamaExecutable.isBlank() ? "ollama" : llmOllamaExecutable.trim();
+    public String getLlmLlamaCppExecutable() {
+        return llmLlamaCppExecutable == null ? "" : llmLlamaCppExecutable.trim();
     }
 
-    public String getLlmOllamaModel() {
-        return llmOllamaModel == null || llmOllamaModel.isBlank() ? "lfm2.5-thinking:1.2b" : llmOllamaModel.trim();
+    public String getLlmLlamaModelPath() {
+        return llmLlamaModelPath == null || llmLlamaModelPath.isBlank()
+                ? "belfegor/models/lfm2.5-thinking.gguf"
+                : llmLlamaModelPath.trim();
     }
 
     public int getLlmAdvisorCooldownSeconds() {

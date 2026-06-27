@@ -31,7 +31,7 @@ Belfegor is built around four ideas:
 | Craft auditing | Developer command `@craftaudit` runs recipe expansion, resource provisioning, real crafting, storage, and pass/fail logging in a cheat-enabled test world. |
 | PvP prep | `@stacked`, `@toolset`, and advanced PvP tasking exist. |
 | Autonomous play | `@player` explores, gathers, crafts, manages shulkers, and builds a basic home campsite. |
-| Local AI advisor | Optional packaged Ollama bridge lets `lfm2.5-thinking:1.2b` inspect context, explain itself, and suggest the next safe command. |
+| Local AI advisor | Optional packaged llama.cpp bridge lets `belfegor/models/lfm2.5-thinking.gguf` inspect context, explain itself, and suggest the next safe command. |
 | Beat-the-game | Classic `@gamer` and `@marvion` routes are present. |
 | Butler | Authorized players can command the bot via whispers. |
 | UI | `C` opens tabs for tasks, commands, settings, shulkers, and logs. |

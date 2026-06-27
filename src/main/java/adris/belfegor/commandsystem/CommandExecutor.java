@@ -2,6 +2,8 @@ package adris.belfegor.commandsystem;
 
 import adris.belfegor.Belfegor;
 import adris.belfegor.Debug;
+import adris.belfegor.debug.DebugLogger;
+import adris.belfegor.util.helpers.StorageHelper;
 
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -88,6 +90,30 @@ public class CommandExecutor {
             line = getCommandPrefix() + line;
         }
         execute(line);
+    }
+
+    public boolean executeAdvisorSuggestion(String line) {
+        if (line == null || line.isBlank()) return false;
+        if (!line.startsWith(getCommandPrefix())) {
+            line = getCommandPrefix() + line;
+        }
+        boolean userLaneBusy = _mod.getUserTaskChain() != null
+                && _mod.getUserTaskChain().isActive()
+                && !_mod.getUserTaskChain().isRunningIdleTask();
+        boolean cursorBusy = !StorageHelper.getItemStackInCursorSlot().isEmpty();
+        boolean slotBusy = _mod.getSlotHandler() != null && _mod.getSlotHandler().isSlotClickInProgress();
+        boolean screenBusy = net.minecraft.client.MinecraftClient.getInstance().currentScreen != null;
+        if (userLaneBusy || cursorBusy || slotBusy || screenBusy) {
+            DebugLogger.getInstance().log("LLM-DEFER",
+                    "Deferred advisor command=" + line
+                            + " userLaneBusy=" + userLaneBusy
+                            + " cursorBusy=" + cursorBusy
+                            + " slotBusy=" + slotBusy
+                            + " screenBusy=" + screenBusy);
+            return false;
+        }
+        execute(line);
+        return true;
     }
 
     private Command getCommand(String line) throws CommandException {

@@ -1,14 +1,14 @@
-# Local Ollama LLM advisor
+# Local llama.cpp LLM advisor
 
-Belfegor packages the LLM advisor code inside the mod jar. The only external runtime requirement is Ollama with a local model installed.
+Belfegor packages the LLM advisor code inside the mod jar and calls a local llama.cpp command-line runtime. The intended runtime layout is bundled with the Minecraft instance so users do not need a separate model server.
 
 The current default model is:
 
 ```text
-lfm2.5-thinking:1.2b
+belfegor/models/lfm2.5-thinking.gguf
 ```
 
-That model was chosen because it is present in the local `ollama list` output and is small enough to be practical as an always-available planning helper.
+That model path points at a GGUF thinking model copied into the instance. Belfegor does not require a background model service.
 
 ## What it does
 
@@ -20,34 +20,33 @@ It writes/reads these files under `.minecraft/belfegor/`:
 |---|---|
 | `llm_commands.md` | Full command catalogue exported from the live command registry. |
 | `llm_context.json` | Current goal, player state, inventory, remembered shulkers, last action, and planned action. |
-| `llm_prompt.txt` | Prompt sent to Ollama. |
+| `llm_prompt.txt` | Prompt sent to llama.cpp. |
 | `llm_response.json` | Parsed model response. |
 | `llm_actions.log` | Running log of actions and reactions. |
 
 ## Setup
 
-1. Install and run Ollama.
-2. Confirm the model exists:
+1. Place the llama.cpp runtime in the instance:
 
 ```powershell
-ollama list
+.minecraft\belfegor\llama.cpp\llama-cli.exe
 ```
 
-3. If needed, pull the model:
+2. Place the GGUF model in the instance:
 
 ```powershell
-ollama pull lfm2.5-thinking:1.2b
+.minecraft\belfegor\models\lfm2.5-thinking.gguf
 ```
 
-4. Edit `.minecraft/belfegor/belfegor_settings.json`:
+3. Edit `.minecraft/belfegor/belfegor_settings.json`:
 
 ```json
 {
   "llmAdvisorEnabled": true,
   "llmAdvisorInPlayerMode": true,
   "llmAdvisorCanChat": true,
-  "llmOllamaExecutable": "ollama",
-  "llmOllamaModel": "lfm2.5-thinking:1.2b",
+  "llmLlamaCppExecutable": "",
+  "llmLlamaModelPath": "belfegor/models/lfm2.5-thinking.gguf",
   "llmAdvisorCooldownSeconds": 90,
   "llmAdvisorTimeoutSeconds": 45,
   "llmContextSize": 8192,
@@ -55,7 +54,9 @@ ollama pull lfm2.5-thinking:1.2b
 }
 ```
 
-5. Run:
+Leave `llmLlamaCppExecutable` blank to use the bundled default path. Set it only if you want to point at a custom `llama-cli` binary.
+
+4. Run:
 
 ```text
 @reload_settings
@@ -100,4 +101,4 @@ Denied automatic commands currently include:
 @player
 ```
 
-If Ollama is unavailable, busy, times out, or returns an invalid command, player mode continues with its deterministic fallback behavior.
+If llama.cpp is unavailable, busy, times out, returns an invalid command, or the task/inventory lane is busy, player mode continues with its deterministic fallback behavior. Valid advisor commands are deferred instead of injected into the middle of active tasks.

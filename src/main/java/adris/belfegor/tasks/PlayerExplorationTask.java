@@ -341,9 +341,13 @@ public class PlayerExplorationTask extends Task {
                     return false;
                 }
                 mod.log("AI selected next command: " + result.command());
-                LlmAdvisor.getInstance().recordAction("llm_execute " + result.command(), result.reason());
-                mod.getCommandExecutor().execute(result.command());
-                return true;
+                if (mod.getCommandExecutor().executeAdvisorSuggestion(result.command())) {
+                    LlmAdvisor.getInstance().recordAction("llm_execute " + result.command(), result.reason());
+                    return true;
+                }
+                LlmAdvisor.getInstance().recordAction("llm_deferred " + result.command(),
+                        "advisor command was valid but the task/inventory lane was busy");
+                return false;
             }
         }
 

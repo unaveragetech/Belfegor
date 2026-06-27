@@ -21,7 +21,7 @@ flowchart TD
     Inventory --> SlotHandler["SlotHandler"]
     Movement --> Baritone["Baritone processes"]
     Storage --> Memory["Memory files"]
-    Runner --> Advisor["Optional Ollama advisor"]
+    Runner --> Advisor["Optional llama.cpp advisor"]
     Advisor --> CommandDocs["llm_commands.md"]
     Advisor --> Context["llm_context.json"]
     Advisor --> ActionLog["llm_actions.log"]
@@ -149,9 +149,9 @@ flowchart TD
 
 Memory files live in `.minecraft/belfegor/` and are intentionally human-readable JSON where practical.
 
-## Packaged Ollama advisor
+## Packaged llama.cpp advisor
 
-The local LLM advisor is packaged as Java code inside the mod and calls Ollama directly. It is deliberately outside the slot-clicking path:
+The local LLM advisor is packaged as Java code inside the mod and calls llama.cpp directly. It is deliberately outside the slot-clicking path:
 
 ```mermaid
 flowchart TD
@@ -160,8 +160,8 @@ flowchart TD
     Snapshot --> Prompt["llm_prompt.txt"]
     ActionLog["llm_actions.log"] --> Prompt
     Export --> Prompt
-    Prompt --> Ollama["ollama run lfm2.5-thinking:1.2b"]
-    Ollama --> Response["llm_response.json"]
+    Prompt --> LlamaCli["llama-cli -m belfegor/models/lfm2.5-thinking.gguf -f llm_prompt.txt"]
+    llama.cpp --> Response["llm_response.json"]
     Response --> Validate["Validate command against registry/denylist"]
     Validate -- valid --> Execute["Execute selected Belfegor command"]
     Validate -- invalid/timeout --> Fallback["Continue deterministic logic"]

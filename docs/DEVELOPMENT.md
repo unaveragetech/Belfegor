@@ -66,7 +66,7 @@ build_and_install.bat
 | `util/RecipeRegistry.java` | Offline recipe catalogue loader, output/input indexes, recursive craft plans, and leaf-resource expansion. |
 | `commands/CraftAuditCommand.java` | Developer command entry point for recipe audit runs. |
 | `tasks/container/CraftAuditTask.java` | Cheat-enabled craft audit task that provisions resources, crafts through real tasks, stores outputs, and logs results. |
-| `llm/LlmAdvisor.java` | Packaged Ollama advisor bridge, command export, context snapshot, action log, response validation, and player-mode decision requests. |
+| `llm/LlmAdvisor.java` | Packaged llama.cpp advisor bridge, command export, context snapshot, action log, response validation, and player-mode decision requests. |
 
 ## Debugging inventory issues
 
@@ -131,12 +131,12 @@ Recommended test-world workflow:
 
 The audit should fail loudly rather than loop forever. A failure usually points at one of four areas: bad recipe data, missing ingredient-group normalization, missing source/acquisition support, or an unsafe inventory transaction during the real craft.
 
-## Local Ollama advisor development
+## Local llama.cpp advisor development
 
-The advisor is packaged in Java and calls Ollama directly:
+The advisor is packaged in Java and calls llama.cpp directly:
 
 ```text
-ollama run lfm2.5-thinking:1.2b
+.minecraft/belfegor/llama.cpp/llama-cli.exe -m .minecraft/belfegor/models/lfm2.5-thinking.gguf -f .minecraft/belfegor/llm_prompt.txt
 ```
 
 It writes inspectable files under `.minecraft/belfegor/`:
@@ -151,7 +151,7 @@ llm_actions.log
 
 Test flow:
 
-1. Confirm `ollama list` includes `lfm2.5-thinking:1.2b`.
+1. Confirm `.minecraft/belfegor/llama.cpp/llama-cli.exe` and `.minecraft/belfegor/models/lfm2.5-thinking.gguf` exist.
 2. Set `llmAdvisorEnabled=true`.
 3. Run:
 

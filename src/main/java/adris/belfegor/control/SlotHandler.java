@@ -30,6 +30,8 @@ public class SlotHandler {
 
     private final TimerGame _slotActionTimer = new TimerGame(0);
     private boolean _overrideTimerOnce = false;
+    private boolean _slotClickInProgress = false;
+    private String _slotClickOwner = "";
 
 private int _clicksThisTick = 0;
     private int _lastPlayerAge = Integer.MIN_VALUE;
@@ -117,7 +119,7 @@ private boolean isSameSlotStuck(int windowSlot, SlotActionType type) {
         DebugLogger.getInstance().slotClick("SlotHandler", slot.getWindowSlot(), mouseButton, type, cursorBefore, slotBefore);
 
         consumeClickBudget();
-        clickWindowSlot(windowSlot, mouseButton, type);
+        clickWindowSlot("normal", windowSlot, mouseButton, type);
     }
 
     public void clickSlotForce(Slot slot, int mouseButton, SlotActionType type) {
@@ -129,6 +131,7 @@ private boolean isSameSlotStuck(int windowSlot, SlotActionType type) {
             return;
         }
         if (!clickBudgetAvailable()) {
+            DebugLogger.getInstance().slotClickBlocked("SlotHandler.forceBudget", slot.getWindowSlot(), type);
             return;
         }
 
@@ -138,16 +141,25 @@ private boolean isSameSlotStuck(int windowSlot, SlotActionType type) {
                 : ItemStack.EMPTY;
         DebugLogger.getInstance().slotClickForce("SlotHandler", slot.getWindowSlot(), mouseButton, type, cursorBefore, slotBefore);
 
+        consumeClickBudget();
         forceAllowNextSlotAction();
-        clickWindowSlot(windowSlot, mouseButton, type);
+        clickWindowSlot("force", windowSlot, mouseButton, type);
     }
 
-    private void clickWindowSlot(int windowSlot, int mouseButton, SlotActionType type) {
+    private void clickWindowSlot(String owner, int windowSlot, int mouseButton, SlotActionType type) {
+        if (_slotClickInProgress) {
+            DebugLogger.getInstance().log("SLOT-LOCK",
+                    "Blocked overlapping click owner=" + owner
+                            + " activeOwner=" + _slotClickOwner
+                            + " slot=" + windowSlot
+                            + " type=" + type
+                            + " cursor=" + describeStack(StorageHelper.getItemStackInCursorSlot()));
+            return;
+        }
         ClientPlayerEntity player = MinecraftClient.getInstance().player;
         if (player == null) {
             return;
         }
-        registerSlotAction();
         if (player.currentScreenHandler == null) return;
         net.minecraft.screen.ScreenHandler handler = player.currentScreenHandler;
         int syncId = handler.syncId;
@@ -157,6 +169,9 @@ private boolean isSameSlotStuck(int windowSlot, SlotActionType type) {
         }
 
         try {
+            _slotClickInProgress = true;
+            _slotClickOwner = owner + ":" + windowSlot + ":" + type;
+            registerSlotAction();
             // Persist the attempted click before entering Minecraft's handler. If a
             // third-party mixin ever blocks inside the click again, the final log
             // line will still identify the exact action instead of disappearing.
@@ -184,7 +199,14 @@ private boolean isSameSlotStuck(int windowSlot, SlotActionType type) {
         } catch (Exception e) {
             Debug.logWarning("Slot Click Error (ignored)");
             e.printStackTrace();
+        } finally {
+            _slotClickInProgress = false;
+            _slotClickOwner = "";
         }
+    }
+
+    public boolean isSlotClickInProgress() {
+        return _slotClickInProgress;
     }
 
     private String describeStack(ItemStack stack) {

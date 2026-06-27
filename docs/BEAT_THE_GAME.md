@@ -92,7 +92,7 @@ While a user task runs, background chains can react to danger:
 
 `@player` is different from a strict speedrun. It starts an open-ended loop where the bot tries to survive, improve tools, gather useful items, practice crafts, maintain a home base, and use shulkers when inventory pressure gets high.
 
-If `llmAdvisorEnabled` and `llmAdvisorInPlayerMode` are enabled, player mode can ask the packaged Ollama advisor for the next command. The default advisor model is `lfm2.5-thinking:1.2b`. The model receives the command catalogue, current phase, fallback plan, goal, last action, planned action, inventory, and remembered shulker contents. Returned commands are validated before execution, and invalid/unsafe commands are ignored.
+If `llmAdvisorEnabled` and `llmAdvisorInPlayerMode` are enabled, player mode can ask the Packaged llama.cpp advisor for the next command. The default advisor model is `belfegor/models/lfm2.5-thinking.gguf`. The model receives the command catalogue, current phase, fallback plan, goal, last action, planned action, inventory, and remembered shulker contents. Returned commands are validated before execution, and invalid/unsafe commands are ignored.
 
 Current implementation lives in:
 
@@ -151,7 +151,7 @@ Every tick, before the phase-specific logic runs, `@player` does several priorit
 | Danger | Health below 8 or at least 3 hostiles within 8 blocks. | Runs a flee/wander task. |
 | Hunger | Every 10 seconds, food level below 14. | Switches to `SURVIVE`. |
 | Shulkers | Every 20 seconds, carried shulker exists and at least 30 main inventory slots are occupied. | Runs auto-store into shulkers for eligible items. |
-| Ollama advisor | Cooldown from `llmAdvisorCooldownSeconds`, disabled by default. | Asks `lfm2.5-thinking:1.2b` or configured Ollama model for the next validated command. |
+| llama.cpp advisor | Cooldown from `llmAdvisorCooldownSeconds`, disabled by default. | Asks `belfegor/models/lfm2.5-thinking.gguf` or configured llama.cpp model for the next validated command. |
 | First tool | Missing wooden pickaxe. | Gets a wooden pickaxe before continuing. |
 | Home | First campsite not built or 90-second home timer elapsed. | Switches to `HOME` unless currently surviving. |
 

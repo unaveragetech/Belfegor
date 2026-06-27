@@ -8,12 +8,12 @@ import adris.belfegor.llm.LlmAdvisor;
 import adris.belfegor.ui.MessagePriority;
 
 /**
- * Developer/user-facing entry point for the local Ollama advisor.
+ * Developer/user-facing entry point for the local llama.cpp advisor.
  */
 public class AiCommand extends Command {
 
     public AiCommand() throws CommandException {
-        super("ai", "Ask the local Ollama advisor using current context. Quote prompts that contain spaces.");
+        super("ai", "Ask the local llama.cpp advisor using current context. Quote prompts that contain spaces.");
     }
 
     @Override
@@ -37,7 +37,7 @@ public class AiCommand extends Command {
         }
         boolean requested = LlmAdvisor.getInstance().requestChatDecision(mod, prompt);
         if (!requested) {
-            mod.log("LLM advisor is disabled, busy, or missing llmOllamaModel. Check belfegor_settings.json and ollama list.",
+            mod.log("LLM advisor is disabled, busy, or missing llmLlamaModelPath/llmLlamaCppExecutable. Check belfegor_settings.json.",
                     MessagePriority.OPTIONAL);
         } else {
             mod.log("LLM advisor request queued. Watch belfegor/llm_actions.log and run @ai again after it responds.",
@@ -53,8 +53,8 @@ public class AiCommand extends Command {
 
     @Override
     public String getDetailedDescription() {
-        return "Asks the local Ollama advisor for help using the exported command catalogue, "
+        return "Asks the local llama.cpp advisor for help using the exported command catalogue, "
                 + "current context snapshot, inventory, shulker memory, last action, planned action, "
-                + "goal, and running action/reaction log. Requires llmAdvisorEnabled=true and an installed llmOllamaModel.";
+                + "goal, and running action/reaction log. Requires llmAdvisorEnabled=true and a local GGUF model at llmLlamaModelPath.";
     }
 }

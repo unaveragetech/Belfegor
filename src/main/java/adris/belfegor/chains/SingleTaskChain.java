@@ -82,12 +82,9 @@ public abstract class SingleTaskChain extends TaskChain {
             // If the task or any child declares shouldForce(), do NOT interrupt it.
             // Interrupting resets _first=true which causes onStart() to re-run on
             // resume, destroying phase progress (e.g. shulker PLACE→OPEN→TRANSFER).
-            boolean canInterrupt = _mainTask.thisOrChildSatisfies(task -> {
-                if (task instanceof ITaskCanForce canForce) {
-                    return !canForce.shouldForce(mod, null);
-                }
-                return true;
-            });
+            boolean canInterrupt = !_mainTask.thisOrChildSatisfies(task ->
+                    task instanceof ITaskCanForce canForce
+                            && canForce.shouldForce(mod, null));
             if (canInterrupt) {
                 _mainTask.interrupt(mod, null);
                 _actuallyInterrupted = true;

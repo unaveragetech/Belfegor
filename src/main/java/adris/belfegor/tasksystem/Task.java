@@ -187,12 +187,11 @@ public abstract class Task {
      */
     private boolean canBeInterrupted(Belfegor mod, Task subTask, Task toInterruptWith) {
         if (subTask == null) return true;
-        // Our task can declare that is FORCES itself to be active NOW.
-        return (subTask.thisOrChildSatisfies(task -> {
-            if (task instanceof ITaskCanForce canForce) {
-                return !canForce.shouldForce(mod, toInterruptWith);
-            }
-            return true;
-        }));
+        // Any task in the active subtree can declare that it MUST keep running.
+        // This prevents a non-forcing parent from accidentally allowing a
+        // forcing child inventory transaction to be interrupted mid-click.
+        return !subTask.thisOrChildSatisfies(task ->
+                task instanceof ITaskCanForce canForce
+                        && canForce.shouldForce(mod, toInterruptWith));
     }
 }

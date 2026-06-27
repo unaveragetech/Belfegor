@@ -15,7 +15,6 @@ import net.minecraft.registry.Registries;
 import java.io.BufferedWriter;
 import java.io.File;
 import java.io.FileWriter;
-import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.time.Instant;
@@ -31,7 +30,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
- * Local Ollama advisor for high-level command decisions.
+ * Local llama.cpp advisor for high-level command decisions.
  *
  * This does not replace Belfegor's task system. It gives the bot a bounded,
  * logged way to ask a local thinking/instruct model: "Given my context and
@@ -152,7 +151,7 @@ public class LlmAdvisor {
     private synchronized boolean requestDecision(Belfegor mod, String mode, String userPrompt, boolean commandRequired) {
         try {
             if (!isConfigured(mod)) {
-                record("SKIP", "LLM advisor disabled or missing Ollama model");
+                record("SKIP", "LLM advisor disabled or missing llama.cpp model");
                 return false;
             }
             exportCommandCatalogue(mod);
@@ -169,29 +168,37 @@ public class LlmAdvisor {
 
     private boolean isConfigured(Belfegor mod) {
         return mod.getModSettings().isLlmAdvisorEnabled()
-                && !mod.getModSettings().getLlmOllamaModel().isBlank();
+                && !mod.getModSettings().getLlmLlamaModelPath().isBlank();
     }
 
     private AdvisorDecision runAdvisorProcess(Belfegor mod, boolean commandRequired) {
         try {
+            File executable = resolveLlamaExecutable(mod);
+            File model = resolveGameFile(mod.getModSettings().getLlmLlamaModelPath());
+            if (!executable.exists()) {
+                return new AdvisorDecision("", "", _goal,
+                        "llama.cpp executable not found: " + executable.getAbsolutePath(), false);
+            }
+            if (!model.exists()) {
+                return new AdvisorDecision("", "", _goal,
+                        "llama.cpp model not found: " + model.getAbsolutePath(), false);
+            }
             List<String> command = List.of(
-                    mod.getModSettings().getLlmOllamaExecutable(),
-                    "run",
-                    mod.getModSettings().getLlmOllamaModel()
+                    executable.getAbsolutePath(),
+                    "-m", model.getAbsolutePath(),
+                    "-c", String.valueOf(mod.getModSettings().getLlmContextSize()),
+                    "-n", String.valueOf(mod.getModSettings().getLlmMaxTokens()),
+                    "--temp", "0.2",
+                    "-f", _promptFile.getAbsolutePath()
             );
             Process process = new ProcessBuilder(command)
                     .directory(_dir)
                     .redirectErrorStream(true)
                     .start();
-            String prompt = Files.readString(_promptFile.toPath(), StandardCharsets.UTF_8);
-            try (OutputStreamWriter writer = new OutputStreamWriter(process.getOutputStream(), StandardCharsets.UTF_8)) {
-                writer.write(prompt);
-                writer.flush();
-            }
             boolean finished = process.waitFor(mod.getModSettings().getLlmAdvisorTimeoutSeconds(), TimeUnit.SECONDS);
             if (!finished) {
                 process.destroyForcibly();
-                return new AdvisorDecision("", "", _goal, "Ollama timed out", false);
+                return new AdvisorDecision("", "", _goal, "llama.cpp timed out", false);
             }
             String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
             record("PROCESS", "exit=" + process.exitValue() + " output=" + output.replace('\n', ' ').trim());
@@ -216,7 +223,7 @@ public class LlmAdvisor {
 
     private String extractJsonObject(String output) {
         if (output == null || output.isBlank()) {
-            return "{\"command\":\"\",\"chat\":\"\",\"goal\":\"\",\"reason\":\"empty Ollama output\"}";
+            return "{\"command\":\"\",\"chat\":\"\",\"goal\":\"\",\"reason\":\"empty llama.cpp output\"}";
         }
         int commandKey = output.lastIndexOf("\"command\"");
         if (commandKey < 0) {
@@ -307,7 +314,7 @@ public class LlmAdvisor {
 
     private void writePrompt(String mode, String userPrompt, boolean commandRequired) throws Exception {
         StringBuilder prompt = new StringBuilder();
-        prompt.append("You are Belfegor's local Minecraft planning advisor running through Ollama.\n");
+        prompt.append("You are Belfegor's local Minecraft planning advisor running through bundled llama.cpp.\n");
         prompt.append("You must reason from the JSON context and command catalogue files.\n");
         prompt.append("Return ONLY compact JSON with keys: command, chat, goal, reason.\n");
         if (commandRequired) {
@@ -327,6 +334,23 @@ public class LlmAdvisor {
 
     private String cleanString(Object value) {
         return value == null ? "" : String.valueOf(value).trim();
+    }
+
+    private File resolveLlamaExecutable(Belfegor mod) {
+        String configured = mod.getModSettings().getLlmLlamaCppExecutable();
+        if (configured != null && !configured.isBlank()) {
+            return resolveGameFile(configured);
+        }
+        String executableName = System.getProperty("os.name", "")
+                .toLowerCase(Locale.ROOT).contains("win") ? "llama-cli.exe" : "llama-cli";
+        return new File(_dir, "llama.cpp/" + executableName);
+    }
+
+    private File resolveGameFile(String configuredPath) {
+        File file = new File(configuredPath);
+        if (file.isAbsolute()) return file;
+        File gameDir = _dir == null || _dir.getParentFile() == null ? new File(".") : _dir.getParentFile();
+        return new File(gameDir, configuredPath);
     }
 
     private synchronized void record(String category, String message) {
