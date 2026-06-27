@@ -39,7 +39,8 @@ public final class CommandDocumentation {
             Map.entry("store", List.of("@store diamond 3", "@store [diamond 3, gold_ingot 8]")),
             Map.entry("retrieve", List.of("@retrieve diamond 3")),
             Map.entry("shulker", List.of("@shulker list", "@shulker store diamond 3",
-                    "@shulker retrieve stick 8", "@shulker auto on"))
+                    "@shulker retrieve stick 8", "@shulker auto on")),
+            Map.entry("craftaudit", List.of("@craftaudit anvil", "@craftaudit all 25"))
     );
 
     private CommandDocumentation() {}
@@ -56,6 +57,7 @@ public final class CommandDocumentation {
             case "retrieve" -> "Retrieves requested item quantities from known nearby storage.";
             case "stacked" -> "Sequentially gathers the complete configured PvP equipment and supply loadout.";
             case "toolset" -> "Crafts one pickaxe, axe, shovel, sword, and hoe at the requested material tier.";
+            case "craftaudit" -> "Developer-only offline recipe audit. Uses bundled recipe data, /give @s leaf resources, crafts each target through Belfegor, stores outputs, and writes belfegor/craft_audit_*.log. Requires cheats/op.";
             default -> fallback;
         };
     }

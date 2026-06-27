@@ -94,6 +94,15 @@ See [Shulker management](SHULKER_MANAGEMENT.md) for exact behavior and exclusion
 |---|---|---|---|
 | `give` | `@give <username> [item] <count=1>` | Gets an item and gives it to a player. | `@give Steve diamond 3` |
 | `test` | `@test <extra>` | Runs experimental test tasks. | `@test stacked` |
+| `craftaudit` | `@craftaudit <target=all> <limit=0>` | Developer-only recipe audit. Uses bundled offline recipe data, `/give @s` leaf resources, crafts through Belfegor, stores outputs, and logs pass/fail results. Requires cheats/op in a test world. | `@craftaudit anvil`, `@craftaudit all 25` |
+
+`@craftaudit` writes logs to:
+
+```text
+.minecraft/belfegor/craft_audit_*.log
+```
+
+Use `@craftaudit all 25` for a small batch before running the full catalogue. The command intentionally exercises Belfegor's real crafting logic after resources are given, so failures are useful for fixing recipe, inventory, and storage bugs.
 
 ## Command chaining
 

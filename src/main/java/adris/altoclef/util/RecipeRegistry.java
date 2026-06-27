@@ -40,6 +40,29 @@ public class RecipeRegistry {
         }
     }
 
+    public static class CraftPlan {
+        public final Item targetItem;
+        public final int targetCount;
+        public final Map<Item, Integer> leafResources;
+        public final List<String> steps;
+        public final List<String> failures;
+
+        public CraftPlan(Item targetItem, int targetCount,
+                         Map<Item, Integer> leafResources,
+                         List<String> steps,
+                         List<String> failures) {
+            this.targetItem = targetItem;
+            this.targetCount = targetCount;
+            this.leafResources = leafResources;
+            this.steps = steps;
+            this.failures = failures;
+        }
+
+        public boolean isUsable() {
+            return failures.isEmpty() && !leafResources.isEmpty();
+        }
+    }
+
     private RecipeRegistry() {
     }
 
@@ -227,6 +250,23 @@ public class RecipeRegistry {
         return _recipesByOutput.keySet();
     }
 
+    public List<Item> getSortedCraftableItems() {
+        if (!_loaded) load();
+        List<Item> result = new ArrayList<>(_recipesByOutput.keySet());
+        result.sort(Comparator.comparing(item -> Registries.ITEM.getId(item).toString()));
+        return result;
+    }
+
+    public CraftPlan buildLeafResourcePlan(Item targetItem, int targetCount) {
+        if (!_loaded) load();
+        Map<Item, Integer> resources = new LinkedHashMap<>();
+        List<String> steps = new ArrayList<>();
+        List<String> failures = new ArrayList<>();
+        expandToLeafResources(targetItem, Math.max(1, targetCount), resources, steps, failures,
+                new HashSet<>(), 0);
+        return new CraftPlan(targetItem, Math.max(1, targetCount), resources, steps, failures);
+    }
+
     /**
      * Get the total number of loaded recipes.
      */
@@ -246,6 +286,67 @@ public class RecipeRegistry {
             }
         }
         return items;
+    }
+
+    private void expandToLeafResources(Item item, int count,
+                                       Map<Item, Integer> resources,
+                                       List<String> steps,
+                                       List<String> failures,
+                                       Set<Item> stack,
+                                       int depth) {
+        if (item == null || item == net.minecraft.item.Items.AIR || count <= 0) return;
+        if (depth > 32) {
+            failures.add("dependency depth limit hit at " + itemId(item));
+            addLeaf(resources, item, count);
+            return;
+        }
+        if (stack.contains(item)) {
+            failures.add("recipe cycle detected at " + itemId(item));
+            addLeaf(resources, item, count);
+            return;
+        }
+
+        RecipeEntry recipe = getRecipe(item);
+        if (recipe == null) {
+            addLeaf(resources, item, count);
+            steps.add("leaf " + count + "x " + itemId(item));
+            return;
+        }
+
+        int crafts = (int) Math.ceil(count / (double) Math.max(1, recipe.outputCount));
+        steps.add("craft " + count + "x " + itemId(item)
+                + " using " + crafts + " recipe pass(es)");
+        stack.add(item);
+        for (ItemTarget slot : recipe.recipe.getSlots()) {
+            if (slot == null || slot.isEmpty()) continue;
+            Item ingredient = chooseRepresentativeIngredient(slot);
+            if (ingredient == null || ingredient == net.minecraft.item.Items.AIR) {
+                failures.add("no representative ingredient for " + itemId(item)
+                        + " slot " + slot);
+                continue;
+            }
+            expandToLeafResources(ingredient, crafts, resources, steps, failures, stack, depth + 1);
+        }
+        stack.remove(item);
+    }
+
+    private Item chooseRepresentativeIngredient(ItemTarget target) {
+        Item[] matches = target.getMatches();
+        if (matches == null || matches.length == 0) return null;
+        for (Item item : matches) {
+            if (item != null && item != net.minecraft.item.Items.AIR) {
+                return item;
+            }
+        }
+        return null;
+    }
+
+    private void addLeaf(Map<Item, Integer> resources, Item item, int count) {
+        resources.merge(item, count, Integer::sum);
+    }
+
+    public static String itemId(Item item) {
+        return Registries.ITEM.getId(item).toString();
     }
 
     /**
