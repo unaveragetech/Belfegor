@@ -1,6 +1,6 @@
 # Belfegor
 
-Belfegor is a Fabric client-side Minecraft automation mod for **Minecraft 1.21.4**. It is a production-focused evolution of AltoClef/Baritone-style task automation with safer crafting, stronger inventory recovery, managed shulker-box sub-inventories, PvP loadout automation, persistent memory, a richer in-game UI, Butler remote control, and detailed debugging for the kinds of Minecraft inventory bugs that usually make bots fall apart.
+Belfegor is a Fabric client-side Minecraft automation mod for **Minecraft 1.21.4**. It is a production-focused evolution of Belfegor/Baritone-style task automation with safer crafting, stronger inventory recovery, managed shulker-box sub-inventories, PvP loadout automation, persistent memory, a richer in-game UI, Butler remote control, and detailed debugging for the kinds of Minecraft inventory bugs that usually make bots fall apart.
 
 At its simplest, Belfegor lets you type commands like:
 
@@ -182,7 +182,7 @@ Belfegor is not a flawless general Minecraft intelligence. Current limitations i
 - shulker identity is based on slot/history/contents rather than a perfect unique ID;
 - server lag, anti-cheat, protected regions, custom plugins, and unusual inventories can break assumptions;
 - beat-the-game routes are world-sensitive and may fail in bad terrain or unlucky structure generation;
-- the Java package name still contains legacy `adris.altoclef` paths even though the mod is Belfegor-branded.
+- the Java package name still contains legacy `adris.belfegor` paths even though the mod is Belfegor-branded.
 
 ## Can Belfegor be used on a server or anarchy server?
 
@@ -408,8 +408,8 @@ In `@player`, the advisor can suggest the next Belfegor command, but only if the
 | Fabric metadata | [`src/main/resources/fabric.mod.json`](src/main/resources/fabric.mod.json) |
 | Mixin config | [`src/main/resources/belfegor.mixins.json`](src/main/resources/belfegor.mixins.json) |
 | Recipe registry data | [`src/main/resources/belfegor_recipes.json`](src/main/resources/belfegor_recipes.json) |
-| Craft audit command | [`src/main/java/adris/altoclef/commands/CraftAuditCommand.java`](src/main/java/adris/altoclef/commands/CraftAuditCommand.java) |
-| Ollama advisor | [`src/main/java/adris/altoclef/llm/LlmAdvisor.java`](src/main/java/adris/altoclef/llm/LlmAdvisor.java) |
+| Craft audit command | [`src/main/java/adris/Belfegor/commands/CraftAuditCommand.java`](src/main/java/adris/Belfegor/commands/CraftAuditCommand.java) |
+| Ollama advisor | [`src/main/java/adris/Belfegor/llm/LlmAdvisor.java`](src/main/java/adris/Belfegor/llm/LlmAdvisor.java) |
 
 ## Build
 
@@ -438,7 +438,7 @@ Belfegor is actively evolving. Core command execution, item acquisition, craftin
 
 ## Credits
 
-Belfegor builds on AltoClef-style Minecraft automation ideas and Baritone pathing, with additional Belfegor-specific work around Minecraft `1.21.4`, managed shulkers, UI, crafting stability, PvP tooling, autonomous player mode, memory, and debugging.
+Belfegor builds on Belfegor-style Minecraft automation ideas and Baritone pathing, with additional Belfegor-specific work around Minecraft `1.21.4`, managed shulkers, UI, crafting stability, PvP tooling, autonomous player mode, memory, and debugging.
 
 ## License
 

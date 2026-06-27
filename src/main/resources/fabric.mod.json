@@ -16,7 +16,7 @@
   "environment": "*",
   "entrypoints": {
     "main": [
-      "adris.altoclef.AltoClef"
+      "adris.belfegor.Belfegor"
     ]
   },
   "mixins": [

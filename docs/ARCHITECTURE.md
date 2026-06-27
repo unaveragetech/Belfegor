@@ -123,7 +123,7 @@ These are known architectural risks and ongoing cleanup targets:
 
 | Pitfall | Why it matters | Planned improvement |
 |---|---|---|
-| Legacy package names | Code still lives under `adris.altoclef`, which is confusing for a Belfegor-branded project. | Defer until stable; eventually migrate packages mechanically with tests. |
+| Legacy package names | Code still lives under `adris.belfegor`, which is confusing for a Belfegor-branded project. | Defer until stable; eventually migrate packages mechanically with tests. |
 | Task oscillation | Two tasks can repeatedly interrupt each other if both think they should run. | More `ITaskCanForce` on atomic transactions; stronger active-subtask caching; clearer scheduler diagnostics. |
 | Inventory count ambiguity | Some helpers count container/crafting slots while others require player inventory only. | Separate APIs for “usable now,” “visible nearby,” “stored,” and “crafting grid.” |
 | Recipe material variants | Recipes like wood/slabs/planks may accept multiple variants, but some tasks still expect exact item targets. | Ingredient groups/tags and recipe unification. |
@@ -231,6 +231,6 @@ Target behavior:
 | `util/helpers/` | Inventory, storage, item, world, and Baritone helpers. |
 | `debug/` | Structured debug logging. |
 
-## Why the old package name still says `adris.altoclef`
+## Why the old package name still says `adris.belfegor`
 
-The Java package name remains `adris.altoclef` because this project evolved from AltoClef code. User-facing assets, settings, mod id, jar name, mixin name, icon path, and docs are Belfegor-branded. Renaming every Java package would be a large mechanical migration with high merge/conflict risk and little runtime value, so it is intentionally deferred.
+The Java package name remains `adris.belfegor` because this project evolved from Belfegor code. User-facing assets, settings, mod id, jar name, mixin name, icon path, and docs are Belfegor-branded. Renaming every Java package would be a large mechanical migration with high merge/conflict risk and little runtime value, so it is intentionally deferred.

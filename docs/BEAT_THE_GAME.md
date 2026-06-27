@@ -1,6 +1,6 @@
 # Beat-the-game, `@player`, and autonomous gameplay
 
-Belfegor contains classic beat-the-game automation inherited from AltoClef-style routes plus newer Belfegor autonomous behavior.
+Belfegor contains classic beat-the-game automation inherited from Belfegor-style routes plus newer Belfegor autonomous behavior.
 
 Commands:
 
@@ -97,7 +97,7 @@ If `llmAdvisorEnabled` and `llmAdvisorInPlayerMode` are enabled, player mode can
 Current implementation lives in:
 
 ```text
-src/main/java/adris/altoclef/tasks/PlayerExplorationTask.java
+src/main/java/adris/Belfegor/tasks/PlayerExplorationTask.java
 ```
 
 ### Startup behavior
@@ -261,7 +261,7 @@ The home phase is where base-building happens. It:
 Current implementation lives in:
 
 ```text
-src/main/java/adris/altoclef/tasks/construction/BuildCampsiteTask.java
+src/main/java/adris/Belfegor/tasks/construction/BuildCampsiteTask.java
 ```
 
 It is deliberately simple and expandable. The current base is a square campsite centered on the home block.

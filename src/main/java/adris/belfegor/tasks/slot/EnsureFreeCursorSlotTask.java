@@ -1,0 +1,67 @@
+package adris.belfegor.tasks.slot;
+
+import adris.belfegor.Belfegor;
+import adris.belfegor.tasksystem.Task;
+import adris.belfegor.util.helpers.ItemHelper;
+import adris.belfegor.util.helpers.StorageHelper;
+import adris.belfegor.util.slots.Slot;
+import net.minecraft.item.ItemStack;
+import net.minecraft.screen.slot.SlotActionType;
+
+import java.util.Optional;
+
+public class EnsureFreeCursorSlotTask extends Task {
+
+    @Override
+    protected void onStart(Belfegor mod) {
+        // YEET
+    }
+
+    @Override
+    protected Task onTick(Belfegor mod) {
+
+
+        ItemStack cursor = StorageHelper.getItemStackInCursorSlot();
+
+
+        if (!cursor.isEmpty()) {
+            Optional<Slot> moveTo = mod.getItemStorage().getSlotThatCanFitInPlayerInventory(cursor, false);
+            if (moveTo.isPresent()) {
+                setDebugState("Moving cursor stack back");
+                mod.getSlotHandler().clickSlotForce(moveTo.get(), 0, SlotActionType.PICKUP);
+                return null;
+            }
+            if (ItemHelper.canThrowAwayStack(mod, cursor)) {
+                setDebugState("Incompatible cursor stack, throwing");
+                mod.getSlotHandler().clickSlotForce(Slot.UNDEFINED, 0, SlotActionType.PICKUP);
+            } else {
+                Optional<Slot> garbage = StorageHelper.getGarbageSlot(mod);
+                if (garbage.isPresent()) {
+                    setDebugState("Picking up garbage");
+                    mod.getSlotHandler().clickSlotForce(garbage.get(), 0, SlotActionType.PICKUP);
+                } else {
+                    mod.getSlotHandler().clickSlotForce(Slot.UNDEFINED, 0, SlotActionType.PICKUP);
+                }
+            }
+            return null;
+        }
+        return null;
+    }
+
+    @Override
+    protected void onStop(Belfegor mod, Task interruptTask) {
+
+    }
+
+    @Override
+    protected boolean isEqual(Task other) {
+        return other instanceof EnsureFreeCursorSlotTask;
+    }
+
+
+    // And filling this in will make it look ok in the task tree
+    @Override
+    protected String toDebugString() {
+        return "Breaking the cursor slot";
+    }
+}

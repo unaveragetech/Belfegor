@@ -1,0 +1,59 @@
+package adris.belfegor.tasks.resources;
+
+import adris.belfegor.Belfegor;
+import adris.belfegor.tasks.ResourceTask;
+import adris.belfegor.tasks.movement.DefaultGoToDimensionTask;
+import adris.belfegor.tasksystem.Task;
+import adris.belfegor.util.Dimension;
+import adris.belfegor.util.ItemTarget;
+import adris.belfegor.util.MiningRequirement;
+import adris.belfegor.util.helpers.WorldHelper;
+import net.minecraft.block.Block;
+import net.minecraft.block.Blocks;
+import net.minecraft.item.Items;
+
+public class CollectQuartzTask extends ResourceTask {
+
+    private final int _count;
+
+    public CollectQuartzTask(int count) {
+        super(Items.QUARTZ, count);
+        _count = count;
+    }
+
+    @Override
+    protected boolean shouldAvoidPickingUp(Belfegor mod) {
+        return false;
+    }
+
+    @Override
+    protected void onResourceStart(Belfegor mod) {
+
+    }
+
+    @Override
+    protected Task onResourceTick(Belfegor mod) {
+        if (WorldHelper.getCurrentDimension() != Dimension.NETHER) {
+            setDebugState("Going to nether");
+            return new DefaultGoToDimensionTask(Dimension.NETHER);
+        }
+
+        setDebugState("Mining");
+        return new MineAndCollectTask(new ItemTarget(Items.QUARTZ, _count), new Block[]{Blocks.NETHER_QUARTZ_ORE}, MiningRequirement.WOOD);
+    }
+
+    @Override
+    protected void onResourceStop(Belfegor mod, Task interruptTask) {
+
+    }
+
+    @Override
+    protected boolean isEqualResource(ResourceTask other) {
+        return other instanceof CollectQuartzTask;
+    }
+
+    @Override
+    protected String toDebugStringName() {
+        return "Collecting " + _count + " quartz";
+    }
+}

@@ -53,14 +53,14 @@ build_and_install.bat
 
 | Area | Purpose |
 |---|---|
-| `AltoClef.java` | Mod entrypoint, tick loop, command initialization, auto-shulker trigger. |
-| `AltoClefCommands.java` | Registered command list. |
+| `Belfegor.java` | Mod entrypoint, tick loop, command initialization, auto-shulker trigger. |
+| `BelfegorCommands.java` | Registered command list. |
 | `commands/` | Chat commands. |
 | `tasks/` | Core task system and gameplay tasks. |
 | `tasks/container/` | Crafting table, storage, shulker, smelting, retrieve/store tasks. |
 | `tasks/resources/` | Resource collection and recipe material tasks. |
 | `memory/` | Persistent crafting/location/shulker memory. |
-| `ui/AltoclefScreen.java` | `C` UI. |
+| `ui/BelfegorScreen.java` | `C` UI. |
 | `util/helpers/InventoryManager.java` | Higher-level inventory click helper. |
 | `debug/DebugLogger.java` | Debug log writer. |
 | `util/RecipeRegistry.java` | Offline recipe catalogue loader, output/input indexes, recursive craft plans, and leaf-resource expansion. |

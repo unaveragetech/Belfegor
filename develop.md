@@ -1,6 +1,6 @@
 # Development Guide
 
-## [Javadocs](https://gaucho-matrero.github.io/altoclef/)
+## [Javadocs](https://gaucho-matrero.github.io/Belfegor/)
 
 ## Get it Running (IDE)
 
@@ -18,7 +18,7 @@ your Project & Gradle Settings!
 
 Click `File > New > Project from Version Control...` ![image](https://user-images.githubusercontent.com/13367955/146222866-42fa307b-016e-40a6-98bc-6e2428cde2dc.png)
 
-3) Copy + Paste the altoclef clone URL and Clone (find
+3) Copy + Paste the Belfegor clone URL and Clone (find
    here: )![image](https://user-images.githubusercontent.com/13367955/146223264-0cc436c0-4c08-4adc-b948-0ca3da4fbd6f.png)
 4) Go to `File > Settings`, search `Gradle` and make sure your Gradle JVM is set to a JDK that's version 16 (IntelliJ
    lets you download open source JDKs, any of those should be
@@ -39,27 +39,27 @@ If the gradle tab doesn't exist, try `View > Tool Windows > Gradle`
 
 ## Modifying Baritone (dev mode)
 
-Alto Clef uses a custom fork of baritone that gives you more control over how baritone works.
+Belfegor uses a custom fork of baritone that gives you more control over how baritone works.
 If you wish to make edits to that fork you can do so locally if you follow these steps:
 
-1) Clone [The baritone fork](https://github.com/gaucho-matrero/baritone) into the same directory containing `altoclef`.
-   For example, if you cloned `altoclef` into your desktop, `baritone` should be in your desktop as well.
+1) Clone [The baritone fork](https://github.com/gaucho-matrero/baritone) into the same directory containing `Belfegor`.
+   For example, if you cloned `Belfegor` into your desktop, `baritone` should be in your desktop as well.
 2) Run `gradle build` within the fork you just cloned. You may open the folder in an IDE and run the `build` task.
 3) There should now be various `.jar` files starting with `baritone` in the following folder: `baritone/build/libs`
-4) Now within `altoclef`, pass `-Paltoclef.development` as a parameter when running `gradle build`
-   (In IntelliJ, go to the build dropdown -> `Edit Configurations`, then duplicate the `altoclef [build]` configuration.
-   In this duplicate, paste `-Paltoclef.development` into the Arguments text field.)
-5) When you build and pass `-Paltoclef.development`, Alto Clef should now use the jar file inside
+4) Now within `Belfegor`, pass `-PBelfegor.development` as a parameter when running `gradle build`
+   (In IntelliJ, go to the build dropdown -> `Edit Configurations`, then duplicate the `Belfegor [build]` configuration.
+   In this duplicate, paste `-PBelfegor.development` into the Arguments text field.)
+5) When you build and pass `-PBelfegor.development`, Belfegor should now use the jar file inside
    of your custom `baritone` fork instead of pulling from online. This lets you rapidly test local changes to baritone.
 
 ## Task Development Guides
 
 ### Task Programming Tutorial Stream
 
-[![More Recent AltoClef Task Programming VOD](https://img.youtube.com/vi/uROEqwyzn3o/0.jpg)](https://www.youtube.com/watch?v=uROEqwyzn3o)
+[![More Recent Belfegor Task Programming VOD](https://img.youtube.com/vi/uROEqwyzn3o/0.jpg)](https://www.youtube.com/watch?v=uROEqwyzn3o)
 
 ### Old (Post Stream) Tutorial VOD
 
-[![Rough AltoClef Tutorial VOD](https://img.youtube.com/vi/giBjHDZ7HvY/0.jpg)](https://www.youtube.com/watch?v=giBjHDZ7HvY)
+[![Rough Belfegor Tutorial VOD](https://img.youtube.com/vi/giBjHDZ7HvY/0.jpg)](https://www.youtube.com/watch?v=giBjHDZ7HvY)
 
 
