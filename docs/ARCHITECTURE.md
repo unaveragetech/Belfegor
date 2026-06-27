@@ -145,9 +145,30 @@ flowchart TD
 
 Memory files live in `.minecraft/belfegor/` and are intentionally human-readable JSON where practical.
 
+## Recipe registry and craft audit loop
+
+Belfegor includes a `RecipeRegistry` that loads `belfegor_recipes.json` from the mod jar and indexes recipes by output and input. It can now sort craftable outputs, build recursive craft plans, and expand nested recipes into leaf resources for test provisioning.
+
+The developer command `@craftaudit <target=all> <limit=0>` uses that registry as a regression harness:
+
+```mermaid
+flowchart TD
+    Audit["@craftaudit all 25"] --> Registry["RecipeRegistry"]
+    Registry --> Target["Select craftable target"]
+    Target --> Plan["Build recursive craft plan"]
+    Plan --> Leaves["Compute leaf resources"]
+    Leaves --> Give["/give leaf resources in test world"]
+    Give --> RealCraft["Run normal Belfegor craft task"]
+    RealCraft --> Store["Store output in containers"]
+    Store --> Log["Write pass/fail audit log"]
+    Log --> Next["Next target"]
+```
+
+The important design choice is that the audit only uses `/give` to provision prerequisite resources. The actual craft still goes through Belfegor's normal task system, so failures expose real planner, inventory, shulker, and crafting bugs.
+
 ## Toward automated craftable-item coverage
 
-Belfegor already includes a `RecipeRegistry` that loads `belfegor_recipes.json` and indexes recipes by output and input. The long-term plan is to use this as the foundation for an automated catalogue system:
+The long-term plan is to use this registry and audit loop as the foundation for an automated catalogue system:
 
 ```mermaid
 flowchart TD
@@ -169,6 +190,7 @@ Target behavior:
 - successful paths become preferred over slower or failed paths;
 - impossible paths fail with a clear missing requirement instead of looping;
 - the `@list`/UI command catalogue can show craftability, missing ingredients, and known route confidence.
+- `@craftaudit all` can continuously validate recipe coverage and write concrete failure reports for every craftable output.
 
 ## Important packages
 

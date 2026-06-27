@@ -2,6 +2,8 @@
 
 This is the first public Belfegor beta release for Minecraft `1.21.4`.
 
+This release bundle has been refreshed with the current craft-audit build. The jar now includes the offline recipe catalogue improvements and the developer command `@craftaudit`.
+
 ## Download
 
 Use the runtime bundle:
@@ -49,6 +51,8 @@ Belfegor is a client-side Minecraft automation agent. It can:
 - craft recipe-driven targets such as tools, workstations, armor, and anvils;
 - use Baritone-style movement/pathing;
 - manage carried shulker boxes as sub-inventories;
+- plan crafts from the bundled offline `1.21.4` recipe catalogue;
+- run developer recipe audits with `@craftaudit <target=all> <limit=0>`;
 - run PvP preparation commands such as `@stacked` and `@toolset`;
 - run autonomous player mode with `@player`;
 - expose task state, command help, logs, and shulker memory through the `C` UI;
@@ -72,6 +76,10 @@ Belfegor can technically run while connected to multiplayer servers if the modde
 
 The Butler system lets authorized players command Belfegor through whispers/private messages. For multiplayer use, enable whitelist mode and add only trusted players before exposing the bot on a server.
 
+## Developer audit note
+
+`@craftaudit` is intended for local test worlds with cheats/op enabled. It expands a target recipe through the bundled offline catalogue, gives the required leaf resources, executes the real Belfegor crafting path, stores outputs in containers, and writes logs under `.minecraft/belfegor/`. Use focused runs like `@craftaudit anvil` before broad catalogue runs like `@craftaudit all 25`.
+
 ## Documentation
 
 This release is backed by the full repository docs:
@@ -84,4 +92,3 @@ This release is backed by the full repository docs:
 - `docs/BUTLER_AND_SERVERS.md`
 - `docs/TROUBLESHOOTING.md`
 - `docs/ROADMAP.md`
-

@@ -11,6 +11,7 @@ At its simplest, Belfegor lets you type commands like:
 @shulker store diamond 3
 @shulker retrieve stick 8
 @player
+@craftaudit anvil
 ```
 
 Behind that small command surface is a task engine that can gather resources, mine, craft, smelt, loot containers, use carried shulkers as storage, path with Baritone, survive hazards, and chain smaller behaviors into larger goals.
@@ -24,7 +25,7 @@ Behind that small command surface is a task engine that can gather resources, mi
 | Built jar | [`releases/belfegor-1.21.4-beta1.jar`](releases/belfegor-1.21.4-beta1.jar) |
 | Runtime bundle | [`releases/belfegor-1.21.4-beta1-runtime.zip`](releases/belfegor-1.21.4-beta1-runtime.zip) |
 | Release notes | [`docs/RELEASE_v1.21.4-beta1.md`](docs/RELEASE_v1.21.4-beta1.md) |
-| Jar SHA256 | `C3B24C02E960F059686D1B779B998F6680413945424A153BF97684DD775D85F1` |
+| Jar SHA256 | `391EA0F77A46796B8EEAB97772A08DB10518BD7C2B2BDA17E4BB032647D3FF20` |
 | Mod id | `belfegor` |
 | Command prefix | `@` |
 | In-game UI | `C` |
@@ -54,6 +55,8 @@ It is currently beta software, with the most active engineering effort focused o
 | Safer crafting | Inventory and table crafting include cursor recovery, screen diagnostics, and transaction guards. |
 | Managed shulkers | Carried shulkers are treated as sub-inventories that can be placed, opened, scanned, used, mined, and picked back up. |
 | Auto shulker sorting | Eligible non-tool items can be deposited into shulkers by timer or inventory-fill detection. |
+| Offline recipe catalogue | Bundled `1.21.4` recipe data lets Belfegor plan craftable-item dependencies without internet access. |
+| Craft audit harness | `@craftaudit` gives normalized leaf resources in a cheat-enabled test world, crafts through the real task system, stores outputs, and logs pass/fail results. |
 | PvP prep | `@stacked`, `@toolset`, and `@pvp` automate gear and combat preparation. |
 | Player mode | `@player` starts an autonomous explore/gather/craft/home-base loop. |
 | Beat-the-game routes | `@gamer` and `@marvion` run classic autonomous completion routes. |
@@ -74,6 +77,8 @@ Belfegor can already do a lot of practical survival automation:
 - store/retrieve items from containers;
 - use carried shulkers as sub-inventories;
 - sort eligible inventory items into shulkers automatically;
+- plan normal craftable items from a bundled offline recipe catalogue;
+- run developer craft audits with `@craftaudit` to test recipes end-to-end;
 - run experimental autonomous play with `@player`;
 - run classic beat-the-game style routines through `@gamer` / `@marvion`;
 - let authorized players command the bot by whisper through the Butler system.
@@ -135,6 +140,8 @@ Then the bot asks, in order:
 If the iron is inside a shulker, the shulker path is part of the same resource plan: place the shulker, ensure it can open, open it, withdraw the required stacks, recatalog contents, close it, mine it, pick it back up, then resume the craft. If the iron must be mined, Belfegor switches into gathering/mining/smelting subtasks and returns to the anvil craft once the prerequisites are satisfied.
 
 This is the same model used for every normal craftable item in Minecraft `1.21.4`: command -> item target -> recipe lookup -> dependency expansion -> source selection -> gather/craft/smelt/retrieve -> guarded crafting -> count verification. The more complete the recipe data and ingredient-tag handling are, the more items can be handled without writing a custom task for each one. Belfegor still has beta edge cases around interchangeable ingredients and unusual server inventories, but the architecture is intentionally recipe-driven rather than hardcoded around one item like a composter or anvil.
+
+The recipe catalogue is bundled in the mod jar as `belfegor_recipes.json`, so basic planning does not require an internet lookup or an external recipe service. The current planner can also expand nested craftable dependencies into leaf resources for testing. For example, an anvil audit resolves iron blocks into iron ingots before it starts the real craft task.
 
 ```mermaid
 flowchart TD
@@ -234,6 +241,16 @@ Fun project ideas:
 - deliberately put recipe supplies in shulkers and confirm `@get` retrieves them;
 - build a private “bot ranch” server where friends can command it with Butler;
 - run `@stacked` as a stress test for gathering, crafting, and inventory handling.
+
+For developers and cheat-enabled test worlds, `@craftaudit` is the “make the bot prove it” command:
+
+```text
+@craftaudit anvil
+@craftaudit diamond_shovel
+@craftaudit all 25
+```
+
+It uses the offline recipe catalogue, computes the leaf resources needed for each target, runs `/give @s <item> <count>` for those resources, crafts through the normal Belfegor task engine, stores the result in containers, and writes a pass/fail log under `.minecraft/belfegor/`. This is intentionally not a normal survival command; it is a regression harness for finding recipe, inventory, shulker, and crafting bugs.
 
 ## System model
 
@@ -369,6 +386,7 @@ The Belfegor UI is meant to make the agent inspectable while it works:
 | Fabric metadata | [`src/main/resources/fabric.mod.json`](src/main/resources/fabric.mod.json) |
 | Mixin config | [`src/main/resources/belfegor.mixins.json`](src/main/resources/belfegor.mixins.json) |
 | Recipe registry data | [`src/main/resources/belfegor_recipes.json`](src/main/resources/belfegor_recipes.json) |
+| Craft audit command | [`src/main/java/adris/altoclef/commands/CraftAuditCommand.java`](src/main/java/adris/altoclef/commands/CraftAuditCommand.java) |
 
 ## Build
 

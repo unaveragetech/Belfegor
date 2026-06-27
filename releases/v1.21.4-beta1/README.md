@@ -2,6 +2,8 @@
 
 This folder contains the runtime files for Belfegor on Minecraft `1.21.4`.
 
+This runtime package has been refreshed with the current craft-audit build. It includes the offline recipe catalogue and the developer command `@craftaudit`.
+
 ## Included jars
 
 Copy these files into your Minecraft instance's `.minecraft/mods/` folder:
@@ -40,6 +42,15 @@ C:\Users\b0052\Desktop\python projects\Projects\mmc-develop-win32\MultiMC\instan
 
 6. Press `C` to open the Belfegor UI.
 
+For cheat-enabled developer test worlds, you can verify recipe/crafting coverage with:
+
+```text
+@craftaudit anvil
+@craftaudit all 25
+```
+
+Audit logs are written to `.minecraft/belfegor/craft_audit_*.log`.
+
 ## Documentation included in the repository
 
 Read the main project docs for full setup and usage:
@@ -55,4 +66,3 @@ Read the main project docs for full setup and usage:
 ## Notes
 
 The Fabric API jar in this runtime package is the one currently present in the working instance: `fabric-api-0.114.3+1.21.4.jar`. Development metadata may reference a newer compatible Fabric API, but this release package intentionally mirrors the tested instance files.
-

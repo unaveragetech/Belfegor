@@ -27,6 +27,8 @@ Belfegor is built around four ideas:
 | Containers | Can store/retrieve from nearby/known containers. |
 | Shulkers | Places, opens, transfers, catalogs, breaks, picks up, and remembers carried shulkers. |
 | Auto shulker sorting | Timer/detection modes for eligible non-tool items. |
+| Offline recipes | Bundled `belfegor_recipes.json` lets the agent reason about craftable-item dependencies without internet access. |
+| Craft auditing | Developer command `@craftaudit` runs recipe expansion, resource provisioning, real crafting, storage, and pass/fail logging in a cheat-enabled test world. |
 | PvP prep | `@stacked`, `@toolset`, and advanced PvP tasking exist. |
 | Autonomous play | `@player` explores, gathers, crafts, manages shulkers, and builds a basic home campsite. |
 | Beat-the-game | Classic `@gamer` and `@marvion` routes are present. |
@@ -185,6 +187,44 @@ That means Belfegor does not need a unique hand-written "make an anvil" brain, a
 - output verification.
 
 The same loop handles simple one-step crafts, such as sticks, and deeper crafts, such as anvils, tools, armor, workstations, and resource blocks. Complex items become large dependency graphs, but the planning method is the same.
+
+### Offline recipe catalogue and craft audits
+
+Belfegor ships with a bundled recipe catalogue at:
+
+```text
+src/main/resources/belfegor_recipes.json
+```
+
+At runtime, `RecipeRegistry` loads that file from the mod jar and builds output/input indexes. This gives the bot a local map of craftable outputs, ingredient lists, output counts, and nested dependencies. The immediate value is reliability: the agent can still plan normal vanilla `1.21.4` crafts without asking a website, API, or wiki what a recipe is.
+
+The developer-facing proof harness is:
+
+```text
+@craftaudit <target=all> <limit=0>
+```
+
+Examples:
+
+```text
+@craftaudit anvil
+@craftaudit diamond_shovel
+@craftaudit all 25
+```
+
+The audit process is deliberately mechanical:
+
+1. Pick a craftable target from the offline catalogue.
+2. Expand its recipe recursively into leaf resources.
+3. Normalize item ids into `/give`-safe Minecraft names.
+4. Run `/give @s <item> <count>` for every leaf resource.
+5. Execute Belfegor's normal `@get`/crafting task path for the target.
+6. Store finished outputs in nearby chests, creating storage when needed.
+7. Write a dated log under `.minecraft/belfegor/` with every pass/fail and failure reason.
+
+This matters because `@craftaudit` does not “pretend craft” inside a planner. It forces the real inventory helpers, crafting tasks, shulker/container checks, cursor guards, and output verification to do the work. A failed audit is therefore actionable evidence: either the recipe data is wrong, ingredient grouping is too strict, the source resolver chose badly, or a real inventory transaction failed.
+
+The long-term goal is to run this audit across the entire craftable catalogue and turn failures into a punch list until every sourceable craftable item in Minecraft `1.21.4` can be collected, crafted, catalogued, and stored automatically.
 
 ### Ingredient alternatives and tags
 

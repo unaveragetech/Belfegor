@@ -63,6 +63,9 @@ build_and_install.bat
 | `ui/AltoclefScreen.java` | `C` UI. |
 | `util/helpers/InventoryManager.java` | Higher-level inventory click helper. |
 | `debug/DebugLogger.java` | Debug log writer. |
+| `util/RecipeRegistry.java` | Offline recipe catalogue loader, output/input indexes, recursive craft plans, and leaf-resource expansion. |
+| `commands/CraftAuditCommand.java` | Developer command entry point for recipe audit runs. |
+| `tasks/container/CraftAuditTask.java` | Cheat-enabled craft audit task that provisions resources, crafts through real tasks, stores outputs, and logs results. |
 
 ## Debugging inventory issues
 
@@ -87,6 +90,45 @@ Useful log tags:
 - `SHULKER-CATALOG`
 - `SHULKER-FORCE`
 - `CONTAINER-FORCE`
+
+## Offline recipe and craft-audit testing
+
+Belfegor carries a local recipe catalogue in:
+
+```text
+src/main/resources/belfegor_recipes.json
+```
+
+The runtime loader is `RecipeRegistry`. It normalizes item ids, indexes recipes by output/input, and can expand a target into a recursive `CraftPlan` with leaf resources. This is used by the developer-only audit command:
+
+```text
+@craftaudit <target=all> <limit=0>
+```
+
+Recommended test-world workflow:
+
+1. Create a singleplayer creative or cheat-enabled survival world.
+2. Make sure commands are allowed, because the audit uses `/give @s`.
+3. Run a focused craft first:
+
+```text
+@craftaudit anvil
+@craftaudit diamond_shovel
+```
+
+4. Then run a bounded catalogue pass:
+
+```text
+@craftaudit all 25
+```
+
+5. Read the generated log:
+
+```text
+.minecraft/belfegor/craft_audit_*.log
+```
+
+The audit should fail loudly rather than loop forever. A failure usually points at one of four areas: bad recipe data, missing ingredient-group normalization, missing source/acquisition support, or an unsafe inventory transaction during the real craft.
 
 ## Packaging release artifacts
 
