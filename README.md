@@ -442,4 +442,4 @@ Belfegor builds on Belfegor-style Minecraft automation ideas and Baritone pathin
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+SDUC. See [LICENSE](LICENSE).
