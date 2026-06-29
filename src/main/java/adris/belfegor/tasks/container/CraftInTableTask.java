@@ -6,6 +6,7 @@ import adris.belfegor.tasks.ResourceTask;
 import adris.belfegor.tasks.construction.DestroyBlockTask;
 import adris.belfegor.tasks.movement.TimeoutWanderTask;
 import adris.belfegor.tasks.resources.CollectRecipeCataloguedResourcesTask;
+import adris.belfegor.tasks.slot.EnsureFreeInventorySlotTask;
 import adris.belfegor.tasks.slot.ReceiveCraftingOutputSlotTask;
 import adris.belfegor.tasksystem.ITaskUsesCraftingGrid;
 import adris.belfegor.tasksystem.Task;
@@ -177,6 +178,7 @@ class DoCraftInTableTask extends DoStuffInContainerTask implements ITaskUsesCraf
     // Creating a new CraftGenericManuallyTask every tick resets its InventoryManager state.
     private CraftGenericManuallyTask _cachedCraftTask = null;
     private RecipeTarget _cachedCraftTarget = null;
+    private Task _freeInventoryTask = null;
     // When true, the crafting table was placed by the bot and should be
     // broken and collected after crafting is complete so the bot carries
     // it instead of walking back to a fixed location every time.
@@ -211,6 +213,7 @@ class DoCraftInTableTask extends DoStuffInContainerTask implements ITaskUsesCraf
         _craftCount = 0;
         _cachedCraftTask = null;
         _cachedCraftTarget = null;
+        _freeInventoryTask = null;
 
         // Protect crafting materials from being placed as blocks
         mod.getBehaviour().addPlacementProtectedItems(getMaterialsArray());
@@ -301,6 +304,34 @@ class DoCraftInTableTask extends DoStuffInContainerTask implements ITaskUsesCraf
         mod.getBehaviour().addProtectedItems(materials);
         // Also prevent these from being placed as blocks (reserved for crafting)
         mod.getBehaviour().addPlacementProtectedItems(materials);
+
+        // Crafting needs at least one safe landing slot for outputs, cursor
+        // recovery, and a picked-up crafting table. If the inventory is full,
+        // make room before opening/placing a table. Prefer shulker storage
+        // because it preserves resources; fall back to the existing garbage
+        // slot recovery only when no carried shulker transaction is available.
+        if (countEmptyMainInventorySlots(mod) == 0
+                && StorageHelper.getItemStackInCursorSlot().isEmpty()) {
+            if (_freeInventoryTask != null
+                    && !_freeInventoryTask.isFinished(mod)
+                    && !_freeInventoryTask.stopped()) {
+                setDebugState("Freeing inventory space before table craft");
+                return _freeInventoryTask;
+            }
+            if (ShulkerInteractionTask.hasCarriedShulker(mod)) {
+                ItemTarget[] autoStore = ShulkerInteractionTask.getAutoStoreTargets(mod);
+                if (autoStore.length > 0) {
+                    _freeInventoryTask = new ShulkerInteractionTask(
+                            ShulkerInteractionTask.Mode.STORE, autoStore);
+                    setDebugState("Storing overflow into carried shulker before table craft");
+                    return _freeInventoryTask;
+                }
+            }
+            _freeInventoryTask = new EnsureFreeInventorySlotTask();
+            setDebugState("Freeing one inventory slot before table craft");
+            return _freeInventoryTask;
+        }
+        _freeInventoryTask = null;
 
         // Avoid breaking crafting tables while we're using them,
         // UNLESS we're done and want to pick up the table
@@ -495,6 +526,15 @@ class DoCraftInTableTask extends DoStuffInContainerTask implements ITaskUsesCraf
 
         // Convert the result list to an array and return it
         return result.toArray(new Item[0]);
+    }
+
+    private int countEmptyMainInventorySlots(Belfegor mod) {
+        if (mod.getPlayer() == null) return 0;
+        int empty = 0;
+        for (ItemStack stack : mod.getPlayer().getInventory().main) {
+            if (stack.isEmpty()) empty++;
+        }
+        return empty;
     }
 
 }

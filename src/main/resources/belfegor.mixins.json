@@ -23,6 +23,7 @@
     "ClientOpenScreenMixin",
     "ClientTickMixin",
     "EntryMixin",
+    "KeyboardAbortMixin",
     "LoadChunkMixin",
     "MixinLocalPlayer",
     "PlayerCollidesWithEntityMixin"

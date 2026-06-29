@@ -7,8 +7,9 @@ Belfegor treats carried shulker boxes as sub-inventories. The intent is that res
 ```mermaid
 flowchart TD
     PlayerInv["Player inventory"] --> ShulkerItem["Carried shulker item"]
-    ShulkerItem --> NBT["NBT contents"]
-    NBT --> Memory["ShulkerMemory"]
+    ShulkerItem --> NBT["CONTAINER component"]
+    NBT --> Slots["27 internal slot map"]
+    Slots --> Memory["ShulkerMemory"]
     Command["@shulker / @get"] --> Selector["Select best shulker"]
     Selector --> Transaction["Managed transaction"]
     Transaction --> UpdatedNBT["Updated shulker item NBT"]
@@ -31,8 +32,8 @@ sequenceDiagram
     Cmd->>Bot: Need store/retrieve items
     Bot->>Bot: Select carried shulker
     Bot->>Bot: Remember original inventory slot
-    Bot->>World: Place shulker nearby
-    Bot->>World: Ensure block above is air
+    Bot->>World: Jump-place shulker under player
+    Bot->>World: Ensure block above is air or clearable
     Bot->>UI: Open shulker
     Bot->>UI: Transfer exact quantities
     Bot->>Mem: Scan contents pass 1
@@ -43,6 +44,18 @@ sequenceDiagram
     Bot->>Bot: Restore original slot if possible
     Bot->>Mem: Sync carried shulker NBT
 ```
+
+The transaction is protected by a single global shulker lock. Only one shulker store/retrieve/catalog operation is allowed at a time. If another task tries to interrupt while the shulker is placed, open, transferring, being broken, or being picked up, the active shulker transaction is force-continued until it reaches `DONE` or a bounded recovery path.
+
+Important recovery behavior:
+
+- slot clicks now return success/failure up through `SlotHandler` and `InventoryManager`, so a blocked click is not treated as a successful pickup;
+- same-slot click guarding resets per client tick, preventing legal one-click-per-tick transfers from becoming permanent `SLOT-STUCK` blocks;
+- pickup targets the one placed shulker item, not the total count of matching shulkers that existed before placement;
+- if pickup times out but the placed shulker block still exists, Belfegor retries breaking it;
+- if pickup times out and a matching carried shulker is present, Belfegor syncs memory and releases the transaction instead of holding the lock forever;
+- if a shulker cannot be opened after the retry limit, Belfegor breaks it and picks it back up rather than spam-opening indefinitely.
+- placement prefers the normal player scaffold motion: clear headroom if possible, jump, place the shulker directly under the player, then open that known block position.
 
 ## Commands
 
@@ -110,14 +123,37 @@ Auto mode excludes:
 
 Shulkers are never stored inside shulkers.
 
+## Slot-level cataloguing
+
+Carried shulkers are indexed before they are opened. Belfegor reads the shulker
+item's Minecraft `CONTAINER` component into a 27-slot list, then stores:
+
+- the player inventory slot holding the shulker;
+- the shulker item type/color;
+- a stable contents fingerprint;
+- total item count and free internal slots;
+- exact internal slot entries: `slot`, `itemName`, `itemKey`, and `count`;
+- the last source of truth, such as `item-component` or `open-screen`.
+
+When a shulker is placed and opened, the open-screen scan becomes the verified
+source of truth and overwrites the carried-item catalogue. After pickup, the
+carried item is synced again so memory points back to the inventory slot.
+
+This is why the bot can know, before opening the box, that inventory slot `7`
+contains a shulker whose internal slot `4` has `diamond x3`.
+
 ## How a shulker is chosen
 
-For retrieval, Belfegor prefers a carried shulker whose NBT contents include the requested item.
+For retrieval, Belfegor prefers a carried shulker whose slot catalogue contains
+the requested item. The selector scores remembered inventory shulkers first,
+then cross-checks the live item component. This prevents the older failure mode
+where the bot placed a shulker, opened it, ignored the contents, and gathered
+fresh resources instead.
 
 For storage, Belfegor prefers:
 
 1. a shulker already containing matching items;
-2. otherwise a shulker with more free space.
+2. otherwise a shulker with more free internal slots.
 
 This keeps item groups together where possible instead of scattering every deposit across random boxes.
 
@@ -150,7 +186,7 @@ Shulker memory is stored at:
 .minecraft/belfegor/belfegor_shulker_memory.json
 ```
 
-The `C` UI shulker tab displays indexed shulkers and known contents. `@shulker list` prints the same information in chat/log form.
+The `C` UI shulker tab displays indexed shulkers and known contents. `@shulker list` prints the same information in chat/log form. Slot-level entries are persisted in `.minecraft/belfegor/belfegor_shulker_memory.json` so the next session starts with the best known catalogue.
 
 ## Debugging shulkers
 
@@ -166,3 +202,17 @@ Relevant debug tags in `belfegor_debug.log`:
 | `CONTAINER-FORCE` | Container pickup transaction lock prevented interruption. |
 
 If a shulker is being opened and closed repeatedly, search the log for `TASK-STOP` and `TASK-START` around the same timestamp. A repeated alternation means another task is interrupting the shulker transaction.
+
+## Current tested behavior
+
+Manual tests in the `1.21.4` MultiMC instance verified:
+
+| Test | Result |
+|---|---|
+| `@shulker store [diamond 1, stick 2]` | Stored without slot-loop lockup. |
+| `@get diamond_shovel` with diamonds in a carried shulker | Retrieved diamond, recatalogued the shulker, picked it up, then crafted the shovel. |
+| `@player` with a full inventory and carried shulker | Auto shulker transactions recovered from pickup/open failures and released the lock. |
+| blocked/open-failing placement | Open retry limit breaks and recovers the shulker instead of hanging. |
+| jump-place placement | `SHULKER-PLACE jump-placed under player` appears, then the shulker opens/transfers/catalogs/breaks/picks up normally. |
+
+Known rough edge: placement may still choose awkward nearby geometry where the shulker has air above but the interaction ray/path is poor. That now recovers safely, but placement scoring should continue to improve.

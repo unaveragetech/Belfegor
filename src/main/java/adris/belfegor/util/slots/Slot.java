@@ -73,6 +73,9 @@ public abstract class Slot {
                 screen instanceof BlastFurnaceScreen) {
             return ContainerType.FURNACE_OR_SMITH_OR_SMOKER_OR_BLAST;
         }
+        if (screen instanceof ShulkerBoxScreen) {
+            return ContainerType.CHEST_SMALL;
+        }
         if (screen instanceof GenericContainerScreen) {
             GenericContainerScreenHandler handler = ((GenericContainerScreen) screen).getScreenHandler();
             boolean big = (handler.getRows() == 6);

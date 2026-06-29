@@ -1,4 +1,4 @@
-# Beat-the-game, `@player`, and autonomous gameplay
+﻿# Beat-the-game, `@player`, and autonomous gameplay
 
 Belfegor contains classic beat-the-game automation inherited from Belfegor-style routes plus newer Belfegor autonomous behavior.
 
@@ -92,7 +92,7 @@ While a user task runs, background chains can react to danger:
 
 `@player` is different from a strict speedrun. It starts an open-ended loop where the bot tries to survive, improve tools, gather useful items, practice crafts, maintain a home base, and use shulkers when inventory pressure gets high.
 
-If `llmAdvisorEnabled` and `llmAdvisorInPlayerMode` are enabled, player mode can ask the Packaged llama.cpp advisor for the next command. The default advisor model is `belfegor/models/lfm2.5-thinking.gguf`. The model receives the command catalogue, current phase, fallback plan, goal, last action, planned action, inventory, and remembered shulker contents. Returned commands are validated before execution, and invalid/unsafe commands are ignored.
+If `llmAdvisorEnabled` and `llmAdvisorInPlayerMode` are enabled, player mode can ask the Packaged llama.cpp advisor for the next command. The default advisor model is `belfegor/models/Qwen3-1.7B-Q4_K_M.gguf`. The model receives the command catalogue, current phase, fallback plan, goal, last action, planned action, inventory, and remembered shulker contents. Returned commands are validated before execution, and invalid/unsafe commands are ignored.
 
 Current implementation lives in:
 
@@ -151,7 +151,7 @@ Every tick, before the phase-specific logic runs, `@player` does several priorit
 | Danger | Health below 8 or at least 3 hostiles within 8 blocks. | Runs a flee/wander task. |
 | Hunger | Every 10 seconds, food level below 14. | Switches to `SURVIVE`. |
 | Shulkers | Every 20 seconds, carried shulker exists and at least 30 main inventory slots are occupied. | Runs auto-store into shulkers for eligible items. |
-| llama.cpp advisor | Cooldown from `llmAdvisorCooldownSeconds`, disabled by default. | Asks `belfegor/models/lfm2.5-thinking.gguf` or configured llama.cpp model for the next validated command. |
+| llama.cpp advisor | Cooldown from `llmAdvisorCooldownSeconds`, disabled by default. | Asks `belfegor/models/Qwen3-1.7B-Q4_K_M.gguf` or configured llama.cpp model for the next validated command. |
 | First tool | Missing wooden pickaxe. | Gets a wooden pickaxe before continuing. |
 | Home | First campsite not built or 90-second home timer elapsed. | Switches to `HOME` unless currently surviving. |
 
@@ -225,7 +225,7 @@ bread
 bucket
 ```
 
-This is the beginning of the future “practice every craftable item” system, but it is currently a curated starter list.
+This is the beginning of the future â€œpractice every craftable itemâ€ system, but it is currently a curated starter list.
 
 ### TOOLS phase
 
@@ -347,7 +347,7 @@ Belfegor has early support for remembering:
 - useful locations;
 - shulker contents.
 
-This is not yet a full reinforcement-learning system. It is practical memory: “this route worked,” “this item is in that shulker,” “home base is here,” and “this craft path has succeeded before.”
+This is not yet a full reinforcement-learning system. It is practical memory: â€œthis route worked,â€ â€œthis item is in that shulker,â€ â€œhome base is here,â€ and â€œthis craft path has succeeded before.â€
 
 ## Known limitations
 
@@ -372,3 +372,4 @@ Before testing full autonomous gameplay, verify the fundamentals:
 @shulker auto status
 @player
 ```
+

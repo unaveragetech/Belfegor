@@ -30,6 +30,7 @@ public class UpgradeInSmithingTableTask extends ResourceTask {
     private final ItemTarget _output;
 
     private final Task _innerTask;
+    private OverflowInventoryTask _overflowTask;
 
     public UpgradeInSmithingTableTask(ItemTarget tool, ItemTarget material, ItemTarget output) {
         super(output);
@@ -69,6 +70,16 @@ public class UpgradeInSmithingTableTask extends ResourceTask {
         int ouputInSlot = inSmithingTable ? getItemsInSlot(SmithingTableSlot.OUTPUT_SLOT, _output) : 0;
 
         int desiredOutput = _output.getTargetCount() - ouputInSlot;
+
+        if (desiredOutput > 0 && OverflowInventoryTask.freeSlots(mod) <= 1) {
+            if (_overflowTask == null || _overflowTask.stopped() || _overflowTask.isFinished(mod)) {
+                _overflowTask = new OverflowInventoryTask(3, _output, _tool, _material, _template);
+            }
+            if (!_overflowTask.isFinished(mod)) {
+                setDebugState("Storing overflow before smithing upgrade batch");
+                return _overflowTask;
+            }
+        }
 
         if (mod.getItemStorage().getItemCount(_tool) + toolsInSlot < desiredOutput ||
                 mod.getItemStorage().getItemCount(_material) + materialsInSlot < desiredOutput ||
@@ -124,6 +135,11 @@ public class UpgradeInSmithingTableTask extends ResourceTask {
 
     @Override
     protected void onResourceStop(Belfegor mod, Task interruptTask) {
+    }
+
+    @Override
+    protected ItemTarget[] getOverflowProtectedTargets() {
+        return new ItemTarget[]{_output, _tool, _material, _template};
     }
 
     @Override

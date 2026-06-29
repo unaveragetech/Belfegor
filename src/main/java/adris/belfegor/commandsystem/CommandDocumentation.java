@@ -36,6 +36,10 @@ public final class CommandDocumentation {
             Map.entry("pvp", List.of("@pvp Steve")),
             Map.entry("stacked", List.of("@stacked")),
             Map.entry("player", List.of("@player")),
+            Map.entry("camp", List.of("@camp", "@camp 10")),
+            Map.entry("build", List.of("@build farmland", "@build storage shulker_vault",
+                    "@build workshop", "@build mobfarm")),
+            Map.entry("home", List.of("@home", "@home farmland", "@home shulker_vault")),
             Map.entry("toolset", List.of("@toolset iron", "@toolset diamond")),
             Map.entry("store", List.of("@store diamond 3", "@store [diamond 3, gold_ingot 8]")),
             Map.entry("retrieve", List.of("@retrieve diamond 3")),
@@ -58,8 +62,12 @@ public final class CommandDocumentation {
             case "deposit", "store", "stash" -> "Moves requested inventory items into storage. Item lists use item count or [item count, item count].";
             case "retrieve" -> "Retrieves requested item quantities from known nearby storage.";
             case "stacked" -> "Sequentially gathers the complete configured PvP equipment and supply loadout.";
+            case "player" -> "Starts autonomous player mode. Belfegor establishes a remembered base, builds a core camp, expands rooms over time, manages shulkers, gathers resources, practices crafts, upgrades tools, and can consult the local llama.cpp advisor without interrupting active tasks.";
+            case "camp" -> "Sets the current position as the remembered home base and builds the core expandable campsite. Run this before @build when you want room expansions connected to a deliberate camp.";
+            case "build" -> "Expands the remembered base with a connected room. Supported types include farmland, storage, workshop, mobfarm, and empty. Belfegor picks a base side, builds a two-wide 3-5 block hall, creates a named room, records its center, and adds room-specific internals such as hydrated tilled farmland.";
+            case "home" -> "Routes to the remembered home base or to a named room/module center created by @player or @build. Examples: @home, @home farmland, @home shulker_vault.";
             case "toolset" -> "Crafts one pickaxe, axe, shovel, sword, and hoe at the requested material tier.";
-            case "ai" -> "Asks the local llama.cpp advisor for a chat response or high-level command suggestion using current context, command docs, inventory, shulker memory, goal, and action log. Defaults to llmLlamaModelPath=belfegor/models/lfm2.5-thinking.gguf when llmAdvisorEnabled is true.";
+            case "ai" -> "Asks the local llama.cpp advisor for a chat response or high-level command suggestion using current context, command docs, inventory, shulker memory, goal, and action log. Defaults to llmLlamaModelPath=belfegor/models/Qwen3-1.7B-Q4_K_M.gguf when llmAdvisorEnabled is true.";
             case "craftaudit" -> "Developer-only offline recipe audit. Uses bundled recipe data, /give @s leaf resources, crafts each target through Belfegor, stores outputs, and writes belfegor/craft_audit_*.log. Requires cheats/op.";
             default -> fallback;
         };
@@ -95,3 +103,4 @@ public final class CommandDocumentation {
         return result.toString();
     }
 }
+

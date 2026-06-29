@@ -20,6 +20,8 @@ public class SlotScreenMapping {
             e(BlastFurnaceSlot.class, screen -> screen instanceof AbstractFurnaceScreen, BlastFurnaceSlot::new),
             e(SmithingTableSlot.class, screen -> screen instanceof SmithingScreen, SmithingTableSlot::new),
             e(BrewingStandSlot.class, screen -> screen instanceof BrewingStandScreen, BrewingStandSlot::new),
+            e(ChestSlot.class, screen -> screen instanceof ShulkerBoxScreen,
+                    (slot, inventory) -> new ChestSlot(slot, false, inventory)),
             e(ChestSlot.class, screen -> screen instanceof GenericContainerScreen, ChestSlot::new),
             e(PlayerSlot.class, screen -> true, PlayerSlot::new), // Order matters, leave this BEFORE the BACK!
             e(CursorSlot.class, screen -> true, (slot, inv) -> CursorSlot.SLOT) // Order matters, leave this in the BACK!

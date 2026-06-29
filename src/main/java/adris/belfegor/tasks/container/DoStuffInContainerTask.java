@@ -59,8 +59,10 @@ public abstract class DoStuffInContainerTask extends Task {
 
         mod.getBlockTracker().trackBlock(_containerBlocks);
 
-        // Protect container since we might place it.
-        mod.getBehaviour().addProtectedItems(ItemHelper.blocksToItems(_containerBlocks));
+        // Do not protect the container item here. Baritone's builder excludes
+        // protected items from its available placement palette, so protecting a
+        // crafting table/furnace/chest immediately before placing it can make
+        // placement fail even while the item is in inventory.
     }
 
     @Override

@@ -1,4 +1,4 @@
-# Architecture
+﻿# Architecture
 
 Belfegor is a task-driven Minecraft client agent. Commands do not directly spam clicks or movement keys. Instead, commands create tasks, tasks create subtasks, and the task runner ticks the active chain every client tick.
 
@@ -55,7 +55,7 @@ flowchart TD
     StopChild --> OnTick
 ```
 
-This is powerful, but it creates a core pitfall: if two tasks both look urgent, they can oscillate. Belfegor’s inventory work therefore adds transaction locks through `ITaskCanForce` so critical slot interactions can finish before another task takes over.
+This is powerful, but it creates a core pitfall: if two tasks both look urgent, they can oscillate. Belfegorâ€™s inventory work therefore adds transaction locks through `ITaskCanForce` so critical slot interactions can finish before another task takes over.
 
 ## Example task tree
 
@@ -70,7 +70,7 @@ flowchart TD
     A --> G["CraftGenericManuallyTask"]
 ```
 
-Most “bot hangs” are not one bad click. They are usually a bad interruption between two otherwise valid tasks. Belfegor adds force-continuation to important inventory transactions so a container or shulker transfer cannot be interrupted halfway through a cursor operation.
+Most â€œbot hangsâ€ are not one bad click. They are usually a bad interruption between two otherwise valid tasks. Belfegor adds force-continuation to important inventory transactions so a container or shulker transfer cannot be interrupted halfway through a cursor operation.
 
 ## Source priority
 
@@ -112,10 +112,12 @@ Belfegor uses several layers to stay safe:
 | Layer | Purpose |
 |---|---|
 | `SlotHandler` | Low-level click wrapper and timing guard. |
-| `InventoryManager` | Higher-level “pick/place one/all” helper. |
+| `InventoryManager` | Higher-level â€œpick/place one/allâ€ helper. |
 | Cursor recovery | Moves cursor stack into inventory/garbage before closing unsafe screens. |
 | Transaction force | Prevents interruption while a container/shulker interaction is active. |
 | Debug snapshots | Logs cursor, screen, handler, and slot contents around risky operations. |
+
+The current low-level inventory rule is: a click that is blocked by a guard must remain false all the way back to the task. Earlier builds allowed a blocked `SlotHandler` click to look successful to `InventoryManager`, which let shulker/crafting code rediscover the same source slot every tick and retry forever. The guard now resets same-slot accounting per client tick and returns click acceptance to callers.
 
 ## Current code pitfalls
 
@@ -125,7 +127,7 @@ These are known architectural risks and ongoing cleanup targets:
 |---|---|---|
 | Legacy package names | Code still lives under `adris.belfegor`, which is confusing for a Belfegor-branded project. | Defer until stable; eventually migrate packages mechanically with tests. |
 | Task oscillation | Two tasks can repeatedly interrupt each other if both think they should run. | More `ITaskCanForce` on atomic transactions; stronger active-subtask caching; clearer scheduler diagnostics. |
-| Inventory count ambiguity | Some helpers count container/crafting slots while others require player inventory only. | Separate APIs for “usable now,” “visible nearby,” “stored,” and “crafting grid.” |
+| Inventory count ambiguity | Some helpers count container/crafting slots while others require player inventory only. | Separate APIs for â€œusable now,â€ â€œvisible nearby,â€ â€œstored,â€ and â€œcrafting grid.â€ |
 | Recipe material variants | Recipes like wood/slabs/planks may accept multiple variants, but some tasks still expect exact item targets. | Ingredient groups/tags and recipe unification. |
 | Shulker identity | A picked-up shulker is an item stack with NBT, not the same object as a placed block. | Better unique IDs/fingerprints based on contents, color, slot history, and transaction state. |
 | UI/config split | Some UI settings are JSON-level toggles while runtime settings live in `Settings`. | Centralize setting definitions and UI metadata. |
@@ -139,15 +141,60 @@ flowchart TD
     Memory["Persistent memory"] --> Shulker["ShulkerMemory"]
     Memory --> Craft["CraftingMemory"]
     Memory --> Location["LocationMemory"]
-    Shulker --> A["inventory slot -> contents"]
-    Shulker --> B["placed position -> contents"]
-    Craft --> C["success/failure timings"]
-    Craft --> D["learned route hints"]
-    Location --> E["home base"]
-    Location --> F["useful known positions"]
+    Memory --> Base["BaseMemory"]
+    Memory --> Spatial["SpatialAwareness"]
+    Shulker --> A["inventory slot -> 27 internal slots"]
+    Shulker --> B["placed position -> verified open-screen slots"]
+    Shulker --> C["contents fingerprint + free slots"]
+    Craft --> D["success/failure timings"]
+    Craft --> E["learned route hints"]
+    Location --> F["home base"]
+    Location --> G["useful known positions"]
+    Base --> H["base center, radius, wall height, clearance"]
+    Base --> I["modules: rooms, walls, farms, mob chamber"]
+    Spatial --> J["nearby solids/air/liquids/entities/notable blocks"]
 ```
 
 Memory files live in `.minecraft/belfegor/` and are intentionally human-readable JSON where practical.
+
+### Base memory
+
+`BaseMemory` writes `.minecraft/belfegor/belfegor_bases.json`. A base record stores:
+
+- dimension and center block;
+- build radius;
+- wall height, currently four blocks for campsite and mob-farm walls;
+- exterior clearance, currently five blocks around the outside of the wall;
+- status, such as `set_by_player_mode`, `planned`, `clear_complete`, `wall_complete`, or `complete`;
+- modules for the core room, perimeter wall, crafting anchor, smelting anchor, storage anchor, starter farm, roofed mob-farm chamber, and entrance/exit.
+- module centers, dimensions, progress counters, status, and notes;
+- inspection records that track checked, blocked, missing, and complete target counts.
+
+`@player` sets a home base when it starts, and `BuildCampsiteTask` updates the base record as it clears/levels terrain, builds the floor, builds the four-high wall, builds interior room dividers, builds a roofed mob-farm chamber, places utility blocks, and plans the crop farm module. The current base radius starts at 8 and can expand up to 18 over later home-building passes. This gives the bot a persistent structure plan it can expand in later sessions instead of treating each run as a brand-new camp.
+
+The current large-base plan uses:
+
+- a four-high exterior perimeter wall;
+- a five-block exterior safety clearance;
+- cross-shaped interior room dividers with doorway gaps;
+- a central core room;
+- crafting, smelting, storage, and crop-farm modules;
+- a roofed cobblestone mob-farm chamber with four-block-tall walls and a two-wide entrance/exit;
+- remembered room centers for pathing and future expansion;
+- larger farm footprints as the base radius grows.
+
+### Spatial awareness
+
+`SpatialAwareness` writes `.minecraft/belfegor/belfegor_spatial_awareness.json`. It scans a radius around the player and records:
+
+- air, solid, water, lava, and liquid counts;
+- open-headroom and flat-floor columns;
+- whether the bot is standing in liquid or near lava;
+- nearby hostile/passive entities and dropped items;
+- notable blocks such as ores, workstations, chests, and shulkers;
+- a compact summary string used by the LLM/player-mode context.
+
+This is intentionally small and frequently refreshed. It gives `@player` a stable local-world snapshot without requiring expensive full-world reasoning.
 
 ## Packaged llama.cpp advisor
 
@@ -160,7 +207,7 @@ flowchart TD
     Snapshot --> Prompt["llm_prompt.txt"]
     ActionLog["llm_actions.log"] --> Prompt
     Export --> Prompt
-    Prompt --> LlamaCli["llama-cli -m belfegor/models/lfm2.5-thinking.gguf -f llm_prompt.txt"]
+    Prompt --> LlamaCli["llama-cli -m belfegor/models/Qwen3-1.7B-Q4_K_M.gguf -f llm_prompt.txt"]
     llama.cpp --> Response["llm_response.json"]
     Response --> Validate["Validate command against registry/denylist"]
     Validate -- valid --> Execute["Execute selected Belfegor command"]
@@ -234,3 +281,4 @@ Target behavior:
 ## Why the old package name still says `adris.belfegor`
 
 The Java package name remains `adris.belfegor` because this project evolved from Belfegor code. User-facing assets, settings, mod id, jar name, mixin name, icon path, and docs are Belfegor-branded. Renaming every Java package would be a large mechanical migration with high merge/conflict risk and little runtime value, so it is intentionally deferred.
+

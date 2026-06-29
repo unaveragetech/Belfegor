@@ -1,4 +1,4 @@
-# Belfegor whitepaper
+﻿# Belfegor whitepaper
 
 ## Abstract
 
@@ -31,7 +31,7 @@ Belfegor is built around four ideas:
 | Craft auditing | Developer command `@craftaudit` runs recipe expansion, resource provisioning, real crafting, storage, and pass/fail logging in a cheat-enabled test world. |
 | PvP prep | `@stacked`, `@toolset`, and advanced PvP tasking exist. |
 | Autonomous play | `@player` explores, gathers, crafts, manages shulkers, and builds a basic home campsite. |
-| Local AI advisor | Optional packaged llama.cpp bridge lets `belfegor/models/lfm2.5-thinking.gguf` inspect context, explain itself, and suggest the next safe command. |
+| Local AI advisor | Optional packaged llama.cpp bridge lets `belfegor/models/Qwen3-1.7B-Q4_K_M.gguf` inspect context, explain itself, and suggest the next safe command. |
 | Beat-the-game | Classic `@gamer` and `@marvion` routes are present. |
 | Butler | Authorized players can command the bot via whispers. |
 | UI | `C` opens tabs for tasks, commands, settings, shulkers, and logs. |
@@ -223,7 +223,7 @@ The audit process is deliberately mechanical:
 6. Store finished outputs in nearby chests, creating storage when needed.
 7. Write a dated log under `.minecraft/belfegor/` with every pass/fail and failure reason.
 
-This matters because `@craftaudit` does not “pretend craft” inside a planner. It forces the real inventory helpers, crafting tasks, shulker/container checks, cursor guards, and output verification to do the work. A failed audit is therefore actionable evidence: either the recipe data is wrong, ingredient grouping is too strict, the source resolver chose badly, or a real inventory transaction failed.
+This matters because `@craftaudit` does not â€œpretend craftâ€ inside a planner. It forces the real inventory helpers, crafting tasks, shulker/container checks, cursor guards, and output verification to do the work. A failed audit is therefore actionable evidence: either the recipe data is wrong, ingredient grouping is too strict, the source resolver chose badly, or a real inventory transaction failed.
 
 The long-term goal is to run this audit across the entire craftable catalogue and turn failures into a punch list until every sourceable craftable item in Minecraft `1.21.4` can be collected, crafted, catalogued, and stored automatically.
 
@@ -435,3 +435,4 @@ Potential commands:
 Belfegor is a practical automation agent with a strong foundation: command-driven tasks, resource collection, crafting, shulkers, memory, UI, and logs. Its future is broader and more ambitious: full craftable-item automation, persistent base operations, richer autonomous play, and better self-debugging.
 
 It is already fun to experiment with. It is not yet magic. That honesty is part of the design.
+

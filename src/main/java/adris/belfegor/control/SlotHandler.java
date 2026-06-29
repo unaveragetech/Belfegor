@@ -98,20 +98,20 @@ private boolean isSameSlotStuck(int windowSlot, SlotActionType type) {
         return false;
     }
 
-    public void clickSlot(Slot slot, int mouseButton, SlotActionType type) {
+    public boolean clickSlot(Slot slot, int mouseButton, SlotActionType type) {
         if (slot == null) {
-            return;
+            return false;
         }
         int windowSlot = slot.getWindowSlot();
-        if (isSameSlotStuck(windowSlot, type)) {
-            return;
-        }
         if (!clickBudgetAvailable()) {
-            return;
+            return false;
+        }
+        if (isSameSlotStuck(windowSlot, type)) {
+            return false;
         }
         if (!canDoSlotAction()) {
             DebugLogger.getInstance().slotClickBlocked("SlotHandler", slot.getWindowSlot(), type);
-            return;
+            return false;
         }
 
         ItemStack cursorBefore = StorageHelper.getItemStackInCursorSlot();
@@ -119,20 +119,20 @@ private boolean isSameSlotStuck(int windowSlot, SlotActionType type) {
         DebugLogger.getInstance().slotClick("SlotHandler", slot.getWindowSlot(), mouseButton, type, cursorBefore, slotBefore);
 
         consumeClickBudget();
-        clickWindowSlot("normal", windowSlot, mouseButton, type);
+        return clickWindowSlot("normal", windowSlot, mouseButton, type);
     }
 
-    public void clickSlotForce(Slot slot, int mouseButton, SlotActionType type) {
+    public boolean clickSlotForce(Slot slot, int mouseButton, SlotActionType type) {
         if (slot == null) {
-            return;
+            return false;
         }
         int windowSlot = slot.getWindowSlot();
-        if (isSameSlotStuck(windowSlot, type)) {
-            return;
-        }
         if (!clickBudgetAvailable()) {
             DebugLogger.getInstance().slotClickBlocked("SlotHandler.forceBudget", slot.getWindowSlot(), type);
-            return;
+            return false;
+        }
+        if (isSameSlotStuck(windowSlot, type)) {
+            return false;
         }
 
         ItemStack cursorBefore = StorageHelper.getItemStackInCursorSlot();
@@ -143,10 +143,10 @@ private boolean isSameSlotStuck(int windowSlot, SlotActionType type) {
 
         consumeClickBudget();
         forceAllowNextSlotAction();
-        clickWindowSlot("force", windowSlot, mouseButton, type);
+        return clickWindowSlot("force", windowSlot, mouseButton, type);
     }
 
-    private void clickWindowSlot(String owner, int windowSlot, int mouseButton, SlotActionType type) {
+    private boolean clickWindowSlot(String owner, int windowSlot, int mouseButton, SlotActionType type) {
         if (_slotClickInProgress) {
             DebugLogger.getInstance().log("SLOT-LOCK",
                     "Blocked overlapping click owner=" + owner
@@ -154,13 +154,13 @@ private boolean isSameSlotStuck(int windowSlot, SlotActionType type) {
                             + " slot=" + windowSlot
                             + " type=" + type
                             + " cursor=" + describeStack(StorageHelper.getItemStackInCursorSlot()));
-            return;
+            return false;
         }
         ClientPlayerEntity player = MinecraftClient.getInstance().player;
         if (player == null) {
-            return;
+            return false;
         }
-        if (player.currentScreenHandler == null) return;
+        if (player.currentScreenHandler == null) return false;
         net.minecraft.screen.ScreenHandler handler = player.currentScreenHandler;
         int syncId = handler.syncId;
         List<ItemStack> beforeStacks = new ArrayList<>(handler.slots.size());
@@ -184,7 +184,7 @@ private boolean isSameSlotStuck(int windowSlot, SlotActionType type) {
             if (player.currentScreenHandler != handler) {
                 DebugLogger.getInstance().log("SLOT-RESULT", "handler changed during click from "
                         + handler.getClass().getName() + " to " + describeHandler(player));
-                return;
+                return true;
             }
             for (int i = 0; i < beforeStacks.size() && i < handler.slots.size(); i++) {
                 ItemStack before = beforeStacks.get(i);
@@ -196,9 +196,11 @@ private boolean isSameSlotStuck(int windowSlot, SlotActionType type) {
                     }
                 }
             }
+            return true;
         } catch (Exception e) {
             Debug.logWarning("Slot Click Error (ignored)");
             e.printStackTrace();
+            return false;
         } finally {
             _slotClickInProgress = false;
             _slotClickOwner = "";

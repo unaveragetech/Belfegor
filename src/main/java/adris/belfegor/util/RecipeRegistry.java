@@ -1,5 +1,6 @@
 package adris.belfegor.util;
 
+import adris.belfegor.TaskCatalogue;
 import adris.belfegor.Debug;
 import adris.belfegor.util.helpers.ItemHelper;
 import com.google.gson.Gson;
@@ -295,6 +296,11 @@ public class RecipeRegistry {
                                        Set<Item> stack,
                                        int depth) {
         if (item == null || item == net.minecraft.item.Items.AIR || count <= 0) return;
+        if (depth > 0 && TaskCatalogue.getItemTask(item, Math.max(1, count)) != null) {
+            addLeaf(resources, item, count);
+            steps.add("supplied ingredient " + count + "x " + itemId(item));
+            return;
+        }
         if (depth > 32) {
             failures.add("dependency depth limit hit at " + itemId(item));
             addLeaf(resources, item, count);
@@ -353,9 +359,17 @@ public class RecipeRegistry {
      * Resolve a Minecraft registry name (e.g. "minecraft:iron_ingot") to an Item.
      */
     public static Item getItemByName(String name) {
-        Identifier id = Identifier.tryParse(name);
+        String normalized = name == null ? "" : name.trim();
+        if (!normalized.contains(":")) {
+            normalized = "minecraft:" + normalized;
+        }
+        Identifier id = Identifier.tryParse(normalized);
         if (id == null) return null;
-        return Registries.ITEM.get(id);
+        Item item = Registries.ITEM.get(id);
+        if (item == net.minecraft.item.Items.AIR && !"minecraft:air".equals(normalized)) {
+            return null;
+        }
+        return item;
     }
 
     private Item[] expandSimilarIngredient(Item ingredient) {

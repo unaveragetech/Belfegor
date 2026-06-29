@@ -39,8 +39,11 @@ public class PlayerCommand extends Command {
     @Override
     public String getDetailedDescription() {
         return "Starts autonomous player mode. The bot sets the current position as home base, "
-                + "saves it to settings, builds and later expands a simple walled campsite, "
+                + "saves it to settings, builds a core campsite, remembers room centers, "
+                + "and later expands the base through named connected modules, "
                 + "uses carried shulkers as sub-inventories, gathers resources, practices useful "
-                + "crafts, upgrades tools, hunts food, explores, and periodically returns home.";
+                + "crafts, upgrades tools, hunts food, explores, and periodically returns home. "
+                + "Use @build farmland/storage/workshop/mobfarm to force specific expansions and "
+                + "@home <room> to navigate back to remembered base rooms.";
     }
 }

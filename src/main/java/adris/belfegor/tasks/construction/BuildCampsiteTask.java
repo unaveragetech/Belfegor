@@ -2,6 +2,7 @@ package adris.belfegor.tasks.construction;
 
 import adris.belfegor.Belfegor;
 import adris.belfegor.TaskCatalogue;
+import adris.belfegor.memory.BaseMemory;
 import adris.belfegor.memory.LocationMemory;
 import adris.belfegor.tasks.InteractWithBlockTask;
 import adris.belfegor.tasks.resources.GetBuildingMaterialsTask;
@@ -25,9 +26,11 @@ import java.util.List;
  * This is intentionally staged instead of "place blocks wherever":
  * 1) clear the inside and a five-block exterior safety gap,
  * 2) flatten/fill the floor,
- * 3) build a three-high perimeter wall,
- * 4) place utility room anchors,
- * 5) prepare a starter farm plot.
+ * 3) build a four-high perimeter wall,
+ * 4) build interior room dividers,
+ * 5) build a roofed mob-farm chamber,
+ * 6) place utility room anchors,
+ * 7) prepare a starter farm plot.
  */
 public class BuildCampsiteTask extends Task {
 
@@ -38,13 +41,15 @@ public class BuildCampsiteTask extends Task {
             Items.WOODEN_HOE, Items.STONE_HOE, Items.IRON_HOE,
             Items.GOLDEN_HOE, Items.DIAMOND_HOE, Items.NETHERITE_HOE
     };
-    private static final int WALL_HEIGHT = 3;
+    private static final int WALL_HEIGHT = 4;
     private static final int EXTERIOR_CLEARANCE = 5;
 
     private enum Phase {
         CLEAR,
         FLOOR,
         WALL,
+        ROOMS,
+        MOB_FARM,
         UTILITY,
         FARM,
         DONE
@@ -55,6 +60,8 @@ public class BuildCampsiteTask extends Task {
     private List<BlockPos> _clearTargets;
     private List<BlockPos> _floorTargets;
     private List<BlockPos> _wallTargets;
+    private List<BlockPos> _roomTargets;
+    private List<BlockPos> _mobFarmTargets;
     private List<BlockPos> _farmTargets;
     private Phase _phase = Phase.CLEAR;
     private int _index;
@@ -62,7 +69,7 @@ public class BuildCampsiteTask extends Task {
 
     public BuildCampsiteTask(BlockPos home, int radius) {
         _home = home;
-        _radius = Math.max(4, Math.min(10, radius));
+        _radius = Math.max(6, Math.min(18, radius));
     }
 
     @Override
@@ -70,6 +77,8 @@ public class BuildCampsiteTask extends Task {
         _clearTargets = buildClearTargets(mod);
         _floorTargets = buildFloorTargets();
         _wallTargets = buildWallTargets(mod);
+        _roomTargets = buildRoomTargets(mod);
+        _mobFarmTargets = buildMobFarmTargets(mod);
         _farmTargets = buildFarmTargets();
         _phase = Phase.CLEAR;
         _index = 0;
@@ -82,6 +91,7 @@ public class BuildCampsiteTask extends Task {
                         && Math.abs(pos.getZ() - _home.getZ()) <= _radius
                         && (Math.abs(pos.getX() - _home.getX()) == _radius
                         || Math.abs(pos.getZ() - _home.getZ()) == _radius));
+        rememberBase("started");
         rememberRooms();
     }
 
@@ -91,24 +101,42 @@ public class BuildCampsiteTask extends Task {
             case CLEAR: {
                 Task clear = runClearPhase(mod);
                 if (clear != null) return clear;
+                rememberBase("clear_complete");
                 nextPhase(Phase.FLOOR);
                 return null;
             }
             case FLOOR: {
                 Task floor = runFloorPhase(mod);
                 if (floor != null) return floor;
+                rememberBase("floor_complete");
                 nextPhase(Phase.WALL);
                 return null;
             }
             case WALL: {
                 Task wall = runWallPhase(mod);
                 if (wall != null) return wall;
+                rememberBase("wall_complete");
+                nextPhase(Phase.ROOMS);
+                return null;
+            }
+            case ROOMS: {
+                Task rooms = runRoomPhase(mod);
+                if (rooms != null) return rooms;
+                rememberBase("rooms_complete");
+                nextPhase(Phase.MOB_FARM);
+                return null;
+            }
+            case MOB_FARM: {
+                Task mobFarm = runMobFarmPhase(mod);
+                if (mobFarm != null) return mobFarm;
+                rememberBase("mob_farm_complete");
                 nextPhase(Phase.UTILITY);
                 return null;
             }
             case UTILITY: {
                 Task utility = placeUtilityBlocks(mod);
                 if (utility != null) return utility;
+                rememberBase("utility_complete");
                 nextPhase(Phase.FARM);
                 return null;
             }
@@ -120,7 +148,9 @@ public class BuildCampsiteTask extends Task {
                         WorldHelper.getCurrentDimension().name(),
                         "radius=" + _radius + ";wallHeight=" + WALL_HEIGHT
                                 + ";clearance=" + EXTERIOR_CLEARANCE);
+                rememberBase("complete");
                 LocationMemory.getInstance().save();
+                BaseMemory.getInstance().save();
                 nextPhase(Phase.DONE);
                 return null;
             }
@@ -131,19 +161,14 @@ public class BuildCampsiteTask extends Task {
     }
 
     private Task runClearPhase(Belfegor mod) {
-        while (_index < _clearTargets.size() && clearDone(mod, _clearTargets.get(_index))) {
-            _index++;
-        }
-        if (_index >= _clearTargets.size()) return null;
-        BlockPos target = _clearTargets.get(_index);
-        if (!WorldHelper.canBreak(mod, target)) {
-            _index++;
-            return null;
-        }
+        if (_clearTargets.isEmpty()) return null;
+        BlockPos min = min(_clearTargets);
+        BlockPos max = max(_clearTargets);
+        if (regionClear(mod, min, max)) return null;
         if (_activeTask == null || _activeTask.stopped() || _activeTask.isFinished(mod)) {
-            _activeTask = new DestroyBlockTask(target);
+            _activeTask = new ClearRegionTask(min, max);
         }
-        setDebugState("Clearing/flattening base area " + (_index + 1) + "/" + _clearTargets.size());
+        setDebugState("Baritone clearing full campsite volume " + min.toShortString() + " -> " + max.toShortString());
         return _activeTask;
     }
 
@@ -153,34 +178,69 @@ public class BuildCampsiteTask extends Task {
             setDebugState("Collecting floor fill materials");
             return new GetBuildingMaterialsTask(Math.min(neededBlocks, 128));
         }
-        while (_index < _floorTargets.size() && floorDone(mod, _floorTargets.get(_index))) {
-            _index++;
-        }
-        if (_index >= _floorTargets.size()) return null;
-        BlockPos target = _floorTargets.get(_index);
+        if (countMissingSolid(mod, _floorTargets) == 0) return null;
         if (_activeTask == null || _activeTask.stopped() || _activeTask.isFinished(mod)) {
-            _activeTask = new PlaceBlockTask(target, WALL_BLOCKS, true, true);
+            _activeTask = new BuildRegionSchematicTask("campsite floor", toTargetMap(_floorTargets), true);
         }
-        setDebugState("Flattening base floor " + (_index + 1) + "/" + _floorTargets.size());
+        setDebugState("Baritone building campsite floor as one schematic");
         return _activeTask;
     }
 
     private Task runWallPhase(Belfegor mod) {
         int neededBlocks = Math.max(24, _wallTargets.size() - countFinishedWalls(mod));
         if (StorageHelper.getBuildingMaterialCount(mod) < Math.min(neededBlocks, 160)) {
-            setDebugState("Collecting three-high wall materials");
+            setDebugState("Collecting four-high wall materials");
             return new GetBuildingMaterialsTask(Math.min(neededBlocks, 160));
         }
 
-        while (_index < _wallTargets.size() && wallBlockDone(mod, _wallTargets.get(_index))) {
-            _index++;
-        }
-        if (_index >= _wallTargets.size()) return null;
-        BlockPos target = _wallTargets.get(_index);
+        int missing = countMissingSolid(mod, _wallTargets);
+        if (missing == 0) return null;
         if (_activeTask == null || _activeTask.stopped() || _activeTask.isFinished(mod)) {
-            _activeTask = new PlaceBlockTask(target, WALL_BLOCKS, true, true);
+            _activeTask = new BuildRegionSchematicTask("campsite perimeter wall", toTargetMap(_wallTargets), true);
         }
-        setDebugState("Building three-high wall " + (_index + 1) + "/" + _wallTargets.size());
+        rememberProgress("perimeter_wall", _wallTargets.size() - missing, _wallTargets.size(), "building",
+                "placing four-high perimeter wall blocks");
+        setDebugState("Baritone building four-high wall as one schematic missing=" + missing);
+        return _activeTask;
+    }
+
+    private Task runRoomPhase(Belfegor mod) {
+        int neededBlocks = Math.max(16, _roomTargets.size() - countFinishedRoomWalls(mod));
+        if (StorageHelper.getBuildingMaterialCount(mod) < Math.min(neededBlocks, 160)) {
+            setDebugState("Collecting interior room wall materials");
+            return new GetBuildingMaterialsTask(Math.min(neededBlocks, 160));
+        }
+
+        int missing = countMissingSolid(mod, _roomTargets);
+        if (missing == 0) return null;
+        if (_activeTask == null || _activeTask.stopped() || _activeTask.isFinished(mod)) {
+            _activeTask = new BuildRegionSchematicTask("campsite interior rooms", toTargetMap(_roomTargets), true);
+        }
+        rememberProgress("interior_dividers", _roomTargets.size() - missing, _roomTargets.size(), "building",
+                "placing room divider blocks");
+        setDebugState("Baritone building interior rooms as one schematic missing=" + missing);
+        return _activeTask;
+    }
+
+    private Task runMobFarmPhase(Belfegor mod) {
+        int neededBlocks = Math.max(32, _mobFarmTargets.size() - countFinishedTargets(mod, _mobFarmTargets));
+        if (StorageHelper.getBuildingMaterialCount(mod) < Math.min(neededBlocks, 256)) {
+            setDebugState("Collecting cobblestone for roofed mob-farm chamber");
+            return new GetBuildingMaterialsTask(Math.min(neededBlocks, 256));
+        }
+
+        int missing = countMissingSolid(mod, _mobFarmTargets);
+        if (missing == 0) {
+            rememberProgress("mob_farm_chamber", _mobFarmTargets.size(), _mobFarmTargets.size(),
+                    "complete", "four-high roofed chamber with two-wide entrance");
+            return null;
+        }
+        if (_activeTask == null || _activeTask.stopped() || _activeTask.isFinished(mod)) {
+            _activeTask = new BuildRegionSchematicTask("campsite mob farm chamber", toTargetMap(_mobFarmTargets), true);
+        }
+        rememberProgress("mob_farm_chamber", _mobFarmTargets.size() - missing, _mobFarmTargets.size(), "building",
+                "placing walls and roof");
+        setDebugState("Baritone building roofed mob-farm chamber as one schematic missing=" + missing);
         return _activeTask;
     }
 
@@ -222,7 +282,7 @@ public class BuildCampsiteTask extends Task {
         for (int dx = -clearRadius; dx <= clearRadius; dx++) {
             for (int dz = -clearRadius; dz <= clearRadius; dz++) {
                 boolean outsideWallGap = Math.abs(dx) > _radius || Math.abs(dz) > _radius;
-                for (int h = 0; h <= WALL_HEIGHT; h++) {
+                for (int h = 0; h <= WALL_HEIGHT + 1; h++) {
                     BlockPos pos = _home.add(dx, h, dz);
                     if (WorldHelper.isInsidePlayer(mod, pos)) continue;
                     Block block = mod.getWorld().getBlockState(pos).getBlock();
@@ -264,11 +324,55 @@ public class BuildCampsiteTask extends Task {
         return result;
     }
 
+    private List<BlockPos> buildRoomTargets(Belfegor mod) {
+        ArrayList<BlockPos> result = new ArrayList<>();
+        int inner = Math.max(3, _radius - 2);
+        for (int d = -inner; d <= inner; d++) {
+            // Central north/south divider, with a two-wide central doorway.
+            if (d != 0 && d != 1) {
+                for (int h = 0; h < 3; h++) {
+                    BlockPos pos = _home.add(0, h, d);
+                    if (!WorldHelper.isInsidePlayer(mod, pos)) result.add(pos);
+                }
+            }
+            // Central east/west divider, also with a two-wide central doorway.
+            if (d != 0 && d != 1) {
+                for (int h = 0; h < 3; h++) {
+                    BlockPos pos = _home.add(d, h, 0);
+                    if (!WorldHelper.isInsidePlayer(mod, pos)) result.add(pos);
+                }
+            }
+        }
+        return result;
+    }
+
+    private List<BlockPos> buildMobFarmTargets(Belfegor mod) {
+        ArrayList<BlockPos> result = new ArrayList<>();
+        int size = getMobFarmSize();
+        BlockPos origin = getMobFarmOrigin();
+        for (int dx = 0; dx < size; dx++) {
+            for (int dz = 0; dz < size; dz++) {
+                boolean wall = dx == 0 || dz == 0 || dx == size - 1 || dz == size - 1;
+                boolean doorway = dz == size - 1 && (dx == size / 2 || dx == size / 2 - 1);
+                if (wall && !doorway) {
+                    for (int h = 0; h < WALL_HEIGHT; h++) {
+                        BlockPos pos = origin.add(dx, h, dz);
+                        if (!WorldHelper.isInsidePlayer(mod, pos)) result.add(pos);
+                    }
+                }
+                BlockPos roof = origin.add(dx, WALL_HEIGHT, dz);
+                if (!WorldHelper.isInsidePlayer(mod, roof)) result.add(roof);
+            }
+        }
+        return result;
+    }
+
     private List<BlockPos> buildFarmTargets() {
         ArrayList<BlockPos> result = new ArrayList<>();
-        BlockPos origin = _home.add(-_radius + 2, -1, _radius - 5);
-        for (int dx = 0; dx < 4; dx++) {
-            for (int dz = 0; dz < 4; dz++) {
+        int farmSize = Math.max(4, Math.min(9, _radius - 2));
+        BlockPos origin = _home.add(-_radius + 2, -1, _radius - farmSize - 1);
+        for (int dx = 0; dx < farmSize; dx++) {
+            for (int dz = 0; dz < farmSize; dz++) {
                 result.add(origin.add(dx, 0, dz));
             }
         }
@@ -276,27 +380,34 @@ public class BuildCampsiteTask extends Task {
     }
 
     private Task placeUtilityBlocks(Belfegor mod) {
-        BlockPos table = _home.add(1, 0, 1);
+        BlockPos table = _home.add(2, 0, 2);
         if (mod.getItemStorage().hasItem(Items.CRAFTING_TABLE)
                 && mod.getWorld().getBlockState(table).getBlock() != Blocks.CRAFTING_TABLE) {
             setDebugState("Placing crafting room table");
-            return new PlaceBlockTask(table, Blocks.CRAFTING_TABLE);
+            return placeFixture(mod, table, Items.CRAFTING_TABLE);
         }
 
-        BlockPos furnace = _home.add(-1, 0, 1);
+        BlockPos furnace = _home.add(-2, 0, 2);
         if (mod.getItemStorage().hasItem(Items.FURNACE)
                 && mod.getWorld().getBlockState(furnace).getBlock() != Blocks.FURNACE) {
             setDebugState("Placing smelting room furnace");
-            return new PlaceBlockTask(furnace, Blocks.FURNACE);
+            return placeFixture(mod, furnace, Items.FURNACE);
         }
 
-        BlockPos chest = _home.add(0, 0, -2);
+        BlockPos chest = _home.add(2, 0, -2);
         if (mod.getItemStorage().hasItem(Items.CHEST)
                 && mod.getWorld().getBlockState(chest).getBlock() != Blocks.CHEST) {
             setDebugState("Placing storage room chest");
-            return new PlaceBlockTask(chest, Blocks.CHEST);
+            return placeFixture(mod, chest, Items.CHEST);
         }
         return null;
+    }
+
+    private Task placeFixture(Belfegor mod, BlockPos target, Item item) {
+        if (!mod.getWorld().getBlockState(target).isAir()) {
+            return new DestroyBlockTask(target);
+        }
+        return new InteractWithBlockTask(new ItemTarget(item, 1), Direction.UP, target.down(), true);
     }
 
     private void rememberRooms() {
@@ -304,15 +415,81 @@ public class BuildCampsiteTask extends Task {
         LocationMemory.getInstance().remember("home_room_core",
                 _home.getX(), _home.getY(), _home.getZ(), dim, "center");
         LocationMemory.getInstance().remember("home_room_crafting",
-                _home.getX() + 1, _home.getY(), _home.getZ() + 1, dim, "crafting_table_anchor");
+                _home.getX() + 2, _home.getY(), _home.getZ() + 2, dim, "crafting_table_anchor");
         LocationMemory.getInstance().remember("home_room_smelting",
-                _home.getX() - 1, _home.getY(), _home.getZ() + 1, dim, "furnace_anchor");
+                _home.getX() - 2, _home.getY(), _home.getZ() + 2, dim, "furnace_anchor");
         LocationMemory.getInstance().remember("home_room_storage",
-                _home.getX(), _home.getY(), _home.getZ() - 2, dim, "chest_anchor");
+                _home.getX() + 2, _home.getY(), _home.getZ() - 2, dim, "chest_anchor");
         LocationMemory.getInstance().remember("home_room_farm",
-                _home.getX() - _radius + 3, _home.getY() - 1, _home.getZ() + _radius - 4,
-                dim, "starter_crop_plot");
+                _home.getX() - _radius + 3, _home.getY() - 1, _home.getZ() + 2,
+                dim, "crop_plot");
+        BaseMemory memory = BaseMemory.getInstance();
+        memory.rememberModule(_home, dim, "core", "room",
+                _home.add(-_radius + 1, 0, -_radius + 1), _radius * 2 - 1,
+                _radius * 2 - 1, WALL_HEIGHT, "planned", "central living/work area");
+        memory.rememberModule(_home, dim, "perimeter_wall", "defense", _home.add(-_radius, 0, -_radius),
+                _radius * 2 + 1, _radius * 2 + 1, WALL_HEIGHT, "planned",
+                "four-high wall with two-wide east doorway and five-block exterior clearance");
+        memory.rememberModule(_home, dim, "interior_dividers", "rooms", _home.add(-_radius + 2, 0, -_radius + 2),
+                _radius * 2 - 3, _radius * 2 - 3, 3, "planned",
+                "cross-shaped divider walls with door gaps for four functional wings");
+        memory.rememberModule(_home, dim, "crafting_workshop", "utility", _home.add(2, 0, 2),
+                Math.max(3, _radius - 2), Math.max(3, _radius - 2), 2, "planned",
+                "crafting and general work area");
+        memory.rememberModule(_home, dim, "smelting_workshop", "utility", _home.add(-2, 0, 2),
+                Math.max(3, _radius - 2), Math.max(3, _radius - 2), 2, "planned",
+                "furnace and future smelter area");
+        memory.rememberModule(_home, dim, "storage_wing", "utility", _home.add(2, 0, -2),
+                Math.max(3, _radius - 2), Math.max(3, _radius - 2), 2, "planned",
+                "chest and shulker staging area");
+        int farmSize = Math.max(4, Math.min(9, _radius - 2));
+        memory.rememberModule(_home, dim, "crop_farm", "farm",
+                _home.add(-_radius + 2, -1, _radius - farmSize - 1),
+                farmSize, farmSize, 1, "planned", "expandable wheat crop plot");
+        int mobSize = getMobFarmSize();
+        BlockPos mobOrigin = getMobFarmOrigin();
+        BlockPos mobCenter = mobOrigin.add(mobSize / 2, 0, mobSize / 2);
+        LocationMemory.getInstance().remember("home_room_mob_farm",
+                mobCenter.getX(), mobCenter.getY(), mobCenter.getZ(), dim,
+                "roofed_dark_room;four_high_walls;two_wide_entrance");
+        memory.rememberModule(_home, dim, "mob_farm_chamber", "mob_farm",
+                mobOrigin, mobSize, mobSize, WALL_HEIGHT + 1, "planned",
+                "large cobblestone roofed chamber with four-block walls and a two-wide entrance");
+        memory.rememberModule(_home, dim, "mob_farm_entrance", "access",
+                mobOrigin.add(mobSize / 2 - 1, 0, mobSize - 1),
+                2, 1, 3, "planned", "two-wide entrance/exit into the roofed mob-farm chamber");
+        inspectBaseFootprint();
         LocationMemory.getInstance().save();
+        BaseMemory.getInstance().save();
+    }
+
+    private void rememberBase(String status) {
+        String dim = WorldHelper.getCurrentDimension().name();
+        BaseMemory.getInstance().rememberBase(_home, dim, _radius, WALL_HEIGHT,
+                EXTERIOR_CLEARANCE, status);
+    }
+
+    private void rememberProgress(String module, int done, int total, String status, String note) {
+        String dim = WorldHelper.getCurrentDimension().name();
+        BaseMemory.getInstance().rememberModuleProgress(_home, dim, module, done, total, status, note);
+    }
+
+    private void inspectBaseFootprint() {
+        String dim = WorldHelper.getCurrentDimension().name();
+        int checked = (_radius * 2 + 1) * (_radius * 2 + 1);
+        int wallBlocks = _wallTargets == null ? 0 : _wallTargets.size();
+        int roomBlocks = _roomTargets == null ? 0 : _roomTargets.size();
+        int mobBlocks = _mobFarmTargets == null ? 0 : _mobFarmTargets.size();
+        BaseMemory memory = BaseMemory.getInstance();
+        memory.rememberInspection(_home, dim, "perimeter_wall", "blueprint",
+                checked, 0, wallBlocks, 0, "planned",
+                "perimeter wall targets generated with five-block exterior clearance");
+        memory.rememberInspection(_home, dim, "interior_dividers", "blueprint",
+                checked, 0, roomBlocks, 0, "planned",
+                "room centers registered for core/crafting/smelting/storage/farm");
+        memory.rememberInspection(_home, dim, "mob_farm_chamber", "blueprint",
+                getMobFarmSize() * getMobFarmSize(), 0, mobBlocks, 0, "planned",
+                "roof and four-high wall target list generated");
     }
 
     private void nextPhase(Phase next) {
@@ -351,6 +528,80 @@ public class BuildCampsiteTask extends Task {
             if (wallBlockDone(mod, pos)) count++;
         }
         return count;
+    }
+
+    private int countFinishedRoomWalls(Belfegor mod) {
+        return countFinishedTargets(mod, _roomTargets);
+    }
+
+    private int countFinishedTargets(Belfegor mod, List<BlockPos> targets) {
+        int count = 0;
+        for (BlockPos pos : targets) {
+            if (wallBlockDone(mod, pos)) count++;
+        }
+        return count;
+    }
+
+    private int countMissingSolid(Belfegor mod, List<BlockPos> targets) {
+        int missing = 0;
+        for (BlockPos pos : targets) {
+            if (!WorldHelper.isSolid(mod, pos)) missing++;
+        }
+        return missing;
+    }
+
+    private java.util.Map<BlockPos, Block[]> toTargetMap(List<BlockPos> targets) {
+        java.util.LinkedHashMap<BlockPos, Block[]> map = new java.util.LinkedHashMap<>();
+        for (BlockPos target : targets) {
+            map.put(target, WALL_BLOCKS);
+        }
+        return map;
+    }
+
+    private BlockPos min(List<BlockPos> positions) {
+        int minX = Integer.MAX_VALUE;
+        int minY = Integer.MAX_VALUE;
+        int minZ = Integer.MAX_VALUE;
+        for (BlockPos pos : positions) {
+            minX = Math.min(minX, pos.getX());
+            minY = Math.min(minY, pos.getY());
+            minZ = Math.min(minZ, pos.getZ());
+        }
+        return new BlockPos(minX, minY, minZ);
+    }
+
+    private BlockPos max(List<BlockPos> positions) {
+        int maxX = Integer.MIN_VALUE;
+        int maxY = Integer.MIN_VALUE;
+        int maxZ = Integer.MIN_VALUE;
+        for (BlockPos pos : positions) {
+            maxX = Math.max(maxX, pos.getX());
+            maxY = Math.max(maxY, pos.getY());
+            maxZ = Math.max(maxZ, pos.getZ());
+        }
+        return new BlockPos(maxX, maxY, maxZ);
+    }
+
+    private boolean regionClear(Belfegor mod, BlockPos min, BlockPos max) {
+        for (int x = min.getX(); x <= max.getX(); x++) {
+            for (int y = min.getY(); y <= max.getY(); y++) {
+                for (int z = min.getZ(); z <= max.getZ(); z++) {
+                    if (!mod.getWorld().getBlockState(new BlockPos(x, y, z)).isAir()) {
+                        return false;
+                    }
+                }
+            }
+        }
+        return true;
+    }
+
+    private int getMobFarmSize() {
+        return Math.max(7, Math.min(13, _radius));
+    }
+
+    private BlockPos getMobFarmOrigin() {
+        int size = getMobFarmSize();
+        return _home.add(-_radius + 2, 0, -_radius + 2);
     }
 
     private boolean wallBlockDone(Belfegor mod, BlockPos pos) {

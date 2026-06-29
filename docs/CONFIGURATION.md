@@ -1,4 +1,4 @@
-# Settings and generated files
+﻿# Settings and generated files
 
 Belfegor creates a config directory in the active Minecraft instance:
 
@@ -42,7 +42,7 @@ For multiplayer, read [Butler and multiplayer guide](BUTLER_AND_SERVERS.md). The
 | `llmAdvisorInPlayerMode` | Lets `@player` ask llama.cpp for the next safe command on a cooldown. |
 | `llmAdvisorCanChat` | Allows `@ai` chat-style advisor prompts. |
 | `llmLlamaCppExecutable` | Optional `llama-cli` path. Blank uses `.minecraft/belfegor/llama.cpp/llama-cli(.exe)`. |
-| `llmLlamaModelPath` | GGUF model path, default `belfegor/models/lfm2.5-thinking.gguf`. |
+| `llmLlamaModelPath` | GGUF model path, default `belfegor/models/Qwen3-1.7B-Q4_K_M.gguf`. |
 | `llmAdvisorCooldownSeconds` | Minimum seconds between automatic player-mode advisor calls. |
 | `llmAdvisorTimeoutSeconds` | Maximum seconds to wait before falling back to deterministic logic. |
 
@@ -68,3 +68,4 @@ The command page includes real examples that can be run by double-clicking.
 ## Emergency stop
 
 Press `+` while a task is running to globally abort the current automation.
+

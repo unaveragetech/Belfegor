@@ -1,4 +1,4 @@
-# Belfegor command reference
+﻿# Belfegor command reference
 
 All commands use the prefix from `belfegor_settings.json`; by default this is `@`.
 
@@ -85,6 +85,8 @@ See [Shulker management](SHULKER_MANAGEMENT.md) for exact behavior and exclusion
 | `hero` | `@hero` | Kills nearby hostile mobs. | `@hero` |
 | `selfcare` | `@selfcare` | Experimental self-care/survival helper. | `@selfcare` |
 | `player` | `@player` | Starts autonomous exploration/learning/home-base mode. | `@player` |
+| `build` | `@build <roomType> [name]` | Expands the remembered base with a connected room. Types: `farmland`, `storage`, `workshop`, `mobfarm`, `empty`. | `@build farmland wheat_wing` |
+| `home` | `@home [room]` | Navigates to the remembered camp center or named room/module center. | `@home farmland` |
 | `gamer` | `@gamer` | Runs the classic beat-the-game task. | `@gamer` |
 | `marvion` | `@marvion` | Runs the Marvion beat-the-game route. | `@marvion` |
 
@@ -93,9 +95,9 @@ See [Shulker management](SHULKER_MANAGEMENT.md) for exact behavior and exclusion
 | Command | Usage | What it does | Examples |
 |---|---|---|---|
 | `give` | `@give <username> [item] <count=1>` | Gets an item and gives it to a player. | `@give Steve diamond 3` |
-| `ai` | `@ai <prompt>` | Queues or polls the Packaged llama.cpp advisor. It reads the command catalogue, context snapshot, inventory, shulker memory, goal, and action log, then returns chat text and/or a safe command suggestion. Defaults to `belfegor/models/lfm2.5-thinking.gguf`. | `@ai "what should I do next?"`, `@ai "why am I stuck?"` |
+| `ai` | `@ai <prompt>` | Queues or polls the Packaged llama.cpp advisor. It reads the command catalogue, context snapshot, inventory, shulker memory, goal, and action log, then returns chat text and/or a safe command suggestion. Defaults to `belfegor/models/Qwen3-1.7B-Q4_K_M.gguf`. | `@ai "what should I do next?"`, `@ai "why am I stuck?"` |
 | `test` | `@test <extra>` | Runs experimental test tasks. | `@test stacked` |
-| `craftaudit` | `@craftaudit <target=all> <limit=0>` | Developer-only recipe audit. Uses bundled offline recipe data, `/give @s` leaf resources, crafts through Belfegor, stores outputs, and logs pass/fail results. Requires cheats/op in a test world. | `@craftaudit anvil`, `@craftaudit all 25` |
+| `craftaudit` | `@craftaudit <target=all> <limit=0>` | Developer-only recipe audit. Starts each item from a clean inventory, gives bundled-recipe leaf resources, crafts through Belfegor, stores outputs in ordinary containers, and logs pass/skip/fail results. Requires cheats/op in a test world. | `@craftaudit anvil`, `@craftaudit all 25` |
 
 `@craftaudit` writes logs to:
 
@@ -103,7 +105,7 @@ See [Shulker management](SHULKER_MANAGEMENT.md) for exact behavior and exclusion
 .minecraft/belfegor/craft_audit_*.log
 ```
 
-Use `@craftaudit all 25` for a small batch before running the full catalogue. The command intentionally exercises Belfegor's real crafting logic after resources are given, so failures are useful for fixing recipe, inventory, and storage bugs.
+Use `@craftaudit all 25` for a small batch before running the full catalogue. The command intentionally exercises Belfegor's real crafting logic after resources are given, so failures are useful for fixing recipe, inventory, and storage bugs. Targets without a craftable recipe/task are skipped instead of being counted as recipe failures.
 
 `@ai` uses local llama.cpp. Enable it in `belfegor_settings.json` with `llmAdvisorEnabled=true`. See [Local llama.cpp LLM advisor](LLM_ADVISOR.md).
 
@@ -118,3 +120,4 @@ Multiple commands can be chained with semicolons:
 ## UI command page
 
 Press `C`, open the command tab, select a command, and double-click an example to run it. The UI shows expected argument values, detailed descriptions, and examples from the same command metadata used by `@help`.
+

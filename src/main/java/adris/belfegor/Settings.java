@@ -559,7 +559,7 @@ public class Settings implements IFailableConfigFile {
      * GGUF model path used by the advisor. Relative paths are resolved from the
      * Minecraft game directory.
      */
-    private String llmLlamaModelPath = "belfegor/models/lfm2.5-thinking.gguf";
+    private String llmLlamaModelPath = "belfegor/models/Qwen3-1.7B-Q4_K_M.gguf";
 
     /**
      * Minimum seconds between automatic player-mode LLM requests.
@@ -889,7 +889,7 @@ public class Settings implements IFailableConfigFile {
 
     public String getLlmLlamaModelPath() {
         return llmLlamaModelPath == null || llmLlamaModelPath.isBlank()
-                ? "belfegor/models/lfm2.5-thinking.gguf"
+                ? "belfegor/models/Qwen3-1.7B-Q4_K_M.gguf"
                 : llmLlamaModelPath.trim();
     }
 

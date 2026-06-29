@@ -1,4 +1,4 @@
-# Development guide
+﻿# Development guide
 
 ## Requirements
 
@@ -109,7 +109,7 @@ The runtime loader is `RecipeRegistry`. It normalizes item ids, indexes recipes 
 Recommended test-world workflow:
 
 1. Create a singleplayer creative or cheat-enabled survival world.
-2. Make sure commands are allowed, because the audit uses `/give @s`.
+2. Make sure commands are allowed, because the audit uses `/clear @s`, `/kill @e[type=item,distance=..16]`, and `/give @s`.
 3. Run a focused craft first:
 
 ```text
@@ -131,12 +131,16 @@ Recommended test-world workflow:
 
 The audit should fail loudly rather than loop forever. A failure usually points at one of four areas: bad recipe data, missing ingredient-group normalization, missing source/acquisition support, or an unsafe inventory transaction during the real craft.
 
+Each audited item now starts from a clean inventory, receives only the normalized leaf resources required for that item plus required utilities such as a crafting table/chest, crafts through the normal task system, and stores the result in ordinary container storage. Shulkers are intentionally excluded from audit storage so recipe/crafting failures are not confused with shulker-management failures.
+
+For Baritone command research and base-building recovery commands, see [Baritone Command Reference](BARITONE_COMMAND_REFERENCE.md).
+
 ## Local llama.cpp advisor development
 
 The advisor is packaged in Java and calls llama.cpp directly:
 
 ```text
-.minecraft/belfegor/llama.cpp/llama-cli.exe -m .minecraft/belfegor/models/lfm2.5-thinking.gguf -f .minecraft/belfegor/llm_prompt.txt
+.minecraft/belfegor/llama.cpp/llama-cli.exe -m .minecraft/belfegor/models/Qwen3-1.7B-Q4_K_M.gguf -f .minecraft/belfegor/llm_prompt.txt
 ```
 
 It writes inspectable files under `.minecraft/belfegor/`:
@@ -151,7 +155,7 @@ llm_actions.log
 
 Test flow:
 
-1. Confirm `.minecraft/belfegor/llama.cpp/llama-cli.exe` and `.minecraft/belfegor/models/lfm2.5-thinking.gguf` exist.
+1. Confirm `.minecraft/belfegor/llama.cpp/llama-cli.exe` and `.minecraft/belfegor/models/Qwen3-1.7B-Q4_K_M.gguf` exist.
 2. Set `llmAdvisorEnabled=true`.
 3. Run:
 
@@ -171,3 +175,4 @@ Get-FileHash -Algorithm SHA256 releases\belfegor-1.21.4-beta1.jar
 ```
 
 The `releases/` folder is intentionally unignored so the production jar can be uploaded with the repo.
+

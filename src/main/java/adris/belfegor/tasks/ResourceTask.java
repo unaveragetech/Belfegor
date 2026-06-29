@@ -2,6 +2,7 @@ package adris.belfegor.tasks;
 
 import adris.belfegor.Belfegor;
 import adris.belfegor.tasks.container.PickupFromContainerTask;
+import adris.belfegor.tasks.container.OverflowInventoryTask;
 import adris.belfegor.tasks.container.ShulkerInteractionTask;
 import adris.belfegor.tasks.movement.DefaultGoToDimensionTask;
 import adris.belfegor.tasks.movement.PickupDroppedItemTask;
@@ -52,6 +53,7 @@ public abstract class ResourceTask extends Task implements ITaskCanForce {
     private BlockPos _mineLastClosest = null;
     private MineAndCollectTask _mineIfPresentTask = null;
     private ShulkerInteractionTask _shulkerRetrieveTask = null;
+    private OverflowInventoryTask _overflowTask = null;
 
     public ResourceTask(ItemTarget[] itemTargets) {
         _itemTargets = itemTargets;
@@ -111,6 +113,13 @@ public abstract class ResourceTask extends Task implements ITaskCanForce {
                 mod.getSlotHandler().clickSlot(moveTo.get(), 0, SlotActionType.PICKUP);
                 return null;
             }
+            if (_overflowTask == null || _overflowTask.stopped() || _overflowTask.isFinished(mod)) {
+                _overflowTask = new OverflowInventoryTask(2, getOverflowProtectedTargets());
+            }
+            if (!_overflowTask.isFinished(mod)) {
+                setDebugState("Making overflow room before moving cursor target");
+                return _overflowTask;
+            }
             if (ItemHelper.canThrowAwayStack(mod, StorageHelper.getItemStackInCursorSlot())) {
                 mod.getSlotHandler().clickSlot(Slot.UNDEFINED, 0, SlotActionType.PICKUP);
                 return null;
@@ -123,6 +132,16 @@ public abstract class ResourceTask extends Task implements ITaskCanForce {
             }
             mod.getSlotHandler().clickSlot(Slot.UNDEFINED, 0, SlotActionType.PICKUP);
             return null;
+        }
+
+        if (!isFinished(mod) && OverflowInventoryTask.freeSlots(mod) <= 0) {
+            if (_overflowTask == null || _overflowTask.stopped() || _overflowTask.isFinished(mod)) {
+                _overflowTask = new OverflowInventoryTask(2, getOverflowProtectedTargets());
+            }
+            if (!_overflowTask.isFinished(mod)) {
+                setDebugState("Inventory full; storing overflow before continuing resource task");
+                return _overflowTask;
+            }
         }
 
         if (!shouldAvoidPickingUp(mod)) {
@@ -154,6 +173,12 @@ public abstract class ResourceTask extends Task implements ITaskCanForce {
 
         // A carried shulker is the nearest storage tier. Withdraw from it before
         // walking to chests, mining, or crafting a replacement.
+        if (_shulkerRetrieveTask != null
+                && (!_shulkerRetrieveTask.isActive()
+                || _shulkerRetrieveTask.isFinished(mod)
+                || _shulkerRetrieveTask.stopped())) {
+            _shulkerRetrieveTask = null;
+        }
         if (_shulkerRetrieveTask != null
                 && !_shulkerRetrieveTask.isFinished(mod)
                 && !_shulkerRetrieveTask.stopped()) {
@@ -298,6 +323,10 @@ public abstract class ResourceTask extends Task implements ITaskCanForce {
     }
 
     protected abstract boolean shouldAvoidPickingUp(Belfegor mod);
+
+    protected ItemTarget[] getOverflowProtectedTargets() {
+        return _itemTargets;
+    }
 
     protected abstract void onResourceStart(Belfegor mod);
 

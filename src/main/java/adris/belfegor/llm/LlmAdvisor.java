@@ -5,7 +5,9 @@ import adris.belfegor.Debug;
 import adris.belfegor.commandsystem.Command;
 import adris.belfegor.commandsystem.CommandDocumentation;
 import adris.belfegor.debug.DebugLogger;
+import adris.belfegor.memory.BaseMemory;
 import adris.belfegor.memory.ShulkerMemory;
+import adris.belfegor.memory.SpatialAwareness;
 import adris.belfegor.util.helpers.WorldHelper;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -148,10 +150,23 @@ public class LlmAdvisor {
         return requestDecision(mod, "chat", prompt, false);
     }
 
+    public synchronized String availabilityReport(Belfegor mod) {
+        if (mod == null || mod.getModSettings() == null) {
+            return "settings unavailable";
+        }
+        File executable = resolveLlamaExecutable(mod);
+        File model = resolveGameFile(mod.getModSettings().getLlmLlamaModelPath());
+        return "enabled=" + mod.getModSettings().isLlmAdvisorEnabled()
+                + " executable=" + executable.getAbsolutePath()
+                + " executableExists=" + executable.exists()
+                + " model=" + model.getAbsolutePath()
+                + " modelExists=" + model.exists();
+    }
+
     private synchronized boolean requestDecision(Belfegor mod, String mode, String userPrompt, boolean commandRequired) {
         try {
             if (!isConfigured(mod)) {
-                record("SKIP", "LLM advisor disabled or missing llama.cpp model");
+                record("SKIP", "LLM advisor disabled or missing model path; " + availabilityReport(mod));
                 return false;
             }
             exportCommandCatalogue(mod);
@@ -176,10 +191,12 @@ public class LlmAdvisor {
             File executable = resolveLlamaExecutable(mod);
             File model = resolveGameFile(mod.getModSettings().getLlmLlamaModelPath());
             if (!executable.exists()) {
+                record("SKIP", "llama.cpp executable not found; " + availabilityReport(mod));
                 return new AdvisorDecision("", "", _goal,
                         "llama.cpp executable not found: " + executable.getAbsolutePath(), false);
             }
             if (!model.exists()) {
+                record("SKIP", "llama.cpp model not found; " + availabilityReport(mod));
                 return new AdvisorDecision("", "", _goal,
                         "llama.cpp model not found: " + model.getAbsolutePath(), false);
             }
@@ -267,6 +284,8 @@ public class LlmAdvisor {
         context.put("player", buildPlayerContext(mod));
         context.put("inventory", buildInventoryContext(mod));
         context.put("shulkers", buildShulkerContext());
+        context.put("base_memory", buildBaseContext());
+        context.put("spatial_awareness", buildSpatialContext());
         context.put("commands_file", _commandsFile == null ? "" : _commandsFile.getAbsolutePath());
         Files.writeString(_contextFile.toPath(), GSON.toJson(context), StandardCharsets.UTF_8);
     }
@@ -305,11 +324,95 @@ public class LlmAdvisor {
             map.put("inventory_slot", entry.inventorySlot);
             map.put("pos", entry.x + "," + entry.y + "," + entry.z);
             map.put("item", entry.shulkerItem);
+            map.put("source_key", entry.sourceKey);
+            map.put("fingerprint", entry.fingerprint);
+            map.put("slot_count", entry.slotCount);
+            map.put("free_slots", entry.freeSlots);
+            map.put("total_items", entry.totalItems);
+            map.put("last_verified_source", entry.lastVerifiedSource);
             map.put("contents", entry.contents.stream()
                     .collect(Collectors.toMap(i -> i.itemName, i -> i.count, Integer::sum, LinkedHashMap::new)));
+            List<Map<String, Object>> slots = new ArrayList<>();
+            for (ShulkerMemory.ShulkerSlotItem slot : entry.slots) {
+                Map<String, Object> slotMap = new LinkedHashMap<>();
+                slotMap.put("slot", slot.slot);
+                slotMap.put("item", slot.itemName);
+                slotMap.put("item_key", slot.itemKey);
+                slotMap.put("count", slot.count);
+                slots.add(slotMap);
+            }
+            map.put("slots", slots);
             shulkers.add(map);
         }
         return shulkers;
+    }
+
+    private List<Map<String, Object>> buildBaseContext() {
+        List<Map<String, Object>> bases = new ArrayList<>();
+        for (BaseMemory.BaseRecord base : BaseMemory.getInstance().getAllBases()) {
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("id", base.id);
+            map.put("dimension", base.dimension);
+            map.put("center", base.x + "," + base.y + "," + base.z);
+            map.put("radius", base.radius);
+            map.put("wall_height", base.wallHeight);
+            map.put("exterior_clearance", base.exteriorClearance);
+            map.put("status", base.status);
+            List<Map<String, Object>> modules = new ArrayList<>();
+            for (BaseMemory.BaseModule module : base.modules) {
+                Map<String, Object> moduleMap = new LinkedHashMap<>();
+                moduleMap.put("name", module.name);
+                moduleMap.put("type", module.type);
+                moduleMap.put("anchor", module.x + "," + module.y + "," + module.z);
+                moduleMap.put("center", module.centerX + "," + module.centerY + "," + module.centerZ);
+                moduleMap.put("size", module.width + "x" + module.depth + "x" + module.height);
+                moduleMap.put("progress", module.progressDone + "/" + module.progressTotal);
+                moduleMap.put("status", module.status);
+                moduleMap.put("note", module.note);
+                modules.add(moduleMap);
+            }
+            map.put("modules", modules);
+            List<Map<String, Object>> inspections = new ArrayList<>();
+            for (BaseMemory.BaseInspection inspection : base.inspections) {
+                Map<String, Object> inspectionMap = new LinkedHashMap<>();
+                inspectionMap.put("module", inspection.module);
+                inspectionMap.put("type", inspection.type);
+                inspectionMap.put("checked", inspection.checked);
+                inspectionMap.put("blocked", inspection.blocked);
+                inspectionMap.put("missing", inspection.missing);
+                inspectionMap.put("complete", inspection.complete);
+                inspectionMap.put("status", inspection.status);
+                inspectionMap.put("note", inspection.note);
+                inspections.add(inspectionMap);
+            }
+            map.put("inspections", inspections);
+            bases.add(map);
+        }
+        return bases;
+    }
+
+    private Map<String, Object> buildSpatialContext() {
+        SpatialAwareness.SpatialSnapshot snapshot = SpatialAwareness.getInstance().lastSnapshot;
+        Map<String, Object> map = new LinkedHashMap<>();
+        if (snapshot == null) return map;
+        map.put("summary", snapshot.summary);
+        map.put("dimension", snapshot.dimension);
+        map.put("center", snapshot.x + "," + snapshot.y + "," + snapshot.z);
+        map.put("radius", snapshot.radius);
+        map.put("air_blocks", snapshot.airBlocks);
+        map.put("solid_blocks", snapshot.solidBlocks);
+        map.put("water_blocks", snapshot.waterBlocks);
+        map.put("lava_blocks", snapshot.lavaBlocks);
+        map.put("open_headroom_columns", snapshot.openHeadroomColumns);
+        map.put("flat_floor_columns", snapshot.flatFloorColumns);
+        map.put("hostile_entities", snapshot.hostileEntities);
+        map.put("passive_entities", snapshot.passiveEntities);
+        map.put("dropped_items", snapshot.droppedItems);
+        map.put("standing_in_liquid", snapshot.standingInLiquid);
+        map.put("near_lava", snapshot.nearLava);
+        map.put("has_emergency_headroom", snapshot.hasEmergencyHeadroom);
+        map.put("notable_blocks", snapshot.notableBlocks);
+        return map;
     }
 
     private void writePrompt(String mode, String userPrompt, boolean commandRequired) throws Exception {

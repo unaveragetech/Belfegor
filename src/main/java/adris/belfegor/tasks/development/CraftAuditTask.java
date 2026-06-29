@@ -25,19 +25,22 @@ import java.util.Map;
  * Developer-only in-game craft audit.
  *
  * For each offline recipe target:
+ * - starts from a clean inventory/test cell,
  * - recursively computes leaf resources from bundled recipe data,
  * - uses /give @s for those resources,
  * - asks Belfegor's normal crafting system to craft the item,
- * - stores the result in chest/barrel/shulker storage,
+ * - stores the result in chest/barrel storage,
  * - writes PASS/FAIL lines to belfegor/craft_audit_*.log.
  */
 public class CraftAuditTask extends Task {
 
     private static final int GIVE_COOLDOWN_TICKS = 4;
+    private static final int RESET_COOLDOWN_TICKS = 12;
     private static final int ITEM_TIMEOUT_TICKS = 20 * 120;
 
     private enum Phase {
         INIT,
+        RESET,
         PLAN,
         GIVE,
         WAIT_RESOURCES,
@@ -57,6 +60,7 @@ public class CraftAuditTask extends Task {
     private List<Map.Entry<Item, Integer>> _giveQueue = new ArrayList<>();
     private int _giveIndex = 0;
     private int _cooldownTicks = 0;
+    private int _resetStep = 0;
     private int _itemTicks = 0;
     private Task _activeTask;
     private File _logFile;
@@ -77,6 +81,7 @@ public class CraftAuditTask extends Task {
         _activeTask = null;
         _itemTicks = 0;
         _cooldownTicks = 0;
+        _resetStep = 0;
         _registry.load();
         _logFile = createLogFile();
         writeLog("START target=" + _target + " limit=" + _limit + " at=" + Instant.now());
@@ -94,6 +99,34 @@ public class CraftAuditTask extends Task {
                     return null;
                 }
                 writeLog("ITEMS count=" + _items.size());
+                _phase = Phase.RESET;
+                _resetStep = 0;
+                _cooldownTicks = 0;
+                return null;
+            }
+            case RESET -> {
+                if (_index >= _items.size()) {
+                    _phase = Phase.PLAN;
+                    return null;
+                }
+                if (_cooldownTicks > 0) {
+                    _cooldownTicks--;
+                    return null;
+                }
+                if (_resetStep == 0) {
+                    sendCommand(mod, "clear @s", "RESET");
+                    _resetStep++;
+                    _cooldownTicks = RESET_COOLDOWN_TICKS;
+                    return null;
+                }
+                if (_resetStep == 1) {
+                    sendCommand(mod, "kill @e[type=item,distance=..16]", "RESET");
+                    _resetStep++;
+                    _cooldownTicks = RESET_COOLDOWN_TICKS;
+                    return null;
+                }
+                writeLog("RESET clean inventory before item " + (_index + 1));
+                _resetStep = 0;
                 _phase = Phase.PLAN;
                 return null;
             }
@@ -107,7 +140,7 @@ public class CraftAuditTask extends Task {
                 }
                 Item item = _items.get(_index);
                 _plan = _registry.buildLeafResourcePlan(item, 1);
-                _giveQueue = new ArrayList<>(normalizeGiveResources(_plan).entrySet());
+                _giveQueue = expandGiveResources(normalizeGiveResources(_plan));
                 _giveIndex = 0;
                 _itemTicks = 0;
                 _activeTask = null;
@@ -117,7 +150,11 @@ public class CraftAuditTask extends Task {
                         + " resources=" + describeResources(_giveQueue)
                         + " failures=" + _plan.failures);
                 if (!_plan.failures.isEmpty()) {
-                    failCurrent("plan failures " + _plan.failures);
+                    skipCurrent("plan failures " + _plan.failures);
+                    return null;
+                }
+                if (TaskCatalogue.getItemTask(item, 1) == null) {
+                    skipCurrent("TaskCatalogue has no task for craftable recipe output");
                     return null;
                 }
                 _phase = Phase.GIVE;
@@ -178,11 +215,11 @@ public class CraftAuditTask extends Task {
                 Item item = _items.get(_index);
                 int count = mod.getItemStorage().getItemCountInventoryOnly(item);
                 if (count <= 0) {
-                    passCurrent("crafted and no longer in inventory; assumed stored or consumed");
+                    passCurrent("crafted and no longer in inventory; assumed stored");
                     return null;
                 }
                 if (_activeTask == null || _activeTask.stopped() || _activeTask.isFinished(mod)) {
-                    _activeTask = new StoreInAnyContainerTask(false, new ItemTarget(item, count));
+                    _activeTask = new StoreInAnyContainerTask(false, false, new ItemTarget(item, count));
                 }
                 setDebugState("Craft audit storing " + count + "x " + RecipeRegistry.itemId(item));
                 _itemTicks++;
@@ -195,7 +232,9 @@ public class CraftAuditTask extends Task {
             }
             case NEXT -> {
                 _index++;
-                _phase = Phase.PLAN;
+                _phase = Phase.RESET;
+                _resetStep = 0;
+                _cooldownTicks = 0;
                 return null;
             }
             case DONE -> {
@@ -212,8 +251,10 @@ public class CraftAuditTask extends Task {
             selected.addAll(all);
         } else {
             Item item = RecipeRegistry.getItemByName(normalizeName(_target));
-            if (item != null && _registry.isCraftable(item)) {
+            if (item != null && _registry.isCraftable(item) && TaskCatalogue.getItemTask(item, 1) != null) {
                 selected.add(item);
+            } else {
+                writeLog("SKIP target=" + _target + " reason=not a craftable Belfegor task target");
             }
         }
         if (_limit > 0 && selected.size() > _limit) {
@@ -227,14 +268,32 @@ public class CraftAuditTask extends Task {
         for (String resourceName : TaskCatalogue.resourceNames()) {
             for (Item item : TaskCatalogue.getItemMatches(resourceName)) {
                 if (item != null && _registry.isCraftable(item)) {
-                    ordered.putIfAbsent(item, item);
+                    if (TaskCatalogue.getItemTask(item, 1) != null) {
+                        ordered.putIfAbsent(item, item);
+                    }
                 }
             }
         }
         for (Item item : _registry.getSortedCraftableItems()) {
-            ordered.putIfAbsent(item, item);
+            if (TaskCatalogue.getItemTask(item, 1) != null) {
+                ordered.putIfAbsent(item, item);
+            }
         }
         return new ArrayList<>(ordered.keySet());
+    }
+
+    private List<Map.Entry<Item, Integer>> expandGiveResources(Map<Item, Integer> resources) {
+        ArrayList<Map.Entry<Item, Integer>> result = new ArrayList<>();
+        for (Map.Entry<Item, Integer> entry : resources.entrySet()) {
+            int remaining = Math.max(0, entry.getValue());
+            int stackSize = Math.max(1, entry.getKey().getMaxCount());
+            while (remaining > 0) {
+                int chunk = Math.min(remaining, stackSize);
+                result.add(Map.entry(entry.getKey(), chunk));
+                remaining -= chunk;
+            }
+        }
+        return result;
     }
 
     private Map<Item, Integer> normalizeGiveResources(RecipeRegistry.CraftPlan plan) {
@@ -258,11 +317,15 @@ public class CraftAuditTask extends Task {
     }
 
     private void sendGiveCommand(Belfegor mod, Item item, int count) {
-        if (mod.getPlayer() == null || mod.getPlayer().networkHandler == null) return;
         String id = Registries.ITEM.getId(item).toString();
         int amount = Math.max(1, count);
-        writeLog("GIVE /give @s " + id + " " + amount);
-        mod.getPlayer().networkHandler.sendChatCommand("give @s " + id + " " + amount);
+        sendCommand(mod, "give @s " + id + " " + amount, "GIVE");
+    }
+
+    private void sendCommand(Belfegor mod, String command, String label) {
+        if (mod.getPlayer() == null || mod.getPlayer().networkHandler == null) return;
+        writeLog(label + " /" + command);
+        mod.getPlayer().networkHandler.sendChatCommand(command);
     }
 
     private boolean timedOut() {
@@ -273,6 +336,15 @@ public class CraftAuditTask extends Task {
         Item item = _items.get(_index);
         _passed++;
         writeLog("PASS item=" + RecipeRegistry.itemId(item) + " reason=" + reason);
+        _phase = Phase.NEXT;
+        _activeTask = null;
+    }
+
+    private void skipCurrent(String reason) {
+        Item item = _items.get(_index);
+        writeLog("SKIP item=" + RecipeRegistry.itemId(item) + " reason=" + reason
+                + " resources=" + describeResources(_giveQueue)
+                + " steps=" + (_plan == null ? "[]" : _plan.steps));
         _phase = Phase.NEXT;
         _activeTask = null;
     }

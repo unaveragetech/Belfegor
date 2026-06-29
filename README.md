@@ -1,4 +1,4 @@
-# Belfegor
+﻿# Belfegor
 
 Belfegor is a Fabric client-side Minecraft automation mod for **Minecraft 1.21.4**. It is a production-focused evolution of Belfegor/Baritone-style task automation with safer crafting, stronger inventory recovery, managed shulker-box sub-inventories, PvP loadout automation, persistent memory, a richer in-game UI, Butler remote control, and detailed debugging for the kinds of Minecraft inventory bugs that usually make bots fall apart.
 
@@ -11,6 +11,8 @@ At its simplest, Belfegor lets you type commands like:
 @shulker store diamond 3
 @shulker retrieve stick 8
 @player
+@build farmland
+@home farmland
 @ai "what should I do next?"
 @craftaudit anvil
 ```
@@ -26,7 +28,7 @@ Behind that small command surface is a task engine that can gather resources, mi
 | Built jar | [`releases/belfegor-1.21.4-beta1.jar`](releases/belfegor-1.21.4-beta1.jar) |
 | Runtime bundle | [`releases/belfegor-1.21.4-beta1-runtime.zip`](releases/belfegor-1.21.4-beta1-runtime.zip) |
 | Release notes | [`docs/RELEASE_v1.21.4-beta1.md`](docs/RELEASE_v1.21.4-beta1.md) |
-| Jar SHA256 | `A2671E95C939575B6AB24F11E294C7155C8F9FB3121C518F5035BBACABDBB761` |
+| Jar SHA256 | `99F65E9FDA869DCC55F03D4497B31BB5DF84555817A557FF17DCA3B80C8155E8` |
 | Mod id | `belfegor` |
 | Command prefix | `@` |
 | In-game UI | `C` |
@@ -59,12 +61,35 @@ It is currently beta software, with the most active engineering effort focused o
 | Offline recipe catalogue | Bundled `1.21.4` recipe data lets Belfegor plan craftable-item dependencies without internet access. |
 | Craft audit harness | `@craftaudit` gives normalized leaf resources in a cheat-enabled test world, crafts through the real task system, stores outputs, and logs pass/fail results. |
 | PvP prep | `@stacked`, `@toolset`, and `@pvp` automate gear and combat preparation. |
-| Player mode | `@player` starts an autonomous explore/gather/craft/home-base loop. |
-| Local AI advisor | Packaged llama.cpp advisor can use `belfegor/models/lfm2.5-thinking.gguf` to answer `@ai` prompts and choose validated next commands during `@player`. |
+| Player mode | `@player` starts an autonomous explore/gather/craft/home-base loop and grows a remembered modular base. |
+| Base expansion | `@build farmland`, `@build storage`, `@build workshop`, and `@build mobfarm` add connected rooms; `@home [room]` navigates to remembered room centers. |
+| Local AI advisor | Packaged llama.cpp advisor can use `belfegor/models/Qwen3-1.7B-Q4_K_M.gguf` to answer `@ai` prompts and choose validated next commands during `@player`. |
 | Beat-the-game routes | `@gamer` and `@marvion` run classic autonomous completion routes. |
 | Butler | Authorized players can command the bot by whisper/private message. |
 | UI | Press `C` for task state, commands, settings, shulker memory, and logs. |
 | Debug logs | Detailed runtime logs are written to `.minecraft/belfegor/belfegor_debug.log`. |
+
+## Latest tested fixes
+
+The current jar has been tested in the `1.21.4` MultiMC instance against the inventory cases that previously caused client locks:
+
+- `@shulker store [diamond 1, stick 2]` no longer loops on one inventory slot when the slot guard blocks a repeated click.
+- `@get diamond_shovel` retrieves a diamond from a catalogued carried shulker, returns leftover cursor items, picks the shulker back up, and then crafts the shovel.
+- `@get composter` accepts mixed slab variants in one craft, for example birch slabs plus oak slabs.
+- `@get anvil` expands ingots into iron blocks and then crafts the anvil through the guarded crafting table flow.
+- managed shulkers now prefer a jump-place-under-player placement path, then open from that known position.
+- shulker memory now stores slot-level catalogues: player inventory slot, shulker type, exact 27-slot internal contents, free slots, total count, and a contents fingerprint.
+- `@player` writes base memory and spatial awareness snapshots, starts larger modular base construction, records room/module centers and inspections, builds four-high walls, and can grow the camp through connected halls into farmland, storage, workshop, and mob-farm rooms.
+
+See [`docs/TESTING.md`](docs/TESTING.md) for the current manual test matrix and known edge cases.
+
+## Showcase media
+
+- [Showcase video: clean staged in-game demo](docs/media/belfegor-showcase-20260628-v2.mp4)
+- [Showcase thumbnail](docs/media/belfegor-showcase-20260628-v2-thumb.png)
+- [Craft-audit proof frame](docs/media/belfegor-showcase-20260628-v2-craft.png)
+
+The current showcase starts from an in-world view, uses visible chat narration, clears inventory/drops, displays Baritone selection help, runs a focused `@craftaudit diamond_shovel`, and shows the resulting safe chest storage.
 
 ## What can it do today?
 
@@ -125,9 +150,9 @@ Because each iron block is itself craftable from 9 iron ingots, the dependency t
 
 ```text
 4 anvils
-└─ 12 iron blocks + 16 iron ingots
-   └─ 108 iron ingots + 16 iron ingots
-      └─ 124 total iron ingots
+â””â”€ 12 iron blocks + 16 iron ingots
+   â””â”€ 108 iron ingots + 16 iron ingots
+      â””â”€ 124 total iron ingots
 ```
 
 Then the bot asks, in order:
@@ -178,8 +203,8 @@ Belfegor is not a flawless general Minecraft intelligence. Current limitations i
 
 - the recipe-driven planner is meant to cover every normal craftable `1.21.4` item, but some items still need better ingredient-tag normalization or custom acquisition support;
 - recipe variants still need work, especially interchangeable materials such as planks, slabs, stones, dyes, and tags;
-- `@player` is experimental and builds a simple functional campsite, not a beautiful or strategic megabase;
-- shulker identity is based on slot/history/contents rather than a perfect unique ID;
+- `@player` base building is experimental: it now remembers modular rooms and halls, but aesthetics, obstacle negotiation, and long-range city planning are still evolving;
+- shulker identity is based on slot/history/contents fingerprints rather than a perfect unique ID;
 - server lag, anti-cheat, protected regions, custom plugins, and unusual inventories can break assumptions;
 - beat-the-game routes are world-sensitive and may fail in bad terrain or unlucky structure generation;
 - the Java package name still contains legacy `adris.belfegor` paths even though the mod is Belfegor-branded.
@@ -234,18 +259,20 @@ Good first experiments:
 @shulker retrieve stick 8
 @stacked
 @player
+@build farmland wheat_wing
+@home wheat_wing
 ```
 
 Fun project ideas:
 
 - make a flat creative test world, give the bot starter shulkers, and watch it use them;
-- start `@player` and watch it set a home base and build its first campsite;
+- start `@player` and watch it set a home base, build its first camp, then expand it with `@build farmland` or `@build storage`;
 - use the `C` UI as a live task debugger while commands run;
 - deliberately put recipe supplies in shulkers and confirm `@get` retrieves them;
-- build a private “bot ranch” server where friends can command it with Butler;
+- build a private â€œbot ranchâ€ server where friends can command it with Butler;
 - run `@stacked` as a stress test for gathering, crafting, and inventory handling.
 
-For developers and cheat-enabled test worlds, `@craftaudit` is the “make the bot prove it” command:
+For developers and cheat-enabled test worlds, `@craftaudit` is the â€œmake the bot prove itâ€ command:
 
 ```text
 @craftaudit anvil
@@ -253,7 +280,9 @@ For developers and cheat-enabled test worlds, `@craftaudit` is the “make the b
 @craftaudit all 25
 ```
 
-It uses the offline recipe catalogue, computes the leaf resources needed for each target, runs `/give @s <item> <count>` for those resources, crafts through the normal Belfegor task engine, stores the result in containers, and writes a pass/fail log under `.minecraft/belfegor/`. This is intentionally not a normal survival command; it is a regression harness for finding recipe, inventory, shulker, and crafting bugs.
+It uses the offline recipe catalogue, computes the leaf resources needed for each target, clears the test inventory between targets, gives only the needed resources/utilities, crafts through the normal Belfegor task engine, stores the result in ordinary containers, and writes a pass/skip/fail log under `.minecraft/belfegor/`. This is intentionally not a normal survival command; it is a regression harness for finding recipe, inventory, shulker, and crafting bugs.
+
+For low-level pathing and construction research, the repo includes a local [Baritone command reference](docs/BARITONE_COMMAND_REFERENCE.md) based on the bundled Baritone jar. Belfegor's campsite system uses Baritone APIs directly for region clearing and generated schematic builds, while `#help`, `#proc`, `#sel`, `#surface`, and related chat commands remain useful for in-game debugging.
 
 ## System model
 
@@ -371,7 +400,7 @@ The Belfegor UI is meant to make the agent inspectable while it works:
 Belfegor includes an optional local AI advisor inside the mod jar. It calls a bundled llama.cpp `llama-cli` runtime and defaults to this local GGUF model path:
 
 ```text
-belfegor/models/lfm2.5-thinking.gguf
+belfegor/models/Qwen3-1.7B-Q4_K_M.gguf
 ```
 
 When enabled, the advisor exports the live command catalogue, context, prompt, response, and action/reaction log to `.minecraft/belfegor/`.

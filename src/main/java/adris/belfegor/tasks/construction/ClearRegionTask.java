@@ -3,6 +3,7 @@ package adris.belfegor.tasks.construction;
 import adris.belfegor.Belfegor;
 import adris.belfegor.tasksystem.ITaskRequiresGrounded;
 import adris.belfegor.tasksystem.Task;
+import net.minecraft.block.Blocks;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.util.math.BlockPos;
 
@@ -11,6 +12,8 @@ public class ClearRegionTask extends Task implements ITaskRequiresGrounded {
 
     private final BlockPos _from;
     private final BlockPos _to;
+    private final BlockPos _min;
+    private final BlockPos _max;
 
     // TODO: Progress checkers in the event of a failure.
     // Progress checker 1 for movement
@@ -20,6 +23,14 @@ public class ClearRegionTask extends Task implements ITaskRequiresGrounded {
     public ClearRegionTask(BlockPos from, BlockPos to) {
         _from = from;
         _to = to;
+        _min = new BlockPos(
+                Math.min(from.getX(), to.getX()),
+                Math.min(from.getY(), to.getY()),
+                Math.min(from.getZ(), to.getZ()));
+        _max = new BlockPos(
+                Math.max(from.getX(), to.getX()),
+                Math.max(from.getY(), to.getY()),
+                Math.max(from.getZ(), to.getZ()));
     }
 
     @Override
@@ -42,15 +53,13 @@ public class ClearRegionTask extends Task implements ITaskRequiresGrounded {
 
     @Override
     public boolean isFinished(Belfegor mod) {
-        int x = _from.getX() - _to.getX();
-        int y = _from.getY() - _to.getY();
-        int z = _from.getZ() - _to.getZ();
-        for (int xx = 0; xx < Math.abs(x); ++xx) {
-            for (int yy = 0; yy < Math.abs(y); ++yy) {
-                for (int zz = 0; zz < Math.abs(z); ++zz) {
-                    BlockPos toCheck = new BlockPos(_from).add(xx * -Integer.signum(x), yy * -Integer.signum(y), zz * -Integer.signum(z));
+        for (int x = _min.getX(); x <= _max.getX(); x++) {
+            for (int y = _min.getY(); y <= _max.getY(); y++) {
+                for (int z = _min.getZ(); z <= _max.getZ(); z++) {
+                    BlockPos toCheck = new BlockPos(x, y, z);
                     assert MinecraftClient.getInstance().world != null;
-                    if (!MinecraftClient.getInstance().world.isAir(toCheck)) {
+                    if (!MinecraftClient.getInstance().world.isAir(toCheck)
+                            && MinecraftClient.getInstance().world.getBlockState(toCheck).getBlock() != Blocks.WATER) {
                         return false;
                     }
                 }

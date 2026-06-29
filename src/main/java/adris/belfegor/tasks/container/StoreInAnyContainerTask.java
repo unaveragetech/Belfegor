@@ -27,9 +27,12 @@ import java.util.stream.Stream;
  */
 public class StoreInAnyContainerTask extends Task {
 
-    private static final Block[] TO_SCAN = Stream.concat(Arrays.stream(new Block[]{Blocks.CHEST, Blocks.TRAPPED_CHEST, Blocks.BARREL}), Arrays.stream(ItemHelper.itemsToBlocks(ItemHelper.SHULKER_BOXES))).toArray(Block[]::new);
+    private static final Block[] OVERFLOW_SCAN = new Block[]{Blocks.CHEST, Blocks.TRAPPED_CHEST, Blocks.BARREL};
+    private static final Block[] TO_SCAN = Stream.concat(Arrays.stream(OVERFLOW_SCAN), Arrays.stream(ItemHelper.itemsToBlocks(ItemHelper.SHULKER_BOXES))).toArray(Block[]::new);
+    private static BlockPos rememberedOverflowContainer = null;
     private final ItemTarget[] _toStore;
     private final boolean _getIfNotPresent;
+    private final boolean _allowShulkers;
     private final HashSet<BlockPos> _dungeonChests = new HashSet<>();
     private final HashSet<BlockPos> _nonDungeonChests = new HashSet<>();
     private final MovementProgressChecker _progressChecker = new MovementProgressChecker();
@@ -37,13 +40,24 @@ public class StoreInAnyContainerTask extends Task {
     private BlockPos _currentChestTry = null;
 
     public StoreInAnyContainerTask(boolean getIfNotPresent, ItemTarget... toStore) {
+        this(getIfNotPresent, true, toStore);
+    }
+
+    /**
+     * @param allowShulkers true for general storage commands, false for
+     *                      emergency overflow. Overflow should be boring,
+     *                      craftable, and reusable, so it uses chests/barrels
+     *                      instead of shulker sub-inventory transactions.
+     */
+    public StoreInAnyContainerTask(boolean getIfNotPresent, boolean allowShulkers, ItemTarget... toStore) {
         _getIfNotPresent = getIfNotPresent;
+        _allowShulkers = allowShulkers;
         _toStore = toStore;
     }
 
     @Override
     protected void onStart(Belfegor mod) {
-        mod.getBlockTracker().trackBlock(TO_SCAN);
+        mod.getBlockTracker().trackBlock(blocksToScan());
         _storedItems.startTracking();
         _dungeonChests.clear();
         _nonDungeonChests.clear();
@@ -66,6 +80,10 @@ public class StoreInAnyContainerTask extends Task {
         ItemTarget[] notStored = _storedItems.getUnstoredItemTargetsYouCanStore(mod, _toStore);
 
         Predicate<BlockPos> validContainer = containerPos -> {
+            if (!_allowShulkers && mod.getPlayer() != null
+                    && containerPos.getSquaredDistance(mod.getPlayer().getBlockPos()) > 24 * 24) {
+                return false;
+            }
 
             // If it's a chest and the block above can't be broken, we can't open this one.
             boolean isChest = WorldHelper.isChest(mod, containerPos);
@@ -100,7 +118,15 @@ public class StoreInAnyContainerTask extends Task {
             return true;
         };
 
-        if (mod.getBlockTracker().anyFound(validContainer, TO_SCAN)) {
+        if (!_allowShulkers && rememberedOverflowContainer != null
+                && validContainer.test(rememberedOverflowContainer)
+                && isOverflowContainerBlock(mod, rememberedOverflowContainer)) {
+            setDebugState("Using remembered overflow container " + rememberedOverflowContainer.toShortString());
+            _currentChestTry = rememberedOverflowContainer;
+            return new StoreInContainerTask(rememberedOverflowContainer, _getIfNotPresent, notStored);
+        }
+
+        if (mod.getBlockTracker().anyFound(validContainer, blocksToScan())) {
 
             setDebugState("Going to container and depositing items");
 
@@ -117,15 +143,18 @@ public class StoreInAnyContainerTask extends Task {
                             _progressChecker.reset();
                         }
                         _currentChestTry = blockPos;
+                        if (!_allowShulkers) {
+                            rememberedOverflowContainer = blockPos;
+                        }
                         return new StoreInContainerTask(blockPos, _getIfNotPresent, notStored);
                     },
                     validContainer,
-                    TO_SCAN);
+                    blocksToScan());
         }
 
         _progressChecker.reset();
         // Craft + place chest nearby
-        for (Block couldPlace : TO_SCAN) {
+        for (Block couldPlace : blocksToScan()) {
             if (mod.getItemStorage().hasItem(couldPlace.asItem())) {
                 setDebugState("Placing container nearby");
                 return new PlaceBlockNearbyTask(canPlace -> {
@@ -150,19 +179,31 @@ public class StoreInAnyContainerTask extends Task {
     @Override
     protected void onStop(Belfegor mod, Task interruptTask) {
         _storedItems.stopTracking();
-        mod.getBlockTracker().stopTracking(TO_SCAN);
+        mod.getBlockTracker().stopTracking(blocksToScan());
     }
 
     @Override
     protected boolean isEqual(Task other) {
         if (other instanceof StoreInAnyContainerTask task) {
-            return task._getIfNotPresent == _getIfNotPresent && Arrays.equals(task._toStore, _toStore);
+            return task._getIfNotPresent == _getIfNotPresent
+                    && task._allowShulkers == _allowShulkers
+                    && Arrays.equals(task._toStore, _toStore);
         }
         return false;
     }
 
     @Override
     protected String toDebugString() {
-        return "Storing in any container: " + Arrays.toString(_toStore);
+        return "Storing in " + (_allowShulkers ? "any container" : "overflow chest")
+                + ": " + Arrays.toString(_toStore);
+    }
+
+    private Block[] blocksToScan() {
+        return _allowShulkers ? TO_SCAN : OVERFLOW_SCAN;
+    }
+
+    private boolean isOverflowContainerBlock(Belfegor mod, BlockPos pos) {
+        Block block = mod.getWorld().getBlockState(pos).getBlock();
+        return Arrays.asList(OVERFLOW_SCAN).contains(block);
     }
 }

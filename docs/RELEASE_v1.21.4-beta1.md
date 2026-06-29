@@ -1,8 +1,8 @@
-# Belfegor `v1.21.4-beta1` release notes
+﻿# Belfegor `v1.21.4-beta1` release notes
 
 This is the first public Belfegor beta release for Minecraft `1.21.4`.
 
-This release bundle has been refreshed with the current craft-audit and packaged llama.cpp-advisor build. The jar now includes the offline recipe catalogue improvements, the developer command `@craftaudit`, and the optional local AI advisor for `belfegor/models/lfm2.5-thinking.gguf`.
+This release bundle has been refreshed with the current craft-audit and packaged llama.cpp-advisor build. The jar now includes the offline recipe catalogue improvements, the developer command `@craftaudit`, and the optional local AI advisor for `belfegor/models/Qwen3-1.7B-Q4_K_M.gguf`.
 
 ## Download
 
@@ -94,3 +94,4 @@ This release is backed by the full repository docs:
 - `docs/BUTLER_AND_SERVERS.md`
 - `docs/TROUBLESHOOTING.md`
 - `docs/ROADMAP.md`
+

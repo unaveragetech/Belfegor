@@ -15,9 +15,11 @@ import adris.belfegor.eventbus.events.TitleScreenEntryEvent;
 import adris.belfegor.macros.MacroRunner;
 import adris.belfegor.macros.MacroStorage;
 import adris.belfegor.memory.CraftingMemory;
+import adris.belfegor.memory.BaseMemory;
 import adris.belfegor.memory.DecisionEngine;
 import adris.belfegor.memory.LocationMemory;
 import adris.belfegor.memory.ShulkerMemory;
+import adris.belfegor.memory.SpatialAwareness;
 import adris.belfegor.tasksystem.CraftingPathRegistry;
 import adris.belfegor.tasksystem.Task;
 import adris.belfegor.tasksystem.TaskRunner;
@@ -94,6 +96,7 @@ public class Belfegor implements ModInitializer {
     // Tick counter for periodic saves
     private int _tickCount = 0;
     private boolean _abortKeyWasDown = false;
+    private long _lastAbortHotkeyMs = 0;
     private long _lastAutoShulkerSortMs = 0;
     private String _lastAutoShulkerFingerprint = "";
     private boolean _hasInitializedRuntime = false;
@@ -179,6 +182,16 @@ public class Belfegor implements ModInitializer {
             LocationMemory.init(new java.io.File("."));
         } catch (Exception e) {
             Debug.logWarning("Failed to initialize location memory: " + e.getMessage());
+        }
+        try {
+            BaseMemory.init(new java.io.File("."));
+        } catch (Exception e) {
+            Debug.logWarning("Failed to initialize base memory: " + e.getMessage());
+        }
+        try {
+            SpatialAwareness.init(new java.io.File("."));
+        } catch (Exception e) {
+            Debug.logWarning("Failed to initialize spatial awareness: " + e.getMessage());
         }
         try {
             CraftingMemory.init(new java.io.File("."));
@@ -331,6 +344,7 @@ public class Belfegor implements ModInitializer {
         // Scan nearby blocks for notable ores and record in LocationMemory
         if (_tickCount % 100 == 0 && getPlayer() != null && getWorld() != null) {
             scanNotableBlocks();
+            SpatialAwareness.getInstance().scan(this, 8);
             adris.belfegor.tasks.container.ShulkerInteractionTask.syncCarriedShulkerMemory(this);
         }
 
@@ -340,6 +354,8 @@ public class Belfegor implements ModInitializer {
         // Save location memory periodically (every 30 seconds)
         if (_tickCount % 600 == 0) {
             LocationMemory.getInstance().save();
+            BaseMemory.getInstance().save();
+            SpatialAwareness.getInstance().save();
             CraftingMemory.getInstance().save();
             CraftingPathRegistry.getInstance().save();
         }
@@ -386,6 +402,11 @@ public class Belfegor implements ModInitializer {
     }
 
     public void abortAllAutomation() {
+        long now = System.currentTimeMillis();
+        if (now - _lastAbortHotkeyMs < 300) {
+            return;
+        }
+        _lastAbortHotkeyMs = now;
         DebugLogger.getInstance().logImmediate("GLOBAL-ABORT", "Emergency abort key pressed");
         if (_macroRunner != null && _macroRunner.isRunning()) {
             _macroRunner.stop();

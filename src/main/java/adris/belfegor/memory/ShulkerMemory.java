@@ -1,6 +1,7 @@
 package adris.belfegor.memory;
 
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import net.minecraft.item.Item;
 import net.minecraft.util.math.BlockPos;
@@ -46,6 +47,13 @@ public class ShulkerMemory {
         public int inventorySlot = -1;
         public String shulkerItem = "";
         public String lastPlacementReason = "";
+        public String sourceKey = "";
+        public String fingerprint = "";
+        public String lastVerifiedSource = "";
+        public int slotCount = 27;
+        public int freeSlots = 27;
+        public int totalItems = 0;
+        public List<ShulkerSlotItem> slots = new ArrayList<>();
 
         public ShulkerEntry() {}
 
@@ -56,11 +64,17 @@ public class ShulkerMemory {
             this.lastUpdated = System.currentTimeMillis();
         }
 
+        @JsonIgnore
         public BlockPos getPos() {
             return new BlockPos(x, y, z);
         }
 
         public int getItemCount(String itemName) {
+            int count = 0;
+            for (ShulkerSlotItem slot : slots) {
+                if (slot.itemName.equals(itemName)) count += slot.count;
+            }
+            if (count > 0) return count;
             for (ShulkerItem si : contents) {
                 if (si.itemName.equals(itemName)) return si.count;
             }
@@ -69,6 +83,13 @@ public class ShulkerMemory {
 
         public boolean hasItem(String itemName) {
             return getItemCount(itemName) > 0;
+        }
+
+        public List<Integer> getSlotsWithItem(String itemName) {
+            return slots.stream()
+                    .filter(slot -> slot.itemName.equals(itemName))
+                    .map(slot -> slot.slot)
+                    .collect(Collectors.toList());
         }
     }
 
@@ -82,6 +103,28 @@ public class ShulkerMemory {
 
         public ShulkerItem(String itemName, int count) {
             this.itemName = itemName;
+            this.count = count;
+        }
+    }
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    @JsonAutoDetect(fieldVisibility = JsonAutoDetect.Visibility.ANY)
+    public static class ShulkerSlotItem {
+        public int slot;
+        public String itemName = "";
+        public String itemKey = "";
+        public int count;
+
+        public ShulkerSlotItem() {}
+
+        public ShulkerSlotItem(int slot, String itemName, int count) {
+            this(slot, itemName, itemName, count);
+        }
+
+        public ShulkerSlotItem(int slot, String itemName, String itemKey, int count) {
+            this.slot = slot;
+            this.itemName = itemName == null ? "" : itemName;
+            this.itemKey = itemKey == null || itemKey.isBlank() ? this.itemName : itemKey;
             this.count = count;
         }
     }
@@ -145,9 +188,23 @@ public class ShulkerMemory {
         String key = posKey(pos);
         ShulkerEntry entry = _shulkers.getOrDefault(key, new ShulkerEntry(pos));
         entry.location = "world";
-        entry.contents = contents.entrySet().stream()
-                .map(e -> new ShulkerItem(e.getKey(), e.getValue()))
-                .collect(Collectors.toList());
+        applyTotals(entry, contents);
+        entry.lastUpdated = System.currentTimeMillis();
+        _shulkers.put(key, entry);
+        _dirty = true;
+    }
+
+    public void rememberContentsDetailed(BlockPos pos, String shulkerItem,
+                                         Map<Integer, ShulkerSlotItem> slotContents,
+                                         String source) {
+        String key = posKey(pos);
+        ShulkerEntry entry = _shulkers.getOrDefault(key, new ShulkerEntry(pos));
+        entry.location = "world";
+        entry.inventorySlot = -1;
+        entry.shulkerItem = shulkerItem == null ? entry.shulkerItem : shulkerItem;
+        entry.sourceKey = key;
+        entry.lastVerifiedSource = source == null ? "open-screen" : source;
+        applySlotContents(entry, slotContents);
         entry.lastUpdated = System.currentTimeMillis();
         _shulkers.put(key, entry);
         _dirty = true;
@@ -165,6 +222,7 @@ public class ShulkerMemory {
         entry.location = "world";
         entry.shulkerItem = shulkerItem == null ? "" : shulkerItem;
         entry.lastPlacementReason = reason == null ? "" : reason;
+        entry.sourceKey = key;
         entry.lastUpdated = System.currentTimeMillis();
         _shulkers.put(key, entry);
         _dirty = true;
@@ -177,10 +235,24 @@ public class ShulkerMemory {
         entry.inventorySlot = inventorySlot;
         entry.shulkerItem = shulkerItem;
         entry.lastUpdated = System.currentTimeMillis();
-        entry.contents = contents.entrySet().stream()
-                .map(e -> new ShulkerItem(e.getKey(), e.getValue()))
-                .collect(Collectors.toList());
+        entry.sourceKey = "inventory:" + inventorySlot;
+        entry.lastVerifiedSource = "item-component";
+        applyTotals(entry, contents);
         _shulkers.put("inventory:" + inventorySlot, entry);
+        _dirty = true;
+    }
+
+    public void rememberInventoryContentsDetailed(int inventorySlot, String shulkerItem,
+                                                  Map<Integer, ShulkerSlotItem> slotContents) {
+        ShulkerEntry entry = new ShulkerEntry();
+        entry.location = "inventory";
+        entry.inventorySlot = inventorySlot;
+        entry.shulkerItem = shulkerItem == null ? "" : shulkerItem;
+        entry.sourceKey = "inventory:" + inventorySlot;
+        entry.lastVerifiedSource = "item-component";
+        applySlotContents(entry, slotContents);
+        entry.lastUpdated = System.currentTimeMillis();
+        _shulkers.put(entry.sourceKey, entry);
         _dirty = true;
     }
 
@@ -218,7 +290,22 @@ public class ShulkerMemory {
                 results.add(entry);
             }
         }
+        results.sort((a, b) -> {
+            int byCount = Integer.compare(b.getItemCount(itemName), a.getItemCount(itemName));
+            if (byCount != 0) return byCount;
+            return Long.compare(b.lastUpdated, a.lastUpdated);
+        });
         return results;
+    }
+
+    public List<ShulkerEntry> findInventoryItem(String itemName) {
+        return findItem(itemName).stream()
+                .filter(entry -> "inventory".equals(entry.location))
+                .collect(Collectors.toList());
+    }
+
+    public Optional<ShulkerEntry> bestInventoryShulkerFor(String itemName) {
+        return findInventoryItem(itemName).stream().findFirst();
     }
 
     /**
@@ -314,5 +401,61 @@ public class ShulkerMemory {
 
     private static String posKey(BlockPos pos) {
         return pos.getX() + "," + pos.getY() + "," + pos.getZ();
+    }
+
+    private static void applyTotals(ShulkerEntry entry, Map<String, Integer> contents) {
+        Map<String, Integer> safe = contents == null ? Collections.emptyMap() : contents;
+        entry.contents = safe.entrySet().stream()
+                .filter(e -> e.getValue() != null && e.getValue() > 0)
+                .map(e -> new ShulkerItem(e.getKey(), e.getValue()))
+                .collect(Collectors.toList());
+        if (entry.slots == null) entry.slots = new ArrayList<>();
+        entry.totalItems = safe.values().stream()
+                .filter(count -> count != null && count > 0)
+                .mapToInt(Integer::intValue)
+                .sum();
+        entry.slotCount = Math.max(entry.slotCount, 27);
+        entry.freeSlots = entry.slots.isEmpty()
+                ? Math.max(0, entry.slotCount - safe.size())
+                : Math.max(0, entry.slotCount - entry.slots.size());
+        entry.fingerprint = fingerprint(entry.slots, entry.contents);
+    }
+
+    private static void applySlotContents(ShulkerEntry entry, Map<Integer, ShulkerSlotItem> slotContents) {
+        Map<Integer, ShulkerSlotItem> safe = slotContents == null ? Collections.emptyMap() : slotContents;
+        entry.slotCount = 27;
+        entry.slots = safe.entrySet().stream()
+                .filter(e -> e.getKey() != null && e.getValue() != null && e.getValue().count > 0)
+                .map(e -> new ShulkerSlotItem(e.getKey(),
+                        e.getValue().itemName,
+                        e.getValue().itemKey,
+                        e.getValue().count))
+                .sorted((a, b) -> Integer.compare(a.slot, b.slot))
+                .collect(Collectors.toList());
+        Map<String, Integer> totals = new HashMap<>();
+        for (ShulkerSlotItem slot : entry.slots) {
+            totals.merge(slot.itemName, slot.count, Integer::sum);
+        }
+        entry.contents = totals.entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .map(e -> new ShulkerItem(e.getKey(), e.getValue()))
+                .collect(Collectors.toList());
+        entry.totalItems = entry.slots.stream().mapToInt(slot -> slot.count).sum();
+        entry.freeSlots = Math.max(0, entry.slotCount - entry.slots.size());
+        entry.fingerprint = fingerprint(entry.slots, entry.contents);
+    }
+
+    private static String fingerprint(List<ShulkerSlotItem> slots, List<ShulkerItem> contents) {
+        if (slots != null && !slots.isEmpty()) {
+            return slots.stream()
+                    .sorted((a, b) -> Integer.compare(a.slot, b.slot))
+                    .map(slot -> slot.slot + ":" + slot.itemName + "x" + slot.count)
+                    .collect(Collectors.joining("|"));
+        }
+        if (contents == null || contents.isEmpty()) return "empty";
+        return contents.stream()
+                .sorted((a, b) -> a.itemName.compareTo(b.itemName))
+                .map(item -> item.itemName + "x" + item.count)
+                .collect(Collectors.joining("|"));
     }
 }

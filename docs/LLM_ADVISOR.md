@@ -1,18 +1,18 @@
-# Local llama.cpp LLM advisor
+﻿# Local llama.cpp LLM advisor
 
 Belfegor packages the LLM advisor code inside the mod jar and calls a local llama.cpp command-line runtime. The intended runtime layout is bundled with the Minecraft instance so users do not need a separate model server.
 
 The current default model is:
 
 ```text
-belfegor/models/lfm2.5-thinking.gguf
+belfegor/models/Qwen3-1.7B-Q4_K_M.gguf
 ```
 
 That model path points at a GGUF thinking model copied into the instance. Belfegor does not require a background model service.
 
 ## What it does
 
-The advisor gives Belfegor a bounded “what should I do next?” brain. It does not click inventory slots or replace the task engine. It reads context and returns either chat text or a safe Belfegor command.
+The advisor gives Belfegor a bounded â€œwhat should I do next?â€ brain. It does not click inventory slots or replace the task engine. It reads context and returns either chat text or a safe Belfegor command.
 
 It writes/reads these files under `.minecraft/belfegor/`:
 
@@ -35,7 +35,7 @@ It writes/reads these files under `.minecraft/belfegor/`:
 2. Place the GGUF model in the instance:
 
 ```powershell
-.minecraft\belfegor\models\lfm2.5-thinking.gguf
+.minecraft\belfegor\models\Qwen3-1.7B-Q4_K_M.gguf
 ```
 
 3. Edit `.minecraft/belfegor/belfegor_settings.json`:
@@ -46,7 +46,7 @@ It writes/reads these files under `.minecraft/belfegor/`:
   "llmAdvisorInPlayerMode": true,
   "llmAdvisorCanChat": true,
   "llmLlamaCppExecutable": "",
-  "llmLlamaModelPath": "belfegor/models/lfm2.5-thinking.gguf",
+  "llmLlamaModelPath": "belfegor/models/Qwen3-1.7B-Q4_K_M.gguf",
   "llmAdvisorCooldownSeconds": 90,
   "llmAdvisorTimeoutSeconds": 45,
   "llmContextSize": 8192,
@@ -82,7 +82,8 @@ When `llmAdvisorInPlayerMode` is enabled, `@player` periodically asks the model 
 - goal, last action, and planned action;
 - position, health, hunger, dimension, and home base;
 - inventory contents;
-- remembered shulker contents.
+- remembered shulker contents;
+- remembered base rooms, halls, module progress, and spatial-awareness snapshots.
 
 The returned command must:
 
@@ -99,6 +100,9 @@ Denied automatic commands currently include:
 @test
 @ai
 @player
+@build
+@home
 ```
 
 If llama.cpp is unavailable, busy, times out, returns an invalid command, or the task/inventory lane is busy, player mode continues with its deterministic fallback behavior. Valid advisor commands are deferred instead of injected into the middle of active tasks.
+

@@ -3,6 +3,7 @@ package adris.belfegor.tasks.construction;
 import adris.belfegor.Belfegor;
 import adris.belfegor.Debug;
 import adris.belfegor.TaskCatalogue;
+import adris.belfegor.debug.DebugLogger;
 import adris.belfegor.tasks.movement.GetToBlockTask;
 import adris.belfegor.tasks.movement.TimeoutWanderTask;
 import adris.belfegor.tasksystem.ITaskRequiresGrounded;
@@ -41,6 +42,8 @@ public class PlaceBlockTask extends Task implements ITaskRequiresGrounded {
     private final TimeoutWanderTask _wanderTask = new TimeoutWanderTask(5); // This can get stuck forever, so we increase the range.
     private Task _materialTask;
     private int _failCount = 0;
+    private int _missingPlaceableTicks = 0;
+    private boolean _missingPlaceableThisBuild = false;
 
     public PlaceBlockTask(BlockPos target, Block[] toPlace, boolean useThrowaways, boolean autoCollectStructureBlocks) {
         _target = target;
@@ -66,7 +69,11 @@ public class PlaceBlockTask extends Task implements ITaskRequiresGrounded {
     protected void onStart(Belfegor mod) {
         _progressChecker.reset();
         mod.getBehaviour().push();
-        mod.getBehaviour().addProtectedItems(ItemHelper.blocksToItems(_toPlace));
+        // Do not add the exact block we are about to place to Baritone's
+        // protected-items list. Protected items are hidden from the builder's
+        // available block list, which caused crafting-table placement to fall
+        // through to the "Failed to find throwaway block" fallback and freeze
+        // the client in a busy build loop.
         // If we get interrupted by another task, this might cause problems...
         //_wanderTask.resetWander();
     }
@@ -134,10 +141,26 @@ public class PlaceBlockTask extends Task implements ITaskRequiresGrounded {
             setDebugState("Alternative way: Trying to go above block to place block.");
             return new GetToBlockTask(_target.up(), false);
         } else {
+            if (_missingPlaceableThisBuild) {
+                _missingPlaceableTicks++;
+                _missingPlaceableThisBuild = false;
+                mod.getClientBaritone().getBuilderProcess().onLostControl();
+                DebugLogger.getInstance().logImmediate("PLACE-BLOCK",
+                        "builder could not see requested block; target=" + _target
+                                + " blocks=" + Arrays.toString(_toPlace)
+                                + " missingTicks=" + _missingPlaceableTicks);
+                if (_missingPlaceableTicks >= 3) {
+                    _failCount++;
+                    setDebugState("Missing placeable block in builder inventory, recovering");
+                    return _wanderTask;
+                }
+                return null;
+            }
             setDebugState("Letting baritone place a block.");
             // Perform baritone placement
             if (!mod.getClientBaritone().getBuilderProcess().isActive()) {
                 Debug.logInternal("Run Structure Build");
+                _missingPlaceableThisBuild = false;
                 ISchematic schematic = new PlaceStructureSchematic(mod);
                 mod.getClientBaritone().getBuilderProcess().build("structure", schematic, _target);
             }
@@ -204,9 +227,9 @@ public class PlaceBlockTask extends Task implements ITaskRequiresGrounded {
                         }
                     }
                 }
-                Debug.logInternal("Failed to find throwaway block");
-                // No throwaways available!!
-                return new BlockOptionalMeta(Blocks.DIRT).getAnyBlockState();
+                _missingPlaceableThisBuild = true;
+                Debug.logInternal("Failed to find requested placeable block");
+                return blockState;
             }
             // Don't care.
             return blockState;

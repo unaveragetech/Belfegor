@@ -12,6 +12,7 @@ import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
 import net.minecraft.item.Items;
 import net.minecraft.screen.slot.SlotActionType;
+import net.minecraft.util.collection.DefaultedList;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -92,9 +93,9 @@ public class InventoryManager {
     public boolean leftClick(Slot slot) {
         if (!canClick()) return false;
         if (!checkSameSlotGuard(slot)) return false;
-        _mod.getSlotHandler().clickSlotForce(slot, 0, SlotActionType.PICKUP);
-        recordClick();
-        return true;
+        boolean clicked = _mod.getSlotHandler().clickSlotForce(slot, 0, SlotActionType.PICKUP);
+        if (clicked) recordClick();
+        return clicked;
     }
 
     /**
@@ -103,9 +104,9 @@ public class InventoryManager {
     public boolean rightClick(Slot slot) {
         if (!canClick()) return false;
         if (!checkSameSlotGuard(slot)) return false;
-        _mod.getSlotHandler().clickSlotForce(slot, 1, SlotActionType.PICKUP);
-        recordClick();
-        return true;
+        boolean clicked = _mod.getSlotHandler().clickSlotForce(slot, 1, SlotActionType.PICKUP);
+        if (clicked) recordClick();
+        return clicked;
     }
 
     /**
@@ -114,9 +115,9 @@ public class InventoryManager {
     public boolean shiftClick(Slot slot) {
         if (!canClick()) return false;
         if (!checkSameSlotGuard(slot)) return false;
-        _mod.getSlotHandler().clickSlotForce(slot, 0, SlotActionType.QUICK_MOVE);
-        recordClick();
-        return true;
+        boolean clicked = _mod.getSlotHandler().clickSlotForce(slot, 0, SlotActionType.QUICK_MOVE);
+        if (clicked) recordClick();
+        return clicked;
     }
 
     /**
@@ -125,9 +126,9 @@ public class InventoryManager {
     public boolean swapWithHotbar(Slot slot, int hotbarIndex) {
         if (!canClick()) return false;
         if (!checkSameSlotGuard(slot)) return false;
-        _mod.getSlotHandler().clickSlotForce(slot, hotbarIndex, SlotActionType.SWAP);
-        recordClick();
-        return true;
+        boolean clicked = _mod.getSlotHandler().clickSlotForce(slot, hotbarIndex, SlotActionType.SWAP);
+        if (clicked) recordClick();
+        return clicked;
     }
 
     /**
@@ -136,9 +137,9 @@ public class InventoryManager {
     public boolean dropCursor() {
         if (!canClick()) return false;
         if (!checkSameSlotGuard(Slot.UNDEFINED)) return false;
-        _mod.getSlotHandler().clickSlotForce(Slot.UNDEFINED, 0, SlotActionType.PICKUP);
-        recordClick();
-        return true;
+        boolean clicked = _mod.getSlotHandler().clickSlotForce(Slot.UNDEFINED, 0, SlotActionType.PICKUP);
+        if (clicked) recordClick();
+        return clicked;
     }
 
     // === ITEM SEARCH ===
@@ -669,14 +670,37 @@ public class InventoryManager {
         Map<String, Integer> contents = new HashMap<>();
         if (shulkerStack.isEmpty()) return contents;
         try {
+            for (ItemStack stored : readShulkerStacksBySlot(shulkerStack).values()) {
+                if (!stored.isEmpty()) {
+                    String name = adris.belfegor.util.helpers.ItemHelper.stripItemName(stored.getItem());
+                    contents.merge(name, stored.getCount(), Integer::sum);
+                }
+            }
+        } catch (Exception ignored) {}
+        return contents;
+    }
+
+    /**
+     * Read a shulker item's 27 internal slots without opening it.
+     *
+     * Minecraft 1.21 stores shulker contents in the CONTAINER data component.
+     * `stream()` is useful for totals, but `copyTo(DefaultedList)` preserves the
+     * real slot positions. Belfegor's shulker memory uses this so carried
+     * shulkers can be treated as known sub-inventories before they are placed.
+     */
+    public Map<Integer, ItemStack> readShulkerStacksBySlot(ItemStack shulkerStack) {
+        Map<Integer, ItemStack> contents = new HashMap<>();
+        if (shulkerStack == null || shulkerStack.isEmpty()) return contents;
+        try {
             var container = shulkerStack.get(DataComponentTypes.CONTAINER);
-            if (container != null) {
-                container.stream().forEach(stored -> {
-                    if (!stored.isEmpty()) {
-                        String name = adris.belfegor.util.helpers.ItemHelper.stripItemName(stored.getItem());
-                        contents.merge(name, stored.getCount(), Integer::sum);
-                    }
-                });
+            if (container == null) return contents;
+            DefaultedList<ItemStack> slots = DefaultedList.ofSize(27, ItemStack.EMPTY);
+            container.copyTo(slots);
+            for (int slot = 0; slot < slots.size(); slot++) {
+                ItemStack stored = slots.get(slot);
+                if (!stored.isEmpty()) {
+                    contents.put(slot, stored.copy());
+                }
             }
         } catch (Exception ignored) {}
         return contents;

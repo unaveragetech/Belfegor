@@ -4,8 +4,11 @@ import adris.belfegor.Belfegor;
 import adris.belfegor.Debug;
 import adris.belfegor.Settings;
 import adris.belfegor.TaskCatalogue;
+import adris.belfegor.memory.BaseMemory;
 import adris.belfegor.memory.LocationMemory;
+import adris.belfegor.memory.SpatialAwareness;
 import adris.belfegor.llm.LlmAdvisor;
+import adris.belfegor.tasks.construction.BuildBaseExpansionTask;
 import adris.belfegor.tasks.construction.BuildCampsiteTask;
 import adris.belfegor.tasks.container.ShulkerInteractionTask;
 import adris.belfegor.tasks.movement.GetToBlockTask;
@@ -86,7 +89,9 @@ public class PlayerExplorationTask extends Task {
         LocationMemory.getInstance().remember("home_base",
                 _homeBase.getX(), _homeBase.getY(), _homeBase.getZ(),
                 WorldHelper.getCurrentDimension().name(), "set_by_player_mode");
+        rememberExpandedBasePlan();
         LocationMemory.getInstance().save();
+        BaseMemory.getInstance().save();
         Debug.logInternal("PlayerExplorationTask: Starting autonomous exploration");
     }
 
@@ -97,6 +102,9 @@ public class PlayerExplorationTask extends Task {
             LlmAdvisor.getInstance().recordAction("player_mode:flee_danger", "nearby danger or low health");
             return new TimeoutWanderTask(true);
         }
+
+        SpatialAwareness.SpatialSnapshot snapshot = SpatialAwareness.getInstance().scan(mod, 8);
+        LlmAdvisor.getInstance().setPlannedAction("spatial:" + snapshot.summary);
 
         if (_foodCheckTimer.elapsed()) {
             _foodCheckTimer.reset();
@@ -151,6 +159,78 @@ public class PlayerExplorationTask extends Task {
         setDebugState("Exploring #" + _explorationCounter);
         LlmAdvisor.getInstance().setPlannedAction("wander/explore nearby terrain");
         return new TimeoutWanderTask(true);
+    }
+
+    private void rememberExpandedBasePlan() {
+        String dim = WorldHelper.getCurrentDimension().name();
+        int radius = 8;
+        int wallHeight = 4;
+        int clearance = 5;
+        int inner = Math.max(3, radius - 2);
+        int farmSize = Math.max(4, Math.min(9, radius - 2));
+        int mobSize = Math.max(7, Math.min(13, radius));
+        BlockPos farmOrigin = _homeBase.add(-radius + 2, -1, radius - farmSize - 1);
+        BlockPos mobOrigin = _homeBase.add(-radius + 2, 0, -radius + 2);
+        BlockPos mobCenter = mobOrigin.add(mobSize / 2, 0, mobSize / 2);
+
+        LocationMemory.getInstance().remember("home_room_core",
+                _homeBase.getX(), _homeBase.getY(), _homeBase.getZ(), dim,
+                "center;player_mode_blueprint");
+        LocationMemory.getInstance().remember("home_room_crafting",
+                _homeBase.getX() + 2, _homeBase.getY(), _homeBase.getZ() + 2, dim,
+                "crafting_table_anchor;player_mode_blueprint");
+        LocationMemory.getInstance().remember("home_room_smelting",
+                _homeBase.getX() - 2, _homeBase.getY(), _homeBase.getZ() + 2, dim,
+                "furnace_anchor;player_mode_blueprint");
+        LocationMemory.getInstance().remember("home_room_storage",
+                _homeBase.getX() + 2, _homeBase.getY(), _homeBase.getZ() - 2, dim,
+                "chest_and_shulker_anchor;player_mode_blueprint");
+        LocationMemory.getInstance().remember("home_room_farm",
+                farmOrigin.getX() + farmSize / 2, farmOrigin.getY(), farmOrigin.getZ() + farmSize / 2,
+                dim, "crop_plot_center;player_mode_blueprint");
+        LocationMemory.getInstance().remember("home_room_mob_farm",
+                mobCenter.getX(), mobCenter.getY(), mobCenter.getZ(), dim,
+                "roofed_dark_room;four_high_walls;two_wide_entrance;player_mode_blueprint");
+
+        BaseMemory memory = BaseMemory.getInstance();
+        memory.rememberBase(_homeBase, dim, radius, wallHeight, clearance, "set_by_player_mode");
+        memory.rememberModule(_homeBase, dim, "core", "room",
+                _homeBase.add(-radius + 1, 0, -radius + 1),
+                radius * 2 - 1, radius * 2 - 1, wallHeight, "planned",
+                "central living/work area");
+        memory.rememberModule(_homeBase, dim, "perimeter_wall", "defense",
+                _homeBase.add(-radius, 0, -radius),
+                radius * 2 + 1, radius * 2 + 1, wallHeight, "planned",
+                "four-high wall with two-wide east doorway and five-block exterior clearance");
+        memory.rememberModule(_homeBase, dim, "interior_dividers", "rooms",
+                _homeBase.add(-radius + 2, 0, -radius + 2),
+                radius * 2 - 3, radius * 2 - 3, 3, "planned",
+                "cross-shaped divider walls with door gaps for four functional wings");
+        memory.rememberModule(_homeBase, dim, "crafting_workshop", "utility",
+                _homeBase.add(2, 0, 2), inner, inner, 2, "planned",
+                "crafting and general work area");
+        memory.rememberModule(_homeBase, dim, "smelting_workshop", "utility",
+                _homeBase.add(-2, 0, 2), inner, inner, 2, "planned",
+                "furnace and future smelter area");
+        memory.rememberModule(_homeBase, dim, "storage_wing", "utility",
+                _homeBase.add(2, 0, -2), inner, inner, 2, "planned",
+                "chest and shulker staging area");
+        memory.rememberModule(_homeBase, dim, "crop_farm", "farm",
+                farmOrigin, farmSize, farmSize, 1, "planned",
+                "expandable wheat crop plot");
+        memory.rememberModule(_homeBase, dim, "mob_farm_chamber", "mob_farm",
+                mobOrigin, mobSize, mobSize, wallHeight + 1, "planned",
+                "large cobblestone roofed chamber with four-block walls and a two-wide entrance");
+        memory.rememberModule(_homeBase, dim, "mob_farm_entrance", "access",
+                mobOrigin.add(mobSize / 2 - 1, 0, mobSize - 1),
+                2, 1, 3, "planned",
+                "two-wide entrance/exit into the roofed mob-farm chamber");
+        memory.rememberInspection(_homeBase, dim, "perimeter_wall", "blueprint",
+                (radius * 2 + 1) * (radius * 2 + 1), 0, (radius * 2 + 1) * wallHeight,
+                0, "planned", "player-mode immediate blueprint seed");
+        memory.rememberInspection(_homeBase, dim, "mob_farm_chamber", "blueprint",
+                mobSize * mobSize, 0, (mobSize * mobSize) + (mobSize * 4 * wallHeight),
+                0, "planned", "roof and four-high wall target list seeded before build phase");
     }
 
     private Task doGather(Belfegor mod) {
@@ -256,18 +336,43 @@ public class PlayerExplorationTask extends Task {
             }
         }
 
-        int radius = Math.min(10, 4 + _campBuildCount);
-        Task build = cacheTask("camp:" + radius + ":" + _homeBase, new BuildCampsiteTask(_homeBase, radius));
+        int radius = Math.min(18, 8 + (_campBuildCount * 2));
+        Task build = _campBuildCount == 0
+                ? cacheTask("camp:" + radius + ":" + _homeBase, new BuildCampsiteTask(_homeBase, radius))
+                : nextBaseExpansion();
         if (!build.isFinished(mod)) {
-            setDebugState("Building/expanding home campsite radius " + radius);
-            LlmAdvisor.getInstance().recordAction("player_mode:build_campsite radius=" + radius,
-                    "expanding remembered home base");
+            setDebugState(_campBuildCount == 0
+                    ? "Building core home campsite radius " + radius
+                    : "Building remembered base expansion");
+            LlmAdvisor.getInstance().recordAction(_campBuildCount == 0
+                            ? "player_mode:build_core_campsite radius=" + radius
+                            : "player_mode:build_base_expansion",
+                    "expanding remembered home base using modular room graph");
             return build;
         }
 
         _campBuildCount++;
         _phase = Phase.EXPLORE;
         return null;
+    }
+
+    private Task nextBaseExpansion() {
+        BuildBaseExpansionTask.RoomType[] cycle = {
+                BuildBaseExpansionTask.RoomType.FARMLAND,
+                BuildBaseExpansionTask.RoomType.STORAGE,
+                BuildBaseExpansionTask.RoomType.WORKSHOP,
+                BuildBaseExpansionTask.RoomType.MOBFARM
+        };
+        BuildBaseExpansionTask.RoomType type = cycle[(_campBuildCount - 1) % cycle.length];
+        String name = switch (type) {
+            case FARMLAND -> "farmland_" + ((_campBuildCount + 3) / 4);
+            case STORAGE -> "storage_" + ((_campBuildCount + 2) / 4);
+            case WORKSHOP -> "workshop_" + ((_campBuildCount + 1) / 4);
+            case MOBFARM -> "mobfarm_" + ((_campBuildCount) / 4);
+            case EMPTY -> "room_" + _campBuildCount;
+        };
+        return cacheTask("base-expansion:" + type + ":" + name,
+                new BuildBaseExpansionTask(type, name));
     }
 
     private Task doSurvive(Belfegor mod) {
@@ -302,6 +407,11 @@ public class PlayerExplorationTask extends Task {
     }
 
     private Task maybeUseShulkers(Belfegor mod) {
+        // Building is spatially sensitive. Do not let inventory-pressure sorting
+        // steal the task lane while @player is actively returning home or
+        // expanding the base; otherwise the bot can spend the whole HOME window
+        // cycling shulkers instead of placing rooms/walls/farms.
+        if (_phase == Phase.HOME) return null;
         if (!_shulkerSortTimer.elapsed()) return null;
         _shulkerSortTimer.reset();
         if (!ShulkerInteractionTask.hasCarriedShulker(mod)) return null;
