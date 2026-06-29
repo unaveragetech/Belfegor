@@ -70,7 +70,7 @@ The latest local test pass verified:
 - `#help sel` was verified in-game against the bundled Baritone command set and documented in [Baritone Command Reference](BARITONE_COMMAND_REFERENCE.md).
 - `@craftaudit diamond_shovel` now starts from a clean inventory, gives `1 diamond`, `2 stick`, `1 crafting_table`, and `1 chest`, crafts through the real crafting-table flow, stores into a nearby overflow chest, and logs `DONE passed=1 failed=0`.
 - Overflow chest storage ignores far stale cached containers during chest-only overflow, preventing the old path to distant cached chests such as underground structure loot.
-- A clean staged showcase video was recorded at [docs/media/belfegor-showcase-20260628-v2.mp4](media/belfegor-showcase-20260628-v2.mp4), with proof frames in [thumbnail](media/belfegor-showcase-20260628-v2-thumb.png) and [craft audit frame](media/belfegor-showcase-20260628-v2-craft.png).
+- A clean staged showcase video was recorded at [docs/media/belfegor-showcase-20260628-v2.mp4](media/belfegor-showcase-20260628-v2.mp4).
 
 ## Known edge cases to keep testing
 

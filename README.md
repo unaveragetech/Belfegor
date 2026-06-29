@@ -86,8 +86,6 @@ See [`docs/TESTING.md`](docs/TESTING.md) for the current manual test matrix and 
 ## Showcase media
 
 - [Showcase video: clean staged in-game demo](docs/media/belfegor-showcase-20260628-v2.mp4)
-- [Showcase thumbnail](docs/media/belfegor-showcase-20260628-v2-thumb.png)
-- [Craft-audit proof frame](docs/media/belfegor-showcase-20260628-v2-craft.png)
 
 The current showcase starts from an in-world view, uses visible chat narration, clears inventory/drops, displays Baritone selection help, runs a focused `@craftaudit diamond_shovel`, and shows the resulting safe chest storage.
 
