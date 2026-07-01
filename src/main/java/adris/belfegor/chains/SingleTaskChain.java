@@ -88,6 +88,9 @@ public abstract class SingleTaskChain extends TaskChain {
             if (canInterrupt) {
                 _mainTask.interrupt(mod, null);
                 _actuallyInterrupted = true;
+                mod.getTaskRunner().annotateLastInterrupt("task-reset", _mainTask, true);
+            } else {
+                mod.getTaskRunner().annotateLastInterrupt("force-continued", _mainTask, false);
             }
             // else: task survives interrupt with state intact; _interrupted flag
             // is set but _actuallyInterrupted is false → tick() won't call reset().

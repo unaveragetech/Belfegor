@@ -118,7 +118,7 @@ public final class CommandDocumentation {
             case "equip" -> "Equips one item or a list of armor/tool items from inventory, storage, or newly crafted resources.";
             case "goto" -> "Travels to XYZ, XZ, or Y coordinates. A dimension may be appended when cross-dimensional travel is required.";
             case "coords" -> "Prints Belfegor's current position and dimension.";
-            case "status" -> "Prints the current task, active chain, pathing state, and useful debug context.";
+            case "status" -> "Prints the current task, active task chain, and last task-chain interruption snapshot when available. This helps diagnose oscillation loops where one chain repeatedly steals control from another.";
             case "inventory" -> "Prints inventory contents or the count of a specific item.";
             case "list" -> "Lists known obtainable items from the task catalogue.";
             case "stop" -> "Cancels the current task/macro/automation lane. The global + key is the emergency abort equivalent while tasks are running.";
