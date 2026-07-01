@@ -4,7 +4,6 @@ import adris.belfegor.Belfegor;
 import adris.belfegor.commandsystem.ArgParser;
 import adris.belfegor.commandsystem.Command;
 import adris.belfegor.commandsystem.CommandException;
-import net.minecraft.client.MinecraftClient;
 
 public class UiCommand extends Command {
     public UiCommand() {
@@ -13,9 +12,10 @@ public class UiCommand extends Command {
 
     @Override
     protected void call(Belfegor mod, ArgParser parser) throws CommandException {
-        MinecraftClient client = MinecraftClient.getInstance();
-        client.execute(mod::openScreen);
+        // Keep this command aligned with the keybind: the shared method owns the
+        // client-thread handoff and screen instance.
         mod.log("Opening Belfegor control panel.");
+        mod.openScreen();
         finish();
     }
 }

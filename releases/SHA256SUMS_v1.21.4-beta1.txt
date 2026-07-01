@@ -1,2 +1,2 @@
-343a24396fc52dc88ee2b30255de75e2cc92931031c473a8db83ae18bfae7f28  belfegor-1.21.4-beta1.jar
+1bba337acf14062f1d6ac29a9599f9cc6c5aa539510b97a91a2fc04767922baa  belfegor-1.21.4-beta1.jar
 620cfccc69e8854c8da7c898cf23375a35579fd08494daea7b5cdeb0a7635c50  belfegor-1.21.4-beta1-runtime.zip

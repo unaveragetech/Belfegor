@@ -25,7 +25,7 @@ nether
 | Command | Usage | What it does | Examples |
 |---|---|---|---|
 | `help` | `@help <command>` | Lists commands or shows detailed help for one command. | `@help`, `@help shulker` |
-| `ui` | `@ui` | Opens the Belfegor control panel. Use this if the `C` key is captured by another client mod. | `@ui` |
+| `ui` | `@ui` | Opens the same Belfegor control panel as pressing `C`. | `@ui` |
 | `stop` | `@stop` | Stops active automation. The global `+` key also aborts while a task is running. | `@stop` |
 | `status` | `@status` | Prints the current active task status. | `@status` |
 | `coords` | `@coords` | Prints the bot position. | `@coords` |
@@ -120,7 +120,7 @@ Multiple commands can be chained with semicolons:
 
 ## UI command page
 
-Press `C` or run `@ui`, open the command tab, select a command, and double-click an example to run it. The UI shows categories, expected argument values, detailed descriptions, and examples from the same command metadata used by `@help` and the local LLM advisor.
+Press `C` or run `@ui`, open the command tab, select a command, and double-click an example to run it. Both menu paths use the same `openScreen()` implementation. The UI shows categories, expected argument values, detailed descriptions, and examples from the same command metadata used by `@help` and the local LLM advisor.
 
 The command list can be searched by command name, category, description, or usage text. Categories include Reference, Control, Resources, Crafting, Storage, Navigation, Base, Autonomy, PvP, Combat, Survival, Nether, Client, Development, and Game completion.
 

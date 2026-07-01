@@ -252,90 +252,87 @@ The home phase is where base-building happens. It:
 3. ensures a crafting table;
 4. ensures a furnace if there are at least 8 cobblestone/cobbled deepslate available;
 5. ensures a chest;
-6. builds or expands a campsite wall with `BuildCampsiteTask`;
+6. builds, validates, or expands the remembered modular base with the campsite/full-base construction tasks;
 7. increments `_campBuildCount`;
 8. returns to `EXPLORE`.
 
 ## Exact base-building behavior
 
-Current implementation lives in:
+Current implementation is split across:
 
 ```text
-src/main/java/adris/Belfegor/tasks/construction/BuildCampsiteTask.java
+src/main/java/adris/belfegor/tasks/construction/BuildCampsiteTask.java
+src/main/java/adris/belfegor/tasks/construction/BuildFullBaseTask.java
+src/main/java/adris/belfegor/tasks/construction/BuildBaseExpansionTask.java
+src/main/java/adris/belfegor/tasks/construction/BuildBaseValidationTask.java
+src/main/java/adris/belfegor/tasks/construction/BuildImportedSchematicTask.java
 ```
 
-It is deliberately simple and expandable. The current base is a square campsite centered on the home block.
+It is deliberately modular. The current base is not just a small wall: it records a home/core room, connected hallways, storage/workshop/farm/mob modules, route centers, inspection state, and validation data.
 
 ### Current structure
 
 | Part | Behavior |
 |---|---|
-| Center | The saved `homeBasePosition`. |
-| Radius | Starts at `4`, then expands by `1` per successful camp build, capped at `8`. |
-| Wall height | `2` blocks. |
-| Wall shape | Square perimeter. |
-| Doorway | Two-wide opening on the east side. |
-| Wall materials | Cobblestone, cobbled deepslate, dirt, or netherrack. |
-| Crafting table | Placed at `home + (1, 0, 1)` when available. |
-| Furnace | Placed at `home + (-1, 0, 1)` when available. |
-| Chest | Placed at `home + (0, 0, -2)` when available. |
+| Center | The saved home/core room center. |
+| Radius | Starts around a radius-8 home plan and can expand toward larger footprints over later passes. |
+| Wall height | Four blocks for main perimeter and mob-room walls. |
+| Wall shape | Generated room/module footprints connected by hollow hallways. |
+| Doorways/halls | Two-wide connected hallways with remembered room centers. |
+| Wall materials | Cobblestone-first for durable base construction; dirt is treated as terrain/farm material, not a preferred structural block. |
+| Storage | Staging/overflow chest in the core room when inventory pressure or construction supplies require it. |
+| Farm | Hydrated farm module with a 2x2 infinite water source and water holes before tilling/planting. |
+| Mob room | Roofed cobblestone chamber with four-block-tall walls and a controlled entrance/exit. |
 
-### Campsite layout
+### Modular base layout
 
 Top-down concept, not exact block rendering:
 
 ```text
-radius r
+              [Mob chamber]
+                    ||
+[Storage] == [Core/Home] == [Workshop]
+                    ||
+              [Hydrated farm]
 
-  #################################
-  #                               #
-  #                               #
-  #              C                #
-  #          F   H   T            #  doorway on east side
-  #              X                #  -> two perimeter blocks left open
-  #                               #
-  #                               #
-  #################################
-
-H = home base center
-T = crafting table at home + (1,0,1)
-F = furnace at home + (-1,0,1)
-C = chest at home + (0,0,-2)
-X = approximate standing/working space
+Each room has remembered bounds and a remembered center. Hallways are hollow
+and pathable so the bot should navigate through the base instead of mining
+through finished walls.
 ```
 
 ### Build algorithm
 
 ```mermaid
 flowchart TD
-    Start["BuildCampsiteTask"] --> Targets["Generate perimeter targets"]
-    Targets --> Materials{"Enough building blocks?"}
-    Materials -- no --> Gather["GetBuildingMaterialsTask up to 96 blocks"]
-    Gather --> Materials
-    Materials -- yes --> Next["Find next unfinished wall block"]
-    Next --> DoneWalls{"All wall targets solid?"}
-    DoneWalls -- no --> Place["PlaceBlockTask at target"]
-    Place --> Next
-    DoneWalls -- yes --> Utility["Place utility blocks if carried"]
-    Utility --> Remember["Remember home_campsite in LocationMemory"]
-    Remember --> Finish["Finish campsite pass"]
+    Start["Build full/base task"] --> Home["Load or set home base"]
+    Home --> Preflight["Stage supplies in overflow chest"]
+    Preflight --> Clear["Clear/level planned bounds"]
+    Clear --> Core["Build core room"]
+    Core --> Halls["Build hollow hallways"]
+    Halls --> Modules["Build storage/workshop/farm/mob modules"]
+    Modules --> Validate["Validate expected blocks"]
+    Validate --> Repair{"Missing/wrong blocks?"}
+    Repair -- yes --> Fix["Repair targets"]
+    Fix --> Validate
+    Repair -- no --> Route["Navigate to remembered room centers"]
+    Route --> Finish["Mark modules complete"]
 ```
 
 ### Planned base improvements
 
-The current campsite is a first durable scaffold. Planned upgrades:
+The current base is the first durable scaffold. Planned upgrades:
 
 - storage wall with labelled/reserved containers;
 - shulker unloading/loading station;
 - mine entrance module;
-- farm plots for wheat/carrots/potatoes;
+- richer farm plots for wheat/carrots/potatoes;
 - animal pen module;
 - safe bed/sleep room;
 - furnace/smoker/blast furnace cluster;
 - portal pad;
 - defensive lighting;
 - pathable gates instead of a simple open doorway;
-- persisted base blueprint so the bot can resume partial construction cleanly.
+- imported schematic placement/repair using the same validation model.
 
 ## Learning and memory
 
@@ -355,7 +352,7 @@ This is not yet a full reinforcement-learning system. It is practical memory: â
 - Nether fortress and End behavior are complex and may need iteration.
 - `@player` is intentionally experimental and can make odd choices.
 - Exploration does not yet build a semantic map of the world.
-- Campsite construction is currently a wall-and-utility-block scaffold, not a full base planner.
+- Base construction is now modular and validation-backed, but still needs more terrain/interruption tests before it should be considered a fully general builder.
 - Inventory bugs remain the highest priority because one stuck cursor can poison any route.
 
 ## Recommended test flow

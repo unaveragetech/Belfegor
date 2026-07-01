@@ -28,7 +28,7 @@ Behind that small command surface is a task engine that can gather resources, mi
 | Built jar | [`releases/belfegor-1.21.4-beta1.jar`](releases/belfegor-1.21.4-beta1.jar) |
 | Runtime bundle | [`releases/belfegor-1.21.4-beta1-runtime.zip`](releases/belfegor-1.21.4-beta1-runtime.zip) |
 | Release notes | [`docs/RELEASE_v1.21.4-beta1.md`](docs/RELEASE_v1.21.4-beta1.md) |
-| Jar SHA256 | `343a24396fc52dc88ee2b30255de75e2cc92931031c473a8db83ae18bfae7f28` |
+| Jar SHA256 | `1bba337acf14062f1d6ac29a9599f9cc6c5aa539510b97a91a2fc04767922baa` |
 | Runtime bundle SHA256 | `620cfccc69e8854c8da7c898cf23375a35579fd08494daea7b5cdeb0a7635c50` |
 | Mod id | `belfegor` |
 | Command prefix | `@` |
@@ -67,7 +67,7 @@ It is currently beta software, with the most active engineering effort focused o
 | Local AI advisor | Packaged llama.cpp advisor can use `belfegor/models/Qwen3-1.7B-Q4_K_M.gguf` to answer `@ai` prompts and choose validated next commands during `@player`. |
 | Beat-the-game routes | `@gamer` and `@marvion` run classic autonomous completion routes. |
 | Butler | Authorized players can command the bot by whisper/private message. |
-| UI | Press `C` for task state, commands, settings, shulker memory, and logs. |
+| UI | Press `C` or run `@ui` for task state, commands, settings, macros, shulker memory, schematics, and logs. |
 | Debug logs | Detailed runtime logs are written to `.minecraft/belfegor/belfegor_debug.log`. |
 
 ## Latest tested fixes
@@ -75,7 +75,7 @@ It is currently beta software, with the most active engineering effort focused o
 The current jar has been tested in the `1.21.4` MultiMC instance against the inventory cases that previously caused client locks:
 
 - command docs are now centralized and categorized; `@help`, the Commands UI, and the llama.cpp command catalogue share the same examples, categories, and expected input descriptions.
-- `@ui` opens the Belfegor control panel when another client mod captures the `C` key.
+- `@ui` now opens the Belfegor control panel through the same shared method as the `C` keybind, so command and key behavior stay aligned.
 - the Macros UI now has functional controls for creating, saving, reloading, running, pausing, stopping, duplicating, deleting, looping, adding, removing, and reordering macro steps.
 - the offline recipe registry rejects invalid empty recipes and resolves wood-family aliases contextually; for example `birch_wood` now plans with birch logs instead of generic/acacia logs.
 - `@craftaudit all 5` passed locally after the recipe-registry fix, with all tested wood-family recipes receiving the correct matching log family.
@@ -84,7 +84,7 @@ The current jar has been tested in the `1.21.4` MultiMC instance against the inv
 - `@get diamond_shovel` retrieves a diamond from a catalogued carried shulker, returns leftover cursor items, picks the shulker back up, and then crafts the shovel.
 - `@get composter` accepts mixed slab variants in one craft, for example birch slabs plus oak slabs.
 - `@get anvil` expands ingots into iron blocks and then crafts the anvil through the guarded crafting table flow.
-- managed shulkers now prefer a jump-place-under-player placement path, then open from that known position.
+- managed shulkers now prefer a jump-place-under-player placement path, remember the exact block position, verify headroom, open from that known position, transfer exact quantities, recatalog, break, and pick the shulker back up.
 - shulker memory now stores slot-level catalogues: player inventory slot, shulker type, exact 27-slot internal contents, free slots, total count, and a contents fingerprint.
 - `@player` writes base memory and spatial awareness snapshots, starts larger modular base construction, records room/module centers and inspections, builds four-high walls, and can grow the camp through connected halls into farmland, storage, workshop, and mob-farm rooms. `@build full` now performs that full base build deliberately, then validates navigation to remembered room centers.
 - Base validation is now schematic-backed for the core campsite: the expected cobblestone floor, walls, and room dividers are saved as a persisted blueprint and `@build validate` compares actual world blocks against it before declaring the base repaired.
@@ -387,7 +387,7 @@ Open chat and run:
 @get crafting_table
 ```
 
-Press `C` or run `@ui` to open the UI.
+Press `C` or run `@ui` to open the UI. Both paths call the same screen-opening method; `@ui` exists so the menu is still reachable from chat/macros/help even if a keybind is inconvenient.
 
 ## The `C` UI
 
@@ -396,7 +396,7 @@ The Belfegor UI is meant to make the agent inspectable while it works:
 | Tab | Purpose |
 |---|---|
 | Tasks | Active chains, current task, progress/debug state. |
-| Macros | Macro runner state. |
+| Macros | Macro editor and runner controls. |
 | Commands | Full interactive command reference with examples. Double-click examples to run them. |
 | Settings | Runtime toggles and configuration visibility. |
 | Shulkers | Indexed shulker memory and auto-sort mode. |
@@ -404,7 +404,7 @@ The Belfegor UI is meant to make the agent inspectable while it works:
 
 The Macros tab is now an actual editor/runner: create a macro, edit its name/description, add command steps, reorder steps, toggle looping, and run/pause/stop it from the panel. Macro steps run through the same command executor as chat commands and wait for the user task lane before advancing.
 
-Known test note: in the current heavily modded local client, `@ui` logs that it is opening the panel, but overlay/client-screen conflicts can still prevent the panel from becoming visible. The code now creates a fresh screen instance and excludes `BelfegorScreen` from the generic screen-closing recovery chain; this should be rechecked in a cleaner client profile before calling the visual UI fully verified.
+The Commands tab is backed by the same command-documentation registry as `@help` and the llama.cpp command catalogue. That means examples, categories, input descriptions, and expected values should stay consistent across chat help, UI help, and AI context.
 
 ## Packaged llama.cpp advisor
 

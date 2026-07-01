@@ -30,11 +30,11 @@ Belfegor is built around four ideas:
 | Offline recipes | Bundled `belfegor_recipes.json` lets the agent reason about craftable-item dependencies without internet access. |
 | Craft auditing | Developer command `@craftaudit` runs recipe expansion, resource provisioning, real crafting, storage, and pass/fail logging in a cheat-enabled test world. |
 | PvP prep | `@stacked`, `@toolset`, and advanced PvP tasking exist. |
-| Autonomous play | `@player` explores, gathers, crafts, manages shulkers, and builds a basic home campsite. |
+| Autonomous play | `@player` explores, gathers, crafts, manages shulkers, writes spatial/base memory, and can grow a modular home base. |
 | Local AI advisor | Optional packaged llama.cpp bridge lets `belfegor/models/Qwen3-1.7B-Q4_K_M.gguf` inspect context, explain itself, and suggest the next safe command. |
 | Beat-the-game | Classic `@gamer` and `@marvion` routes are present. |
 | Butler | Authorized players can command the bot via whispers. |
-| UI | `C` opens tabs for tasks, commands, settings, shulkers, and logs. |
+| UI | `C` or `@ui` opens tabs for tasks, commands, macros, settings, shulkers, schematics, and logs. |
 | Debugging | Structured log tags for task, crafting, shulker, container, and screen states. |
 
 ## What Belfegor cannot do yet
@@ -44,7 +44,7 @@ Belfegor should not be oversold. Current limits:
 - It is not a full general Minecraft AI.
 - Its recipe-driven planner is meant to work across normal Minecraft `1.21.4` craftable items, but some recipes still depend on better tag/variant normalization or acquisition logic.
 - Recipe variants and tags still need stronger normalization.
-- `@player` does not yet build complex bases or farms.
+- `@player` and `@build full` now build a larger modular base, but structure planning is still experimental and needs more validation across real terrain.
 - It can get confused by server lag, plugins, protected regions, or anti-cheat.
 - It cannot guarantee beat-the-game success in every seed.
 - It does not guarantee safe behavior in hostile multiplayer.
@@ -307,7 +307,30 @@ sequenceDiagram
 
 Shulkers are explicitly excluded from auto-storage because shulkers cannot go inside shulkers.
 
-## `@player` and base building
+## UI, macros, and command discoverability
+
+Belfegor has two equal ways to open the control panel:
+
+```text
+Press C
+@ui
+```
+
+Both call the same `openScreen()` implementation. That matters because the UI is not a separate debug toy; it is the operator console for a long-running agent. The panel exposes task state, command help, settings, macro controls, shulker memory, schematic/import state, and recent logs.
+
+The command documentation registry is now the shared source for:
+
+- `@help`;
+- the UI Commands tab;
+- runnable examples;
+- categories/search;
+- the llama.cpp advisor command catalogue.
+
+This prevents the common failure where the AI, the help menu, and the UI each believe in a slightly different command language.
+
+The Macros tab is a small command-chain editor. Macro steps are ordinary Belfegor commands. They run through the same command executor as chat commands and wait for the user task lane before advancing, so a macro should not inject a new craft/shulker/build action into the middle of an active inventory transaction.
+
+## `@player`, `@build`, and base building
 
 `@player` is an autonomous loop, not a fixed speedrun. It:
 
@@ -320,20 +343,38 @@ Shulkers are explicitly excluded from auto-storage because shulkers cannot go in
 - practices a curated list of useful crafts;
 - upgrades tools;
 - returns home periodically;
-- builds/expands a simple campsite;
-- auto-sorts into shulkers when inventory pressure is high.
+- builds/expands a remembered modular base;
+- records room centers, bounds, inspections, and progress in base memory;
+- uses spatial-awareness snapshots to reason about liquids, headroom, flat floor columns, notable blocks, and nearby hazards;
+- pauses auto-shulker sorting during home/build phases so storage automation does not fight construction.
 
-The campsite currently consists of:
+The current base system has three layers:
 
-- square perimeter wall;
-- radius starting at 4 and expanding up to 8;
-- two-block wall height;
-- two-wide doorway on the east side;
-- crafting table at `home + (1,0,1)`;
-- furnace at `home + (-1,0,1)`;
-- chest at `home + (0,0,-2)`.
+1. **Base memory.** `BaseMemory` stores the home, modules, room centers, bounds, inspections, and completion/repair state.
+2. **Generated schematic execution.** Region tasks build floors, walls, halls, roofs, farms, storage/workshop modules, and mob-farm chambers with deterministic block targets.
+3. **Validation/repair.** `BuildBaseValidationTask` and schematic-backed validation compare expected blocks against the world and schedule fixes for missing/wrong blocks.
 
-Future base plans include storage walls, shulker stations, farms, portal pads, bedrooms, furnace rooms, and mine entrances.
+The full-base command:
+
+```text
+@build full
+@build full 12 here
+```
+
+serializes a complete build rather than firing overlapping movement/build goals. The intended order is:
+
+1. establish or reload the home room;
+2. preflight supplies into a nearby staging/overflow chest when inventory pressure is high;
+3. clear debris while respecting protected/placed blocks;
+4. build the core room;
+5. build connected hollow hallways;
+6. build storage/workshop/farm/mob modules without overlapping remembered footprints;
+7. validate all expected blocks;
+8. navigate to remembered room centers to prove reachability.
+
+The farm module is expected to create an infinite water source and hydrated crop layout before planting. The mob module is expected to be a roofed cobblestone chamber with remembered room center and a controlled entrance/exit. These are still being refined, but they are no longer represented as a one-off two-block campsite wall.
+
+Future base plans include better schematic import placement UI, storage walls, shulker stations, portal pads, bedrooms, furnace rooms, mine entrances, and stronger repair logic for interrupted builds.
 
 ## Butler system
 
@@ -403,6 +444,7 @@ Project-style experiments:
 | Shulker identity | NBT/slot/content matching can be imperfect. | Stronger fingerprints and labels. |
 | Server compatibility | Plugins/lag/anti-cheat can break assumptions. | More defensive timing and diagnostics. |
 | `@player` | Still a simple loop, not a human-level planner. | Scoring, semantic memory, modular base plans. |
+| Base building | Can build/validate modular rooms, but long builds still need more terrain and interruption testing. | Better schematic printer semantics, staging chests, and room repair. |
 | Full catalogue | Recipe registry/planning exists conceptually, but needs stronger universal tag handling and blocked-item reporting. | Automated craftable-item dependency graph for all obtainable craftables. |
 
 ## Future: automate all craftable items

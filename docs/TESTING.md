@@ -10,6 +10,7 @@ This file tracks the practical in-game regression tests used for the `1.21.4` Be
 | Launcher shortcut | `C:\Users\b0052\Desktop\belfegor launch path MultiMC 5.lnk` |
 | Mod jar | `.minecraft/mods/belfegor-1.21.4-beta1.jar` |
 | Debug log | `.minecraft/belfegor/belfegor_debug.log` |
+| UI key/command | `C` or `@ui` |
 | Abort key | `+` / Shift+`=` |
 
 Before a reinstall test, close Minecraft and MultiMC, build the jar, copy it into the instance `mods` folder, clear `belfegor_debug.log`, launch, then run the command sequence.
@@ -59,7 +60,7 @@ Expected behavior:
 The latest local test pass verified:
 
 - `@help ui`, `@status`, `@coords`, `@inventory`, and `@list` executed without command errors in the `1.21.4` test instance.
-- `@ui` is registered and executes, logging `Opening Belfegor control panel.` In the current heavily modded test profile, the screen still did not become visible, so visual UI verification remains a release-blocking follow-up for a clean client profile or the next UI patch.
+- `@ui` is registered and now calls the same shared screen-opening method used by the `C` keybind. Regression check: press `C`, close the menu, then run `@ui`; both should open the same Belfegor control panel without the generic screen-recovery chain closing it.
 - the Macros tab code now provides create/save/reload/run/pause/stop/duplicate/delete/loop/add/remove/reorder controls and compiles cleanly.
 - `@craftaudit all 5` passed after recipe-registry cleanup. The audit gave matching wood-family resources: acacia wood used acacia logs, birch wood used birch logs, dark oak wood used dark oak logs, oak wood used oak logs, and jungle wood used jungle logs.
 - `@get cake` no longer produced a local scan storm in the sampled run. The bot advanced through normal dependencies and the recent log tail contained one `RESOURCE-LOCALITY` line while the Java process remained responsive.
@@ -81,11 +82,25 @@ The latest local test pass verified:
 
 ## Known edge cases to keep testing
 
-- The Belfegor control panel can still fail to become visible in the current heavily modded local profile even though `@ui` executes. Suspected causes are client overlay/screen conflicts. The code now uses a fresh screen instance and excludes `BelfegorScreen` from the generic screen-closing chain, but this needs a clean-profile visual verification.
+- UI conflicts remain possible in heavily modded profiles if another mod consumes `C` or replaces screens. `@ui` should now behave like pressing `C`; if either path fails, inspect screen conflicts rather than command registration.
 - Shulker placement can still choose awkward geometry where the block above is air but the bot cannot open the shulker reliably. Current behavior recovers by breaking and picking up the shulker; placement scoring should improve.
 - Auto shulker mode can interrupt long base-building work when inventory pressure is high. The transaction is safe, but scheduling should become less jumpy.
 - Some command smoke tests are intentionally shallow because destructive/world-changing commands need controlled worlds.
 - Server inventories, lag, anticheat, and custom plugins are not covered by the local singleplayer matrix.
+
+## UI and command-registry regression tests
+
+Run this set after every UI/command change:
+
+| Test | Command/action | Expected result |
+|---|---|---|
+| Key menu | Press `C` while no screen is open | Belfegor control panel opens. |
+| Chat menu | Run `@ui` | Same control panel opens through the same `openScreen()` path as `C`. |
+| Help registry | Run `@help ui`, `@help build`, `@help shulker`, `@help craftaudit` | Each command has category, description, inputs, and runnable examples. |
+| Commands tab | Open UI -> Commands | Search matches command names, categories, and examples. Clicking runnable examples should load/copy usable command text. |
+| Macros tab | Open UI -> Macros | New/save/reload/run/pause/stop/duplicate/delete/loop/add/remove/reorder controls respond without closing the screen. |
+| Shulkers tab | Open UI -> Shulkers | Indexed carried/placed shulkers and slot-level contents appear if memory exists. |
+| Schematics tab | Open UI -> Schematics | Imported/internal schematic entries list command-ready build/validate actions. |
 
 ## Log checklist
 

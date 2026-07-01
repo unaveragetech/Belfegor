@@ -304,7 +304,7 @@ public class Belfegor implements ModInitializer {
 
         // Open Belfegor menu with 'C' key (only when no screen is open)
         if (InputHelper.isKeyPressed(GLFW.GLFW_KEY_C) && MinecraftClient.getInstance().currentScreen == null && inGame()) {
-            MinecraftClient.getInstance().setScreen(_BelfegorScreen);
+            openScreen();
         }
 
         // Macro runner tick
@@ -808,16 +808,21 @@ public class Belfegor implements ModInitializer {
     }
 
     /**
-     * Open the Belfegor control panel
+     * Open the Belfegor control panel using the exact same route as the C keybind.
      */
     public void openScreen() {
-        if (inGame()) {
-            MinecraftClient client = MinecraftClient.getInstance();
-            client.execute(() -> {
-                _BelfegorScreen = new BelfegorScreen(this);
-                client.setScreen(_BelfegorScreen);
-            });
+        MinecraftClient client = MinecraftClient.getInstance();
+        if (!inGame()) {
+            return;
         }
+        if (!client.isOnThread()) {
+            client.execute(this::openScreen);
+            return;
+        }
+        if (_BelfegorScreen == null) {
+            _BelfegorScreen = new BelfegorScreen(this);
+        }
+        client.setScreen(_BelfegorScreen);
     }
 
     public void log(String message) {

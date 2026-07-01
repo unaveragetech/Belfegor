@@ -108,7 +108,7 @@ public final class CommandDocumentation {
     public static String detailsFor(String name, String fallback) {
         return switch (name) {
             case "help" -> "Prints either the full command reference or a focused page for one command, including inputs and runnable examples.";
-            case "ui" -> "Opens the Belfegor control panel. Use this when the C key is unavailable or another client mod has captured the keybind.";
+            case "ui" -> "Opens the same Belfegor control panel as pressing C. Useful from chat, macros, help examples, or when a keybind is inconvenient.";
             case "get" -> "Obtains the requested catalogued item and quantity using gathering, crafting, smelting, containers, or carried shulkers.";
             case "give" -> "Gets an item and delivers it to a named player when possible.";
             case "follow" -> "Follows the named player, or the command issuer when no explicit target is provided.";

@@ -41,8 +41,8 @@ The `+` key is a global abort while a task is running.
 | Bot walks on shulker instead of opening it | Placement/opening task selected movement path or block above is blocked. | `SHULKER-STATE`, block above placement position. |
 | Stack overflow crash | Recursive task creation or repeated progress checker creation. | Crash report stack trace. |
 | Bot gets stuck switching between two tasks | Scheduler oscillation. | Alternating `TASK-STOP` / `TASK-START` pairs. |
-| `C` does not open the Belfegor UI | Another client mod captured the key or a screen/overlay conflict replaced the panel. | Try `@ui`; check `latest.log` for `Opening Belfegor control panel.` |
-| `@ui` logs but panel is not visible | Client-screen conflict or overlay mod is replacing/closing the custom screen. | Test in a cleaner profile; verify `BelfegorScreen` is excluded from screen auto-close; check for other mods binding `C` or opening screens. |
+| `C` does not open the Belfegor UI | Another client mod captured the key or a screen/overlay conflict replaced the panel. | Try `@ui`; both paths now call the same `openScreen()` method. |
+| `@ui` logs but panel is not visible | Client-screen conflict or overlay mod is replacing/closing the custom screen. | Test in a cleaner profile; verify `BelfegorScreen` is excluded from screen auto-close; check other mods that open/replace screens. |
 
 ## Reading a task oscillation
 
