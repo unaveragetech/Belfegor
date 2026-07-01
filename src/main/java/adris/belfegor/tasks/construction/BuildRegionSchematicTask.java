@@ -10,6 +10,7 @@ import adris.belfegor.tasks.resources.GetBuildingMaterialsTask;
 import adris.belfegor.tasksystem.ITaskRequiresGrounded;
 import adris.belfegor.tasksystem.Task;
 import adris.belfegor.util.ItemTarget;
+import adris.belfegor.util.helpers.NativeBaritoneHelper;
 import adris.belfegor.util.helpers.StorageHelper;
 import adris.belfegor.util.helpers.WorldHelper;
 import baritone.api.schematic.AbstractSchematic;
@@ -81,6 +82,8 @@ public class BuildRegionSchematicTask extends Task implements ITaskRequiresGroun
         mod.getBehaviour().setAllowDiagonalAscend(false);
         mod.getBehaviour().forceUseTool((state, stack) -> stack != null && stack.isSuitableFor(state));
         mod.getClientBaritone().getBuilderProcess().onLostControl();
+        NativeBaritoneHelper.selectBox(mod, _origin, _max, "build-region-" + _name);
+        NativeBaritoneHelper.logProcessState(mod, "build-region-start-" + _name);
         DebugLogger.getInstance().log("BUILD-REGION", "start name=" + _name
                 + " targets=" + _targets.size()
                 + " allowThrowaway=" + _allowAnyThrowaway);
@@ -126,6 +129,7 @@ public class BuildRegionSchematicTask extends Task implements ITaskRequiresGroun
                     + " origin=" + _origin.toShortString()
                     + " max=" + _max.toShortString()
                     + " missing=" + missing + "/" + _targets.size());
+            NativeBaritoneHelper.logProcessState(mod, "build-region-before-native-builder-" + _name);
             ISchematic schematic = new RegionSchematic(mod);
             mod.getClientBaritone().getBuilderProcess().build(_name, schematic, _origin);
             _builderLaunched = true;
@@ -339,6 +343,7 @@ public class BuildRegionSchematicTask extends Task implements ITaskRequiresGroun
     protected void onStop(Belfegor mod, Task interruptTask) {
         mod.getBehaviour().pop();
         mod.getClientBaritone().getBuilderProcess().onLostControl();
+        NativeBaritoneHelper.clearSelections(mod, "build-region-stop-" + _name);
     }
 
     @Override

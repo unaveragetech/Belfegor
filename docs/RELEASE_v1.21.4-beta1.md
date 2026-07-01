@@ -69,6 +69,7 @@ Belfegor is a client-side Minecraft automation agent. It can:
 - `@get cake` was rechecked after local loaded-block scan throttling; the client stayed responsive and the sampled log no longer showed the previous scan storm.
 - `@help ui`, `@status`, `@coords`, `@inventory`, and `@list` executed without command errors in the test instance.
 - UI note: `@ui` and `C` are intentionally aligned. If both fail to show the panel in a heavily modded profile, treat it as a screen/overlay conflict rather than a command-registry failure.
+- Baritone integration note: Belfegor now captures `@...` commands at chat-screen submit time before Baritone can consume them, and includes `@baritone` for safe native diagnostics/testing. Verified: `@baritone proc`, `@baritone help sel`, and `@baritone sel clear`.
 
 ## What this release cannot promise
 

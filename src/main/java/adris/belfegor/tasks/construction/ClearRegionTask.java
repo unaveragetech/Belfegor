@@ -5,6 +5,7 @@ import adris.belfegor.Debug;
 import adris.belfegor.memory.BaseMemory;
 import adris.belfegor.tasksystem.ITaskRequiresGrounded;
 import adris.belfegor.tasksystem.Task;
+import adris.belfegor.util.helpers.NativeBaritoneHelper;
 import adris.belfegor.util.helpers.WorldHelper;
 import net.minecraft.block.Blocks;
 import net.minecraft.client.MinecraftClient;
@@ -68,6 +69,10 @@ public class ClearRegionTask extends Task implements ITaskRequiresGrounded {
         Debug.logInternal("Clear region start: " + _from.toShortString()
                 + " to " + _to.toShortString()
                 + " remaining=" + countRemaining());
+        if (_explicitTargets == null) {
+            NativeBaritoneHelper.selectBox(mod, _from, _to, "clear-region");
+        }
+        NativeBaritoneHelper.logProcessState(mod, "clear-region-start");
     }
 
     @Override
@@ -97,6 +102,7 @@ public class ClearRegionTask extends Task implements ITaskRequiresGrounded {
         }
 
         if (_explicitTargets == null && !mod.getClientBaritone().getBuilderProcess().isActive()) {
+            NativeBaritoneHelper.logProcessState(mod, "clear-region-before-native-cleararea");
             mod.getClientBaritone().getBuilderProcess().clearArea(_from, _to);
         }
         setDebugState((_explicitTargets == null ? "Baritone" : "Targeted")
@@ -143,6 +149,9 @@ public class ClearRegionTask extends Task implements ITaskRequiresGrounded {
     @Override
     protected void onStop(Belfegor mod, Task interruptTask) {
         mod.getClientBaritone().getBuilderProcess().onLostControl();
+        if (_explicitTargets == null) {
+            NativeBaritoneHelper.clearSelections(mod, "clear-region-stop");
+        }
         mod.getBehaviour().pop();
     }
 

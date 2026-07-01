@@ -28,7 +28,7 @@ Behind that small command surface is a task engine that can gather resources, mi
 | Built jar | [`releases/belfegor-1.21.4-beta1.jar`](releases/belfegor-1.21.4-beta1.jar) |
 | Runtime bundle | [`releases/belfegor-1.21.4-beta1-runtime.zip`](releases/belfegor-1.21.4-beta1-runtime.zip) |
 | Release notes | [`docs/RELEASE_v1.21.4-beta1.md`](docs/RELEASE_v1.21.4-beta1.md) |
-| Jar SHA256 | `1bba337acf14062f1d6ac29a9599f9cc6c5aa539510b97a91a2fc04767922baa` |
+| Jar SHA256 | `ad7f40e7093de0b50086bf7638e207467716c1690864018d635dd1283200e3ee` |
 | Runtime bundle SHA256 | `620cfccc69e8854c8da7c898cf23375a35579fd08494daea7b5cdeb0a7635c50` |
 | Mod id | `belfegor` |
 | Command prefix | `@` |
@@ -76,6 +76,8 @@ The current jar has been tested in the `1.21.4` MultiMC instance against the inv
 
 - command docs are now centralized and categorized; `@help`, the Commands UI, and the llama.cpp command catalogue share the same examples, categories, and expected input descriptions.
 - `@ui` now opens the Belfegor control panel through the same shared method as the `C` keybind, so command and key behavior stay aligned.
+- Belfegor commands are now intercepted at chat-screen submit time before Baritone can consume `@...` as native input; this fixes the profile where `@status` produced a Baritone unknown-command error.
+- `@baritone` exposes a controlled native Baritone bridge for diagnostics and construction testing. Verified locally: `@baritone proc`, `@baritone help sel`, and `@baritone sel clear` execute through Baritone's command manager and log `BARITONE-CMD`/`BARITONE-PROC`.
 - the Macros UI now has functional controls for creating, saving, reloading, running, pausing, stopping, duplicating, deleting, looping, adding, removing, and reordering macro steps.
 - the offline recipe registry rejects invalid empty recipes and resolves wood-family aliases contextually; for example `birch_wood` now plans with birch logs instead of generic/acacia logs.
 - `@craftaudit all 5` passed locally after the recipe-registry fix, with all tested wood-family recipes receiving the correct matching log family.

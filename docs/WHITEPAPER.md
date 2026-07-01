@@ -372,6 +372,15 @@ serializes a complete build rather than firing overlapping movement/build goals.
 7. validate all expected blocks;
 8. navigate to remembered room centers to prove reachability.
 
+Under the hood, construction now leans on native Baritone where it is strongest:
+
+- region clearing uses Baritone's builder `clearArea` process for rectangular areas;
+- generated floors/walls/roofs/modules are passed to Baritone's native builder process as an in-memory schematic;
+- active clear/build boxes are mirrored into Baritone's selection manager for visibility and diagnostics;
+- `@baritone proc`, `@baritone help sel`, `@baritone sel clear`, `@baritone surface`, `@baritone build`, and `@baritone litematica` provide a controlled native-command bridge for testing and recovery.
+
+Belfegor still owns the plan, memory, validation, staging chest logic, and repair loop. Baritone is used as the efficient executor for well-defined movement/build/clear operations, not as a second independent planner.
+
 The farm module is expected to create an infinite water source and hydrated crop layout before planting. The mob module is expected to be a roofed cobblestone chamber with remembered room center and a controlled entrance/exit. These are still being refined, but they are no longer represented as a one-off two-block campsite wall.
 
 Future base plans include better schematic import placement UI, storage walls, shulker stations, portal pads, bedrooms, furnace rooms, mine entrances, and stronger repair logic for interrupted builds.

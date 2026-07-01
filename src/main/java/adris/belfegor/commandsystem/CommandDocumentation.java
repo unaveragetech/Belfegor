@@ -44,6 +44,8 @@ public final class CommandDocumentation {
                     "@build base import \"C:\\Users\\you\\.minecraft\\schematics\\test\\camp.litematic\"",
                     "@build schematic import \"C:\\builds\\watchtower.litematic\" watchtower")),
             Map.entry("home", List.of("@home", "@home farmland", "@home shulker_vault")),
+            Map.entry("baritone", List.of("@baritone proc", "@baritone help sel", "@baritone sel clear",
+                    "@baritone surface", "@baritone forcecancel")),
             Map.entry("toolset", List.of("@toolset iron", "@toolset diamond")),
             Map.entry("store", List.of("@store diamond 3", "@store [diamond 3, gold_ingot 8]")),
             Map.entry("retrieve", List.of("@retrieve diamond 3")),
@@ -78,6 +80,7 @@ public final class CommandDocumentation {
             Map.entry("goto", "Navigation"),
             Map.entry("follow", "Navigation"),
             Map.entry("home", "Navigation"),
+            Map.entry("baritone", "Development"),
             Map.entry("locate_structure", "Navigation"),
             Map.entry("camp", "Base"),
             Map.entry("build", "Base"),
@@ -134,6 +137,7 @@ public final class CommandDocumentation {
             case "camp" -> "Sets the current position as the remembered home base and builds the core expandable campsite. Run this before @build when you want room expansions connected to a deliberate camp.";
             case "build" -> "Expands the remembered base with a connected room, runs @build full to build the complete modular base, imports external .litematic/.json schematics with @build base import \"file\", or runs @build validate/@build repair to inspect and fix incomplete remembered rooms. Imported schematics are copied into belfegor/schematics/imported, parsed into Belfegor's internal blueprint, assigned a staging chest, resource-counted, built, and remembered for later navigation/repair. Placement is footprint-aware to avoid overlapping rooms. Full mode builds core campsite, storage, workshop, hydrated crop farmland, roofed mob-farm room, repair validation, and route validation.";
             case "home" -> "Routes to the remembered home base or to a named room/module center created by @player or @build. Examples: @home, @home farmland, @home shulker_vault.";
+            case "baritone" -> "Controlled bridge to native Baritone diagnostics and area/build commands. Supported examples include @baritone proc, @baritone help sel, @baritone sel clear, @baritone surface, @baritone forcecancel, @baritone build <schematic> [x y z], and @baritone litematica. Belfegor's own construction tasks use native builder/selection APIs internally, while this command is for testing, recovery, and command reference.";
             case "toolset" -> "Crafts one pickaxe, axe, shovel, sword, and hoe at the requested material tier.";
             case "locate_structure" -> "Uses Minecraft structure location support to find a generated structure, then reports or navigates according to the command behavior.";
             case "coverwithsand" -> "Nether utility that covers dangerous lava using sand-style falling blocks.";

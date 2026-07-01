@@ -60,6 +60,8 @@ Expected behavior:
 The latest local test pass verified:
 
 - `@help ui`, `@status`, `@coords`, `@inventory`, and `@list` executed without command errors in the `1.21.4` test instance.
+- `@status` is intercepted at chat-screen submit time and no longer falls through to Baritone as an unknown `@status` command in the heavily modded profile.
+- `@baritone proc`, `@baritone help sel`, `@baritone sel clear`, and `@help baritone` were run in-game after rebuild/restart. The chat showed Belfegor responses and `belfegor_debug.log` recorded `BARITONE-CMD`/`BARITONE-PROC`.
 - `@ui` is registered and now calls the same shared screen-opening method used by the `C` keybind. Regression check: press `C`, close the menu, then run `@ui`; both should open the same Belfegor control panel without the generic screen-recovery chain closing it.
 - the Macros tab code now provides create/save/reload/run/pause/stop/duplicate/delete/loop/add/remove/reorder controls and compiles cleanly.
 - `@craftaudit all 5` passed after recipe-registry cleanup. The audit gave matching wood-family resources: acacia wood used acacia logs, birch wood used birch logs, dark oak wood used dark oak logs, oak wood used oak logs, and jungle wood used jungle logs.
@@ -101,6 +103,19 @@ Run this set after every UI/command change:
 | Macros tab | Open UI -> Macros | New/save/reload/run/pause/stop/duplicate/delete/loop/add/remove/reorder controls respond without closing the screen. |
 | Shulkers tab | Open UI -> Shulkers | Indexed carried/placed shulkers and slot-level contents appear if memory exists. |
 | Schematics tab | Open UI -> Schematics | Imported/internal schematic entries list command-ready build/validate actions. |
+
+## Native Baritone bridge tests
+
+Run these after changing construction/pathing integration:
+
+| Test | Command/action | Expected result |
+|---|---|---|
+| Process diagnostics | `@baritone proc` | Baritone prints process state and `belfegor_debug.log` records `BARITONE-PROC`. |
+| Help passthrough | `@baritone help sel` | Native Baritone selection help appears in chat/log output. |
+| Selection clear | `@baritone sel clear` | Current native Baritone selections are cleared without stopping Belfegor tasks. |
+| Surface recovery | Put bot underground or underwater with blocks, then `@baritone surface` | Baritone starts native surface/top recovery. Use `@stop`/`@baritone forcecancel` if needed. |
+| Build-region selection | Run a small `@build full 8 here` or room build | Debug log records `BARITONE-SEL select reason=build-region...` and `BARITONE-PROC reason=build-region-before-native-builder...`. |
+| Clear-region selection | Run a base build that clears terrain | Debug log records `BARITONE-SEL select reason=clear-region` and `BARITONE-PROC reason=clear-region-before-native-cleararea`. |
 
 ## Log checklist
 

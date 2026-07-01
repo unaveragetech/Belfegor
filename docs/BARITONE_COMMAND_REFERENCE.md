@@ -8,7 +8,7 @@ Observed runtime:
 - Baritone: `1.11.1-2-ga0f100f4`
 - Prefix: `#`, for example `#help`, `#proc`, `#sel cleararea`
 
-Belfegor should prefer Baritone Java APIs for repeatable automation, but these chat commands are useful for live research, manual recovery, and mapping future base-builder features onto native Baritone capabilities.
+Belfegor should prefer Baritone Java APIs for repeatable automation, but these chat commands are useful for live research, manual recovery, and mapping future base-builder features onto native Baritone capabilities. Belfegor exposes a controlled bridge as `@baritone ...`, which runs a safe subset through Baritone's command manager without requiring the user to type raw `#` commands.
 
 ## Full command catalogue
 
@@ -126,7 +126,9 @@ Live help notes:
 
 Belfegor now saves an internal on-disk blueprint for the core campsite at `.minecraft/belfegor/schematics/base_core_<dimension>_<x>_<y>_<z>.belfegor_schematic.json`. Validation loads that file and checks every expected block against the world before marking the core complete.
 
-Current code still uses generated in-memory Baritone schematics through `BuildRegionSchematicTask` for execution. The saved blueprint is the validation/source-of-truth layer; Baritone's `#build` and `#litematica` command families are the native execution/interoperability layer for future imported schematics.
+Current code uses generated in-memory Baritone schematics through `BuildRegionSchematicTask` for execution. The saved blueprint is the validation/source-of-truth layer; Baritone's `#build` and `#litematica` command families are exposed for diagnostics/interoperability through `@baritone build ...` and `@baritone litematica`.
+
+`BuildRegionSchematicTask` and `ClearRegionTask` now also set native Baritone selections for active regions. This makes construction work visible/debuggable with Baritone's selection tools while the actual repeatable operation remains owned by Belfegor's task system.
 
 ## Belfegor base-building policy
 
@@ -142,4 +144,4 @@ Belfegor's campsite system should not place one block, walk away, then come back
 8. For farmland, dig/fill the 2x2 water source first, then till only hydrated soil, then plant.
 9. Save every module center, hall, direction, dimensions, and status in `BaseMemory` and `LocationMemory`.
 
-For test recovery, use `#proc` to inspect active Baritone processes and `#forcecancel` if a stale process survives after Belfegor has stopped.
+For test recovery, use `@baritone proc` to inspect active Baritone processes and `@baritone forcecancel` if a stale process survives after Belfegor has stopped.

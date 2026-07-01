@@ -45,6 +45,7 @@ public class BelfegorCommands {
                 new CampCommand(),
                 new BuildCommand(),
                 new HomeCommand(),
+                new BaritoneCommand(),
                 new ToolSetCommand(),
                 new StoreCommand(),
                 new RetrieveCommand(),
