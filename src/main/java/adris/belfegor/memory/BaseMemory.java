@@ -298,6 +298,81 @@ public class BaseMemory {
         return count;
     }
 
+    public boolean footprintOverlaps(BaseRecord base, String ignoreName,
+                                     BlockPos anchor, int width, int depth,
+                                     int margin) {
+        if (base == null || anchor == null) return false;
+        String ignored = normalize(ignoreName);
+        int ax1 = anchor.getX() - Math.max(0, margin);
+        int az1 = anchor.getZ() - Math.max(0, margin);
+        int ax2 = anchor.getX() + Math.max(1, width) - 1 + Math.max(0, margin);
+        int az2 = anchor.getZ() + Math.max(1, depth) - 1 + Math.max(0, margin);
+        for (BaseModule module : base.modules) {
+            if (module == null) continue;
+            if (!ignored.isBlank() && normalize(module.name).equals(ignored)) continue;
+            if (normalize(module.type).equals("hall") || normalize(module.type).equals("access")) continue;
+            int bx1 = module.x - Math.max(0, margin);
+            int bz1 = module.z - Math.max(0, margin);
+            int bx2 = module.x + Math.max(1, module.width) - 1 + Math.max(0, margin);
+            int bz2 = module.z + Math.max(1, module.depth) - 1 + Math.max(0, margin);
+            if (ax1 <= bx2 && ax2 >= bx1 && az1 <= bz2 && az2 >= bz1) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public boolean hasModuleNamed(BaseRecord base, String name) {
+        if (base == null || name == null || name.isBlank()) return false;
+        String query = normalize(name);
+        return base.modules.stream().anyMatch(module -> normalize(module.name).equals(query));
+    }
+
+    public boolean moduleComplete(BaseModule module) {
+        if (module == null) return false;
+        String status = normalize(module.status);
+        return status.equals("complete")
+                || status.endsWith("_complete")
+                || status.equals("reachable");
+    }
+
+    public boolean isProtectedFixturePosition(BlockPos pos, String dimension) {
+        if (pos == null) return false;
+        for (BaseRecord base : _bases.values()) {
+            if (base == null) continue;
+            if (dimension != null && !dimension.isBlank() && !dimension.equals(base.dimension)) continue;
+            for (BaseModule module : base.modules) {
+                if (module == null) continue;
+                if (!isProtectedFixture(module)) continue;
+                if (module.x == pos.getX() && module.y == pos.getY() && module.z == pos.getZ()) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    public Optional<BaseModule> findProtectedFixture(BlockPos pos, String dimension) {
+        if (pos == null) return Optional.empty();
+        return _bases.values().stream()
+                .filter(base -> dimension == null || dimension.isBlank() || dimension.equals(base.dimension))
+                .flatMap(base -> base.modules.stream())
+                .filter(this::isProtectedFixture)
+                .filter(module -> module.x == pos.getX() && module.y == pos.getY() && module.z == pos.getZ())
+                .findFirst();
+    }
+
+    private boolean isProtectedFixture(BaseModule module) {
+        String name = normalize(module.name);
+        String type = normalize(module.type);
+        return name.equals("construction_staging")
+                || name.equals("storage_wing")
+                || name.equals("crafting_workshop")
+                || name.equals("smelting_workshop")
+                || name.endsWith("_fixture")
+                || type.equals("fixture");
+    }
+
     public void markBaseStatus(BlockPos center, String dimension, String status) {
         rememberBase(center, dimension, 4, 3, 5, status);
     }
@@ -306,6 +381,40 @@ public class BaseMemory {
         return _bases.values().stream()
                 .filter(base -> dimension == null || dimension.isBlank() || dimension.equals(base.dimension))
                 .min(Comparator.comparingDouble(base -> base.distanceSq(pos)));
+    }
+
+    public int forgetAbandonedBasesFarFrom(BlockPos center, String dimension, double minimumDistance) {
+        if (center == null) return 0;
+        double minimumDistanceSq = Math.max(0, minimumDistance) * Math.max(0, minimumDistance);
+        int before = _bases.size();
+        _bases.entrySet().removeIf(entry -> {
+            BaseRecord base = entry.getValue();
+            if (base == null) return true;
+            if (dimension != null && !dimension.isBlank() && !dimension.equals(base.dimension)) return false;
+            if (base.center().equals(center)) return false;
+            if (base.distanceSq(center) < minimumDistanceSq) return false;
+            return isAbandoned(base);
+        });
+        int removed = before - _bases.size();
+        if (removed > 0) _dirty = true;
+        return removed;
+    }
+
+    private boolean isAbandoned(BaseRecord base) {
+        String status = normalize(base.status);
+        if (status.equals("complete")
+                || status.equals("full_base_complete")
+                || status.equals("reachable")
+                || status.endsWith("_complete")) {
+            return false;
+        }
+        boolean hasCompletedModule = base.modules.stream().anyMatch(this::moduleComplete);
+        if (hasCompletedModule) return false;
+        return status.equals("planned")
+                || status.equals("started")
+                || status.equals("full_base_started")
+                || status.startsWith("full_base_")
+                || status.endsWith("_started");
     }
 
     public List<BaseRecord> getAllBases() {

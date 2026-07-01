@@ -96,6 +96,13 @@ public abstract class ResourceTask extends Task implements ITaskCanForce {
 
     @Override
     protected Task onTick(Belfegor mod) {
+        if (_overflowTask != null
+                && !_overflowTask.stopped()
+                && !_overflowTask.isFinished(mod)) {
+            setDebugState("Continuing active overflow transaction");
+            return _overflowTask;
+        }
+
         // If we have an item in an INACCESSIBLE inventory slot
         if (!(thisOrChildSatisfies(task -> task instanceof ITaskUsesCraftingGrid)) || _ensureFreeCraftingGridTask.isActive()) {
             for (ItemTarget target : _itemTargets) {

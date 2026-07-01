@@ -135,6 +135,9 @@ public class MLGBucketFallChain extends SingleTaskChain implements ITaskOverride
         if (!mod.getModSettings().shouldAutoMLGBucket()) {
             return false;
         }
+        if (!mod.getBehaviour().shouldAutoMLG()) {
+            return false;
+        }
         if (mod.getPlayer() == null) return false;
         if (mod.getPlayer().isSwimming() || mod.getPlayer().isTouchingWater() || mod.getPlayer().isOnGround() || mod.getPlayer().isClimbing()) {
             // We're grounded.

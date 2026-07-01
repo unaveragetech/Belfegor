@@ -167,7 +167,7 @@ public class PlayerExplorationTask extends Task {
         int wallHeight = 4;
         int clearance = 5;
         int inner = Math.max(3, radius - 2);
-        int farmSize = Math.max(4, Math.min(9, radius - 2));
+        int farmSize = Math.max(5, Math.min(9, radius + 1));
         int mobSize = Math.max(7, Math.min(13, radius));
         BlockPos farmOrigin = _homeBase.add(-radius + 2, -1, radius - farmSize - 1);
         BlockPos mobOrigin = _homeBase.add(-radius + 2, 0, -radius + 2);
@@ -187,7 +187,10 @@ public class PlayerExplorationTask extends Task {
                 "chest_and_shulker_anchor;player_mode_blueprint");
         LocationMemory.getInstance().remember("home_room_farm",
                 farmOrigin.getX() + farmSize / 2, farmOrigin.getY(), farmOrigin.getZ() + farmSize / 2,
-                dim, "crop_plot_center;player_mode_blueprint");
+                dim, "crop_plot_center;hydrated_by_2x2_infinite_source;player_mode_blueprint");
+        LocationMemory.getInstance().remember("home_room_farm_water",
+                farmOrigin.getX() + farmSize / 2, farmOrigin.getY(), farmOrigin.getZ() + farmSize / 2,
+                dim, "2x2_infinite_water_source;hydration_center;player_mode_blueprint");
         LocationMemory.getInstance().remember("home_room_mob_farm",
                 mobCenter.getX(), mobCenter.getY(), mobCenter.getZ(), dim,
                 "roofed_dark_room;four_high_walls;two_wide_entrance;player_mode_blueprint");
@@ -217,7 +220,7 @@ public class PlayerExplorationTask extends Task {
                 "chest and shulker staging area");
         memory.rememberModule(_homeBase, dim, "crop_farm", "farm",
                 farmOrigin, farmSize, farmSize, 1, "planned",
-                "expandable wheat crop plot");
+                "hydrated wheat plot with centered 2x2 infinite water source");
         memory.rememberModule(_homeBase, dim, "mob_farm_chamber", "mob_farm",
                 mobOrigin, mobSize, mobSize, wallHeight + 1, "planned",
                 "large cobblestone roofed chamber with four-block walls and a two-wide entrance");

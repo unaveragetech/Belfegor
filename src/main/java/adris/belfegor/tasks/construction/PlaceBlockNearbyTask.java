@@ -149,7 +149,7 @@ public class PlaceBlockNearbyTask extends Task {
         }
 
         // Try to place at a particular spot.
-        if (_tryPlace == null || !WorldHelper.canReach(mod, _tryPlace)) {
+        if (_tryPlace == null || !isGoodNearbyPlacementCandidate(mod, _tryPlace) || !WorldHelper.canReach(mod, _tryPlace)) {
             _tryPlace = locateClosePlacePos(mod);
         }
         if (_tryPlace != null) {
@@ -193,7 +193,13 @@ public class PlaceBlockNearbyTask extends Task {
     }
 
     public BlockPos getPlaced() {
-        return _justPlaced;
+        if (_mod == null || _justPlaced == null) {
+            return null;
+        }
+        if (ArrayUtils.contains(_toPlace, _mod.getWorld().getBlockState(_justPlaced).getBlock())) {
+            return _justPlaced;
+        }
+        return null;
     }
 
     private BlockPos getCurrentlyLookingBlockPlace(Belfegor mod) {
@@ -209,7 +215,7 @@ public class PlaceBlockNearbyTask extends Task {
                     return null;
                 }
                 //Debug.logMessage("TEMP: B (actual): " + placePos);
-                if (WorldHelper.canPlace(mod, placePos)) {
+                if (WorldHelper.canPlace(mod, placePos) && isGoodNearbyPlacementCandidate(mod, placePos)) {
                     return placePos;
                 }
             }
@@ -261,11 +267,16 @@ public class PlaceBlockNearbyTask extends Task {
         int range = 7;
         BlockPos best = null;
         double smallestScore = Double.POSITIVE_INFINITY;
+        BlockPos playerFeet = mod.getPlayer().getBlockPos();
+        BlockPos playerHead = playerFeet.up();
         BlockPos start = mod.getPlayer().getBlockPos().add(-range, -range, -range);
         BlockPos end = mod.getPlayer().getBlockPos().add(range, range, range);
         for (BlockPos blockPos : WorldHelper.scanRegion(mod, start, end)) {
             boolean solid = WorldHelper.isSolid(mod, blockPos);
             boolean inside = WorldHelper.isInsidePlayer(mod, blockPos);
+            if (inside || blockPos.equals(playerFeet) || blockPos.equals(playerHead)) {
+                continue;
+            }
             // We can't break this block.
             if (solid && !WorldHelper.canBreak(mod, blockPos)) {
                 continue;
@@ -275,13 +286,14 @@ public class PlaceBlockNearbyTask extends Task {
                 continue;
             }
             // We can't place here.
-            if (!WorldHelper.canReach(mod, blockPos) || !WorldHelper.canPlace(mod, blockPos)) {
+            if (!WorldHelper.canReach(mod, blockPos) || !WorldHelper.canPlace(mod, blockPos)
+                    || !isGoodNearbyPlacementCandidate(mod, blockPos)) {
                 continue;
             }
             boolean hasBelow = WorldHelper.isSolid(mod, blockPos.down());
             double distSq = blockPos.getSquaredDistance(mod.getPlayer().getPos());
 
-            double score = distSq + (solid ? 4 : 0) + (hasBelow ? 0 : 10) + (inside ? 3 : 0);
+            double score = distSq + (solid ? 4 : 0) + (hasBelow ? 0 : 10);
 
             if (score < smallestScore) {
                 best = blockPos;
@@ -290,5 +302,15 @@ public class PlaceBlockNearbyTask extends Task {
         }
 
         return best;
+    }
+
+    private boolean isGoodNearbyPlacementCandidate(Belfegor mod, BlockPos blockPos) {
+        if (mod.getWorld() == null || mod.getPlayer() == null || blockPos == null) return false;
+        if (Math.abs(blockPos.getY() - mod.getPlayer().getBlockPos().getY()) > 4) return false;
+        var state = mod.getWorld().getBlockState(blockPos);
+        if (!state.getFluidState().isEmpty()) return false;
+        if (!mod.getWorld().getBlockState(blockPos.down()).getFluidState().isEmpty()) return false;
+        if (WorldHelper.isInsidePlayer(mod, blockPos)) return false;
+        return true;
     }
 }

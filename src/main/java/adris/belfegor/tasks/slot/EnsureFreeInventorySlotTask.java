@@ -13,7 +13,16 @@ import java.util.Optional;
 
 public class EnsureFreeInventorySlotTask extends Task {
 
+    private final boolean _allowOverflow;
     private OverflowInventoryTask _overflowTask;
+
+    public EnsureFreeInventorySlotTask() {
+        this(true);
+    }
+
+    public EnsureFreeInventorySlotTask(boolean allowOverflow) {
+        _allowOverflow = allowOverflow;
+    }
 
     @Override
     protected void onStart(Belfegor mod) {
@@ -23,7 +32,7 @@ public class EnsureFreeInventorySlotTask extends Task {
     @Override
     protected Task onTick(Belfegor mod) {
         ItemStack cursorStack = StorageHelper.getItemStackInCursorSlot();
-        if (cursorStack.isEmpty() && OverflowInventoryTask.freeSlots(mod) <= 0) {
+        if (_allowOverflow && cursorStack.isEmpty() && OverflowInventoryTask.freeSlots(mod) <= 0) {
             if (_overflowTask == null || _overflowTask.stopped() || _overflowTask.isFinished(mod)) {
                 _overflowTask = new OverflowInventoryTask(1);
             }
@@ -55,11 +64,12 @@ public class EnsureFreeInventorySlotTask extends Task {
 
     @Override
     protected boolean isEqual(Task obj) {
-        return obj instanceof EnsureFreeInventorySlotTask;
+        return obj instanceof EnsureFreeInventorySlotTask task
+                && task._allowOverflow == _allowOverflow;
     }
 
     @Override
     protected String toDebugString() {
-        return "Ensuring inventory is free";
+        return "Ensuring inventory is free" + (_allowOverflow ? "" : " without recursive overflow");
     }
 }

@@ -564,23 +564,33 @@ public class Settings implements IFailableConfigFile {
     /**
      * Minimum seconds between automatic player-mode LLM requests.
      */
-    private int llmAdvisorCooldownSeconds = 90;
+    private int llmAdvisorCooldownSeconds = 300;
 
     /**
      * Maximum seconds to wait for llama.cpp before falling back to normal logic.
      */
-    private int llmAdvisorTimeoutSeconds = 45;
+    private int llmAdvisorTimeoutSeconds = 20;
 
     /**
      * Requested context window for the model prompt. llama.cpp may clamp/ignore this
      * depending on model/runtime support.
      */
-    private int llmContextSize = 8192;
+    private int llmContextSize = 4096;
 
     /**
      * Maximum generated tokens for the advisor response.
      */
-    private int llmMaxTokens = 384;
+    private int llmMaxTokens = 160;
+
+    /**
+     * Maximum CPU threads llama.cpp may use. Keep low so Minecraft remains responsive.
+     */
+    private int llmMaxThreads = 2;
+
+    /**
+     * llama.cpp prompt batch size. Smaller values reduce CPU spikes.
+     */
+    private int llmBatchSize = 128;
 
     // ============ LOGGING & DEBUG ============
 
@@ -907,6 +917,14 @@ public class Settings implements IFailableConfigFile {
 
     public int getLlmMaxTokens() {
         return Math.max(64, llmMaxTokens);
+    }
+
+    public int getLlmMaxThreads() {
+        return Math.max(1, Math.min(4, llmMaxThreads));
+    }
+
+    public int getLlmBatchSize() {
+        return Math.max(32, Math.min(512, llmBatchSize));
     }
 
     @Override

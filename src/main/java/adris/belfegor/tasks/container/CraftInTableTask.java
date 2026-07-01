@@ -22,6 +22,8 @@ import adris.belfegor.tasksystem.CraftingPathRegistry;
 import net.minecraft.block.Blocks;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
+import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gui.screen.ingame.CraftingScreen;
 import net.minecraft.screen.CraftingScreenHandler;
 import net.minecraft.screen.slot.SlotActionType;
 import net.minecraft.util.math.BlockPos;
@@ -390,7 +392,8 @@ class DoCraftInTableTask extends DoStuffInContainerTask implements ITaskUsesCraf
      */
     @Override
     protected boolean isContainerOpen(Belfegor mod) {
-        return mod.getPlayer().currentScreenHandler instanceof CraftingScreenHandler;
+        return MinecraftClient.getInstance().currentScreen instanceof CraftingScreen
+                || mod.getPlayer().currentScreenHandler instanceof CraftingScreenHandler;
     }
 
     /**

@@ -23,6 +23,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 
 /**
  * Builds a remembered room expansion off the persistent @player home base.
@@ -44,8 +45,8 @@ public class BuildBaseExpansionTask extends Task {
         EMPTY
     }
 
-    private static final Block[] WALL_BLOCKS = {
-            Blocks.COBBLESTONE, Blocks.COBBLED_DEEPSLATE, Blocks.DIRT, Blocks.NETHERRACK
+    private static final Block[] STRUCTURE_BLOCKS = {
+            Blocks.COBBLESTONE
     };
     private static final Item[] HOES = {
             Items.WOODEN_HOE, Items.STONE_HOE, Items.IRON_HOE,
@@ -53,6 +54,8 @@ public class BuildBaseExpansionTask extends Task {
     };
     private static final int WALL_HEIGHT = 4;
     private static final int HALL_WIDTH = 2;
+    private static final int MIN_FARM_WATER_BUCKETS = 2;
+    private static final int MIN_FARM_HOES = 3;
 
     private enum Phase {
         PLAN,
@@ -81,6 +84,7 @@ public class BuildBaseExpansionTask extends Task {
     private Direction _direction;
     private int _hallLength;
     private int _roomSize;
+    private int _outwardStep;
     private BlockPos _roomAnchor;
     private BlockPos _roomCenter;
     private List<BlockPos> _clearTargets = List.of();
@@ -104,6 +108,8 @@ public class BuildBaseExpansionTask extends Task {
         _activeTask = null;
         _index = 0;
         mod.getBehaviour().push();
+        mod.getBehaviour().setAutoMLG(false);
+        mod.getBehaviour().setAllowDiagonalAscend(false);
     }
 
     @Override
@@ -111,6 +117,7 @@ public class BuildBaseExpansionTask extends Task {
         switch (_phase) {
             case PLAN -> {
                 plan(mod);
+                protectExistingBaseModules(mod);
                 remember("planned");
                 next(Phase.GO_HOME);
                 return null;
@@ -134,21 +141,21 @@ public class BuildBaseExpansionTask extends Task {
             case FLOOR -> {
                 Task floor = _type == RoomType.FARMLAND
                         ? runBuildRegion(mod, _floorTargets, "dirt farm floor", false, Blocks.DIRT)
-                        : runBuildRegion(mod, _floorTargets, "floor", true, WALL_BLOCKS);
+                        : runBuildRegion(mod, _floorTargets, "floor", false, STRUCTURE_BLOCKS);
                 if (floor != null) return floor;
                 remember("floor_complete");
                 next(Phase.WALLS);
                 return null;
             }
             case WALLS -> {
-                Task walls = runBuildRegion(mod, _wallTargets, "walls", true, WALL_BLOCKS);
+                Task walls = runBuildRegion(mod, _wallTargets, "walls", false, STRUCTURE_BLOCKS);
                 if (walls != null) return walls;
                 remember("walls_complete");
                 next(_roofTargets.isEmpty() ? Phase.FIXTURES : Phase.ROOF);
                 return null;
             }
             case ROOF -> {
-                Task roof = runBuildRegion(mod, _roofTargets, "roof", true, WALL_BLOCKS);
+                Task roof = runBuildRegion(mod, _roofTargets, "roof", false, STRUCTURE_BLOCKS);
                 if (roof != null) return roof;
                 remember("roof_complete");
                 next(Phase.FIXTURES);
@@ -201,23 +208,13 @@ public class BuildBaseExpansionTask extends Task {
         mod.getModSettings().setHomeBasePosition(_baseCenter);
 
         _roomName = uniqueRoomName(_base, _requestedName, _type);
-        _direction = chooseDirection(_base);
-        _hallLength = 3 + Math.min(2, BaseMemory.getInstance().countModulesOfType(_base, _type.name().toLowerCase(Locale.ROOT)) % 3);
         _roomSize = switch (_type) {
             case FARMLAND -> 9;
             case MOBFARM -> 11;
             case STORAGE, WORKSHOP -> 7;
             case EMPTY -> 7;
         };
-
-        int baseRadius = Math.max(8, _base.radius);
-        _roomCenter = switch (_direction) {
-            case NORTH -> _baseCenter.add(0, 0, -baseRadius - _hallLength - (_roomSize / 2) - 1);
-            case SOUTH -> _baseCenter.add(0, 0, baseRadius + _hallLength + (_roomSize / 2) + 1);
-            case WEST -> _baseCenter.add(-baseRadius - _hallLength - (_roomSize / 2) - 1, 0, 0);
-            default -> _baseCenter.add(baseRadius + _hallLength + (_roomSize / 2) + 1, 0, 0);
-        };
-        _roomAnchor = _roomCenter.add(-_roomSize / 2, 0, -_roomSize / 2);
+        choosePlacement();
 
         _clearTargets = buildClearTargets();
         _floorTargets = buildFloorTargets();
@@ -228,14 +225,112 @@ public class BuildBaseExpansionTask extends Task {
         _clearRegions = buildClearRegions();
     }
 
+    private void protectExistingBaseModules(Belfegor mod) {
+        mod.getBehaviour().avoidBlockBreaking(pos -> {
+            if (pos == null || _baseCenter == null || _dimension == null) return false;
+            Optional<BaseMemory.BaseRecord> liveBase = BaseMemory.getInstance().nearestBase(_baseCenter, _dimension);
+            if (liveBase.isEmpty()) return false;
+            for (BaseMemory.BaseModule module : liveBase.get().modules) {
+                if (module == null) continue;
+                String moduleName = normalize(module.name);
+                if (moduleName.equals(normalize(_roomName))
+                        || moduleName.equals(normalize(_roomName + "_hall"))) {
+                    continue;
+                }
+                if (!isConstructedEnoughToProtect(module)) continue;
+                if (insideModule(module, pos, 1)) {
+                    return true;
+                }
+            }
+            return false;
+        });
+    }
+
+    private boolean isConstructedEnoughToProtect(BaseMemory.BaseModule module) {
+        String status = normalize(module.status);
+        return status.equals("complete")
+                || status.endsWith("_complete")
+                || status.equals("reachable")
+                || status.equals("ready")
+                || status.startsWith("ready_")
+                || status.equals("tilled")
+                || status.equals("water_complete");
+    }
+
+    private boolean insideModule(BaseMemory.BaseModule module, BlockPos pos, int margin) {
+        int m = Math.max(0, margin);
+        int minX = module.x - m;
+        int minY = module.y - m;
+        int minZ = module.z - m;
+        int maxX = module.x + Math.max(1, module.width) - 1 + m;
+        int maxY = module.y + Math.max(1, module.height) - 1 + m;
+        int maxZ = module.z + Math.max(1, module.depth) - 1 + m;
+        return pos.getX() >= minX && pos.getX() <= maxX
+                && pos.getY() >= minY && pos.getY() <= maxY
+                && pos.getZ() >= minZ && pos.getZ() <= maxZ;
+    }
+
     private Task runClearRegions(Belfegor mod) {
-        while (_index < _clearRegions.size() && _clearRegions.get(_index).isClear(mod)) {
+        while (_index < _clearTargets.size() && clearTargetDone(mod, _clearTargets.get(_index))) {
             _index++;
         }
-        if (_index >= _clearRegions.size()) return null;
-        BlockRegion region = _clearRegions.get(_index);
-        setDebugState("Baritone clearing " + _roomName + " region " + (_index + 1) + "/" + _clearRegions.size());
-        return cache(mod, new ClearRegionTask(region.min(), region.max()));
+        if (_index >= _clearTargets.size()) return null;
+        ArrayList<BlockPos> batch = new ArrayList<>();
+        for (int i = _index; i < _clearTargets.size() && batch.size() < 96; i++) {
+            BlockPos target = _clearTargets.get(i);
+            if (!clearTargetDone(mod, target)) {
+                batch.add(target);
+            }
+        }
+        if (batch.isEmpty()) return null;
+        setDebugState("Clearing planned air for " + _roomName
+                + " target " + (_index + 1) + "/" + _clearTargets.size()
+                + " batch=" + batch.size());
+        return cache(mod, new ClearRegionTask(batch));
+    }
+
+    private boolean clearTargetDone(Belfegor mod, BlockPos target) {
+        if (target == null || mod.getWorld() == null) return true;
+        if (BaseMemory.getInstance().isProtectedFixturePosition(target, WorldHelper.getCurrentDimension().name())) {
+            return true;
+        }
+        Block block = mod.getWorld().getBlockState(target).getBlock();
+        if (block == Blocks.AIR || block == Blocks.CAVE_AIR || block == Blocks.VOID_AIR) return true;
+        if (isProtectedExistingModuleBlock(target)) return true;
+        if (isCorrectCurrentBuildBlock(target, block)) return true;
+        return false;
+    }
+
+    private boolean isProtectedExistingModuleBlock(BlockPos pos) {
+        if (_base == null || pos == null) return false;
+        for (BaseMemory.BaseModule module : _base.modules) {
+            if (module == null) continue;
+            String moduleName = normalize(module.name);
+            if (moduleName.equals(normalize(_roomName))
+                    || moduleName.equals(normalize(_roomName + "_hall"))) {
+                continue;
+            }
+            if (!isConstructedEnoughToProtect(module)) continue;
+            if (insideModule(module, pos, 1)) return true;
+        }
+        return false;
+    }
+
+    private boolean isCorrectCurrentBuildBlock(BlockPos pos, Block block) {
+        if (pos == null || block == null) return false;
+        if (_wallTargets.contains(pos) && block == Blocks.COBBLESTONE) return true;
+        if (_roofTargets.contains(pos) && block == Blocks.COBBLESTONE) return true;
+        if (_floorTargets.contains(pos)) {
+            if (_type == RoomType.FARMLAND) {
+                return block == Blocks.DIRT
+                        || block == Blocks.GRASS_BLOCK
+                        || block == Blocks.FARMLAND
+                        || block == Blocks.WATER;
+            }
+            return block == Blocks.COBBLESTONE;
+        }
+        if (_waterTargets.contains(pos) && block == Blocks.WATER) return true;
+        return false;
     }
 
     private Task runBuildRegion(Belfegor mod, List<BlockPos> targets, String label,
@@ -249,10 +344,14 @@ public class BuildBaseExpansionTask extends Task {
             setDebugState("Collecting materials for " + _roomName + " " + label);
             return new GetBuildingMaterialsTask(Math.min(Math.max(needed, 32), 160));
         }
-        if (needed > 0 && !useThrowaways && mod.getItemStorage().getItemCount(blockItems(desired)) < Math.min(needed, 64)) {
-            if (desired.length == 1 && desired[0] == Blocks.DIRT) {
-                Task dirt = TaskCatalogue.getItemTask("dirt", Math.min(Math.max(needed, 32), 64));
-                if (dirt != null) return dirt;
+        if (needed > 0 && !useThrowaways
+                && mod.getItemStorage().getItemCountInventoryOnly(blockItems(desired)) < Math.min(needed, 24)) {
+            Task materials = materialTaskFor(desired, Math.min(Math.max(needed, 32), 64));
+            if (materials != null) {
+                setDebugState("Collecting carried exact materials for " + _roomName + " " + label
+                        + " carried=" + mod.getItemStorage().getItemCountInventoryOnly(blockItems(desired))
+                        + " needed=" + needed);
+                return materials;
             }
         }
         if (needed <= 0) return null;
@@ -268,7 +367,7 @@ public class BuildBaseExpansionTask extends Task {
                 needed++;
             }
         }
-        if (needed > 0 && mod.getItemStorage().getItemCount(Items.DIRT) < Math.min(needed, 64)) {
+        if (needed > 0 && mod.getItemStorage().getItemCountInventoryOnly(Items.DIRT) < Math.min(needed, 24)) {
             Task dirt = TaskCatalogue.getItemTask("dirt", Math.min(Math.max(needed, 32), 64));
             if (dirt != null) return dirt;
         }
@@ -325,23 +424,50 @@ public class BuildBaseExpansionTask extends Task {
     }
 
     private Task placeFixture(Belfegor mod, BlockPos target, Item item) {
+        BlockPos stand = fixtureStandPosition(mod, target);
+        if (stand != null && mod.getPlayer() != null
+                && stand.getSquaredDistance(mod.getPlayer().getBlockPos()) > 4) {
+            return cache(mod, new GetToBlockTask(stand));
+        }
         if (!mod.getWorld().getBlockState(target).isAir()) {
             return cache(mod, new DestroyBlockTask(target));
         }
         return new InteractWithBlockTask(new ItemTarget(item, 1), Direction.UP, target.down(), true);
     }
 
+    private BlockPos fixtureStandPosition(Belfegor mod, BlockPos target) {
+        Direction[] options = {Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST};
+        for (Direction option : options) {
+            BlockPos stand = target.offset(option);
+            if (WorldHelper.isSolid(mod, stand.down())
+                    && mod.getWorld().getBlockState(stand).isAir()
+                    && mod.getWorld().getBlockState(stand.up()).isAir()) {
+                return stand;
+            }
+        }
+        return null;
+    }
+
     private Task runFarmWater(Belfegor mod) {
         for (BlockPos water : _waterTargets) {
             if (mod.getWorld().getBlockState(water).getBlock() == Blocks.WATER) continue;
+            if (!WorldHelper.isSolid(mod, water.down())) {
+                setDebugState("Building solid basin floor under farm water source "
+                        + (_waterTargets.indexOf(water) + 1) + "/" + _waterTargets.size());
+                return cache(mod, new PlaceBlockTask(water.down(), new Block[]{Blocks.COBBLESTONE}, false, true));
+            }
             if (mod.getWorld().getBlockState(water).getBlock() != Blocks.AIR) {
-                setDebugState("Digging hydration hole");
+                setDebugState("Digging farm water/infinite-source hole " + water.toShortString());
                 return cache(mod, new DestroyBlockTask(water));
             }
-            if (!mod.getItemStorage().hasItem(Items.WATER_BUCKET)) {
-                return new CollectBucketLiquidTask.CollectWaterBucketTask(1);
+            int bucketCount = mod.getItemStorage().getItemCount(Items.WATER_BUCKET);
+            if (bucketCount < MIN_FARM_WATER_BUCKETS) {
+                setDebugState("Preparing water buckets for farm source "
+                        + bucketCount + "/" + MIN_FARM_WATER_BUCKETS);
+                return new CollectBucketLiquidTask.CollectWaterBucketTask(MIN_FARM_WATER_BUCKETS);
             }
-            setDebugState("Placing farmland water source");
+            setDebugState("Filling farm water/infinite-source hole "
+                    + (_waterTargets.indexOf(water) + 1) + "/" + _waterTargets.size());
             return new InteractWithBlockTask(new ItemTarget(Items.WATER_BUCKET, 1),
                     Direction.UP, water.down(), true);
         }
@@ -349,8 +475,9 @@ public class BuildBaseExpansionTask extends Task {
     }
 
     private Task runFarmTill(Belfegor mod) {
-        if (!mod.getItemStorage().hasItem(HOES)) {
-            Task hoe = TaskCatalogue.getItemTask("wooden_hoe", 1);
+        int hoeCount = mod.getItemStorage().getItemCount(HOES);
+        if (hoeCount < MIN_FARM_HOES) {
+            Task hoe = TaskCatalogue.getItemTask("wooden_hoe", MIN_FARM_HOES);
             if (hoe != null) return hoe;
         }
         while (_index < _farmTargets.size()
@@ -363,6 +490,12 @@ public class BuildBaseExpansionTask extends Task {
             _index++;
             return null;
         }
+        if (!isHydratedByPlannedWater(soil)) {
+            _index++;
+            return null;
+        }
+        Task approach = getNearFarmSoil(mod, soil);
+        if (approach != null) return approach;
         setDebugState("Tilling hydrated farmland " + (_index + 1) + "/" + _farmTargets.size());
         return new InteractWithBlockTask(new ItemTarget(HOES, 1), Direction.UP, soil, true);
     }
@@ -383,8 +516,49 @@ public class BuildBaseExpansionTask extends Task {
             _index++;
             return null;
         }
+        Task approach = getNearFarmSoil(mod, soil);
+        if (approach != null) return approach;
         setDebugState("Planting farmland " + (_index + 1) + "/" + _farmTargets.size());
         return new InteractWithBlockTask(new ItemTarget(Items.WHEAT_SEEDS, 1), Direction.UP, soil, true);
+    }
+
+    private Task getNearFarmSoil(Belfegor mod, BlockPos soil) {
+        if (mod.getPlayer() == null) return null;
+        BlockPos stand = farmStandPosition(mod, soil);
+        if (stand != null && stand.getSquaredDistance(mod.getPlayer().getBlockPos()) > 4) {
+            setDebugState("Moving within reach of farm tile " + (_index + 1) + "/" + _farmTargets.size());
+            return cache(mod, new GetToBlockTask(stand));
+        }
+        return null;
+    }
+
+    private BlockPos farmStandPosition(Belfegor mod, BlockPos soil) {
+        Direction[] options = {
+                Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST,
+                _direction, _direction.getOpposite()
+        };
+        BlockPos best = null;
+        double bestDistance = Double.POSITIVE_INFINITY;
+        BlockPos player = mod.getPlayer() == null ? soil : mod.getPlayer().getBlockPos();
+        for (Direction option : options) {
+            BlockPos stand = soil.offset(option).up();
+            if (!isSafeStandPosition(mod, stand)) continue;
+            double distance = stand.getSquaredDistance(player);
+            if (distance < bestDistance) {
+                bestDistance = distance;
+                best = stand;
+            }
+        }
+        return best;
+    }
+
+    private boolean isSafeStandPosition(Belfegor mod, BlockPos stand) {
+        Block below = mod.getWorld().getBlockState(stand.down()).getBlock();
+        return below != Blocks.WATER
+                && below != Blocks.LAVA
+                && WorldHelper.isSolid(mod, stand.down())
+                && mod.getWorld().getBlockState(stand).isAir()
+                && mod.getWorld().getBlockState(stand.up()).isAir();
     }
 
     private List<BlockPos> buildClearTargets() {
@@ -414,7 +588,11 @@ public class BuildBaseExpansionTask extends Task {
         ArrayList<BlockPos> result = new ArrayList<>();
         for (int dx = 0; dx < _roomSize; dx++) {
             for (int dz = 0; dz < _roomSize; dz++) {
-                result.add(_roomAnchor.add(dx, -1, dz));
+                BlockPos floor = _roomAnchor.add(dx, -1, dz);
+                result.add(floor);
+                if (_type == RoomType.FARMLAND) {
+                    result.add(floor.down());
+                }
             }
         }
         addHallFloor(result);
@@ -447,7 +625,14 @@ public class BuildBaseExpansionTask extends Task {
     }
 
     private List<BlockPos> buildWaterTargets() {
-        return List.of(_roomCenter.add(0, -1, 0));
+        if (_type != RoomType.FARMLAND) return List.of();
+        BlockPos center = _roomCenter.add(0, -1, 0);
+        return List.of(
+                center,
+                center.add(1, 0, 0),
+                center.add(0, 0, 1),
+                center.add(1, 0, 1)
+        );
     }
 
     private List<BlockPos> buildFarmTargets() {
@@ -455,11 +640,23 @@ public class BuildBaseExpansionTask extends Task {
         for (int dx = 1; dx < _roomSize - 1; dx++) {
             for (int dz = 1; dz < _roomSize - 1; dz++) {
                 BlockPos soil = _roomAnchor.add(dx, -1, dz);
-                if (!_waterTargets.contains(soil)) result.add(soil);
+                if (!_waterTargets.contains(soil) && isHydratedByPlannedWater(soil)) result.add(soil);
             }
         }
         result.sort(Comparator.comparingInt(this::distanceToRoomCenter));
         return result;
+    }
+
+    private boolean isHydratedByPlannedWater(BlockPos soil) {
+        if (_waterTargets == null || _waterTargets.isEmpty()) return true;
+        for (BlockPos water : _waterTargets) {
+            if (Math.abs(water.getX() - soil.getX()) <= 4
+                    && Math.abs(water.getZ() - soil.getZ()) <= 4
+                    && Math.abs(water.getY() - soil.getY()) <= 1) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void addBoxAir(List<BlockPos> result, BlockPos anchor, int width, int depth, int height) {
@@ -485,9 +682,11 @@ public class BuildBaseExpansionTask extends Task {
     }
 
     private void addHallWalls(List<BlockPos> result) {
-        for (BlockPos floor : hallFloorPositions()) {
-            BlockPos left = floor.offset(_direction.rotateYCounterclockwise());
-            BlockPos right = floor.offset(_direction.rotateYClockwise());
+        Direction leftDirection = _direction.rotateYCounterclockwise();
+        Direction rightDirection = _direction.rotateYClockwise();
+        for (BlockPos centerFloor : hallCenterFloorPositions()) {
+            BlockPos left = centerFloor.offset(leftDirection);
+            BlockPos right = centerFloor.offset(rightDirection, HALL_WIDTH);
             for (int h = 0; h < 3; h++) {
                 result.add(left.add(0, h + 1, 0));
                 result.add(right.add(0, h + 1, 0));
@@ -496,6 +695,15 @@ public class BuildBaseExpansionTask extends Task {
     }
 
     private List<BlockPos> hallFloorPositions() {
+        ArrayList<BlockPos> result = new ArrayList<>();
+        for (BlockPos center : hallCenterFloorPositions()) {
+            result.add(center);
+            result.add(center.offset(_direction.rotateYClockwise()));
+        }
+        return result;
+    }
+
+    private List<BlockPos> hallCenterFloorPositions() {
         ArrayList<BlockPos> result = new ArrayList<>();
         int baseRadius = Math.max(8, _base == null ? 8 : _base.radius);
         BlockPos start = switch (_direction) {
@@ -507,7 +715,6 @@ public class BuildBaseExpansionTask extends Task {
         for (int i = 0; i < _hallLength + 2; i++) {
             BlockPos center = start.offset(_direction, i);
             result.add(center);
-            result.add(center.offset(_direction.rotateYClockwise()));
         }
         return result;
     }
@@ -522,27 +729,78 @@ public class BuildBaseExpansionTask extends Task {
         };
     }
 
-    private Direction chooseDirection(BaseMemory.BaseRecord base) {
+    private void choosePlacement() {
         Direction[] order = {Direction.EAST, Direction.NORTH, Direction.SOUTH, Direction.WEST};
+        int baseRadius = Math.max(8, _base.radius);
         int bestScore = Integer.MAX_VALUE;
-        Direction best = Direction.EAST;
+        Direction bestDirection = Direction.EAST;
+        int bestHallLength = 3;
+        int bestStep = 0;
+        BlockPos bestCenter = null;
+        BlockPos bestAnchor = null;
         for (Direction direction : order) {
-            int score = 0;
-            for (BaseMemory.BaseModule module : base.modules) {
-                if (direction.asString().equalsIgnoreCase(module.direction)) score++;
+            int sideUse = 0;
+            for (BaseMemory.BaseModule module : _base.modules) {
+                if (direction.asString().equalsIgnoreCase(module.direction)) sideUse++;
             }
-            if (score < bestScore) {
-                bestScore = score;
-                best = direction;
+            for (int hall = 3; hall <= 7; hall++) {
+                for (int step = 0; step <= 8; step++) {
+                    BlockPos center = roomCenterFor(direction, baseRadius, hall, step);
+                    BlockPos anchor = center.add(-_roomSize / 2, 0, -_roomSize / 2);
+                    boolean overlaps = BaseMemory.getInstance().footprintOverlaps(_base, _roomName,
+                            anchor, _roomSize, _roomSize, 3);
+                    int score = sideUse * 1000 + step * 100 + hall;
+                    if (!overlaps && score < bestScore) {
+                        bestScore = score;
+                        bestDirection = direction;
+                        bestHallLength = hall;
+                        bestStep = step;
+                        bestCenter = center;
+                        bestAnchor = anchor;
+                    }
+                }
             }
         }
-        return best;
+        if (bestCenter == null) {
+            // Fall back to a farther east slot rather than overlapping an
+            // existing module. This keeps the bot productive and records the
+            // oversized step for later inspection.
+            bestDirection = Direction.EAST;
+            bestHallLength = 7;
+            bestStep = 9 + BaseMemory.getInstance().countModulesOfType(_base, _type.name().toLowerCase(Locale.ROOT));
+            bestCenter = roomCenterFor(bestDirection, baseRadius, bestHallLength, bestStep);
+            bestAnchor = bestCenter.add(-_roomSize / 2, 0, -_roomSize / 2);
+        }
+        _direction = bestDirection;
+        _hallLength = bestHallLength;
+        _outwardStep = bestStep;
+        _roomCenter = bestCenter;
+        _roomAnchor = bestAnchor;
+    }
+
+    private BlockPos roomCenterFor(Direction direction, int baseRadius, int hallLength, int outwardStep) {
+        int distance = baseRadius + hallLength + (_roomSize / 2) + 1
+                + outwardStep * (_roomSize + 5);
+        return switch (direction) {
+            case NORTH -> _baseCenter.add(0, 0, -distance);
+            case SOUTH -> _baseCenter.add(0, 0, distance);
+            case WEST -> _baseCenter.add(-distance, 0, 0);
+            default -> _baseCenter.add(distance, 0, 0);
+        };
     }
 
     private String uniqueRoomName(BaseMemory.BaseRecord base, String requested, RoomType type) {
         String baseName = requested == null || requested.isBlank() ? defaultName(type) : normalize(requested);
         boolean exists = base.modules.stream().anyMatch(module -> normalize(module.name).equals(baseName));
         if (!exists) return baseName;
+        Optional<BaseMemory.BaseModule> existing = base.modules.stream()
+                .filter(module -> normalize(module.name).equals(baseName))
+                .findFirst();
+        if (existing.isPresent()
+                && !BaseMemory.getInstance().moduleComplete(existing.get())
+                && normalize(existing.get().type).equals(type.name().toLowerCase(Locale.ROOT))) {
+            return baseName;
+        }
         int index = 2;
         while (true) {
             String candidate = baseName + "_" + index;
@@ -558,7 +816,8 @@ public class BuildBaseExpansionTask extends Task {
         BaseMemory memory = BaseMemory.getInstance();
         memory.rememberModule(_baseCenter, _dimension, _roomName, _type.name().toLowerCase(Locale.ROOT),
                 _roomAnchor, _roomSize, _roomSize, _type == RoomType.MOBFARM ? WALL_HEIGHT + 1 : WALL_HEIGHT,
-                status, "expanded room; hall=" + HALL_WIDTH + "x" + _hallLength,
+                status, "expanded room; hall=" + HALL_WIDTH + "x" + _hallLength
+                        + ";outwardStep=" + _outwardStep,
                 "core", _direction.asString(), _hallLength, HALL_WIDTH);
         memory.rememberModule(_baseCenter, _dimension, _roomName + "_hall", "hall",
                 hallFloorPositions().get(0), HALL_WIDTH, _hallLength + 2, 3,
@@ -613,6 +872,17 @@ public class BuildBaseExpansionTask extends Task {
             items[i] = blocks[i].asItem();
         }
         return items;
+    }
+
+    private Task materialTaskFor(Block[] desired, int count) {
+        if (desired.length != 1) return null;
+        if (desired[0] == Blocks.DIRT) {
+            return TaskCatalogue.getItemTask("dirt", count);
+        }
+        if (desired[0] == Blocks.COBBLESTONE) {
+            return TaskCatalogue.getItemTask("cobblestone", count);
+        }
+        return TaskCatalogue.getItemTask(desired[0].asItem(), count);
     }
 
     public static RoomType parseType(String value) {

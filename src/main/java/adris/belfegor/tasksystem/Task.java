@@ -22,6 +22,14 @@ public abstract class Task {
 
     public void tick(Belfegor mod, TaskChain parentChain) {
         parentChain.addTaskToChain(this);
+        if (parentChain.isOverDepthLimit()) {
+            Debug.logError("Task chain exceeded safe depth; aborting nested tick to prevent stack overflow.");
+            DebugLogger.getInstance().logImmediate("TASK-DEPTH-GUARD",
+                    "depth>" + TaskChain.MAX_TASK_DEPTH_PER_TICK
+                            + " chain=" + parentChain.describeTaskChain());
+            stop(mod);
+            return;
+        }
         if (_first) {
             Debug.logInternal("Task START: " + this);
             DebugLogger.getInstance().taskStart(toDebugString());
@@ -33,6 +41,14 @@ public abstract class Task {
         if (_stopped) return;
 
         Task newSub = onTick(mod);
+        if (newSub == this || (newSub != null && newSub.thisOrChildSatisfies(task -> task == this))) {
+            Debug.logError("Task attempted to return itself or an ancestor as a subtask; refusing recursive tick: "
+                    + this + " -> " + newSub);
+            DebugLogger.getInstance().log("TASK-RECURSION-GUARD",
+                    toDebugString() + " refused recursive subtask "
+                            + (newSub == null ? "null" : newSub.toDebugString()));
+            return;
+        }
         // Debug state print
         if (!_oldDebugState.equals(_debugState)) {
             Debug.logInternal(toString());

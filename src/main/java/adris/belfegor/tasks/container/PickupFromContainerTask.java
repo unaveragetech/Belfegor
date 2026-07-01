@@ -11,6 +11,7 @@ import adris.belfegor.util.helpers.StorageHelper;
 import adris.belfegor.util.slots.FurnaceSlot;
 import adris.belfegor.util.slots.Slot;
 import net.minecraft.item.ItemStack;
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.screen.FurnaceScreenHandler;
 import net.minecraft.screen.SmokerScreenHandler;
 import net.minecraft.screen.slot.SlotActionType;
@@ -28,6 +29,7 @@ public class PickupFromContainerTask extends AbstractDoToStorageContainerTask im
     private final ItemTarget[] _targets;
 
     private final EnsureFreeInventorySlotTask _freeInventoryTask = new EnsureFreeInventorySlotTask();
+    private boolean _containerExhausted;
 
     public PickupFromContainerTask(BlockPos targetContainer, ItemTarget... targets) {
         _targets = targets;
@@ -88,6 +90,12 @@ public class PickupFromContainerTask extends AbstractDoToStorageContainerTask im
     }
 
     @Override
+    protected void onStart(Belfegor mod) {
+        _containerExhausted = false;
+        super.onStart(mod);
+    }
+
+    @Override
     protected Task onTick(Belfegor mod) {
         // Free inventory while we're doing it.
         if (_freeInventoryTask.isActive() && !_freeInventoryTask.isFinished(mod) && !mod.getItemStorage().hasEmptyInventorySlot()) {
@@ -99,27 +107,44 @@ public class PickupFromContainerTask extends AbstractDoToStorageContainerTask im
 
     @Override
     public boolean isFinished(Belfegor mod) {
-        return Arrays.stream(_targets).allMatch(target -> mod.getItemStorage().getItemCountInventoryOnly(target.getMatches()) >= target.getTargetCount());
+        boolean targetsSatisfied = Arrays.stream(_targets)
+                .allMatch(target -> mod.getItemStorage().getItemCountInventoryOnly(target.getMatches()) >= target.getTargetCount());
+        return targetsSatisfied || (_containerExhausted && StorageHelper.getItemStackInCursorSlot().isEmpty());
     }
 
     @Override
     public boolean shouldForce(Belfegor mod, Task interruptingCandidate) {
         if (isFinished(mod)) return false;
         boolean cursorHeld = !StorageHelper.getItemStackInCursorSlot().isEmpty();
-        boolean screenOpen = net.minecraft.client.MinecraftClient.getInstance().currentScreen != null;
-        if (cursorHeld || screenOpen) {
+        boolean screenOpen = MinecraftClient.getInstance().currentScreen != null;
+        boolean hasUsefulContainerStack = screenOpen && hasUsefulContainerStack(mod);
+        if (cursorHeld || hasUsefulContainerStack) {
             adris.belfegor.debug.DebugLogger.getInstance().logImmediate("CONTAINER-FORCE",
                     "continuing pickup target=" + _targetContainer
                             + " targets=" + Arrays.toString(_targets)
                             + " cursor=" + StorageHelper.getItemStackInCursorSlot()
+                            + " usefulStack=" + hasUsefulContainerStack
                             + " interrupt="
                             + (interruptingCandidate == null ? "null" : interruptingCandidate.toString()));
         }
-        return cursorHeld || screenOpen;
+        return cursorHeld || hasUsefulContainerStack;
+    }
+
+    private boolean hasUsefulContainerStack(Belfegor mod) {
+        for (ItemTarget target : _targets) {
+            if (mod.getItemStorage().getItemCountInventoryOnly(target.getMatches()) >= target.getTargetCount()) {
+                continue;
+            }
+            if (!mod.getItemStorage().getSlotsWithItemContainer(target.getMatches()).isEmpty()) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override
     protected Task onContainerOpenSubtask(Belfegor mod, ContainerCache containerCache) {
+        boolean anyUsefulStackRemaining = false;
         for (ItemTarget target : _targets) {
             // Go through each item
             int count = mod.getItemStorage().getItemCountInventoryOnly(target.getMatches());
@@ -129,6 +154,9 @@ public class PickupFromContainerTask extends AbstractDoToStorageContainerTask im
                 setDebugState("Collecting " + target);
                 // Grab the item from the current chest that most closely matches our requirements
                 List<Slot> potentials = mod.getItemStorage().getSlotsWithItemContainer(target.getMatches());
+                if (!potentials.isEmpty()) {
+                    anyUsefulStackRemaining = true;
+                }
 
                 // Pick the best slot to grab from.
                 Optional<Slot> bestPotential = getBestSlotToTransfer(mod, target, count, potentials, stack -> mod.getItemStorage().getSlotThatCanFitInPlayerInventory(stack, false).isPresent());
@@ -153,11 +181,17 @@ public class PickupFromContainerTask extends AbstractDoToStorageContainerTask im
                     mod.getSlotHandler().clickSlot(bestPotential.get(), 0, SlotActionType.PICKUP);
                     return null;
                 }
-                setDebugState("SHOULD NOT HAPPEN! No valid items detected.");
+                setDebugState("Target not present in this container: " + target);
             }
         }
 
         // We're done.
+        if (!anyUsefulStackRemaining && StorageHelper.getItemStackInCursorSlot().isEmpty()) {
+            _containerExhausted = true;
+            StorageHelper.closeScreen();
+            setDebugState("Container exhausted; releasing pickup task.");
+            return null;
+        }
         setDebugState("Done");
         if (mod.getPlayer().currentScreenHandler instanceof SmokerScreenHandler || mod.getPlayer().currentScreenHandler
                 instanceof FurnaceScreenHandler) {

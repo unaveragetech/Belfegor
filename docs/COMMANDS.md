@@ -25,6 +25,7 @@ nether
 | Command | Usage | What it does | Examples |
 |---|---|---|---|
 | `help` | `@help <command>` | Lists commands or shows detailed help for one command. | `@help`, `@help shulker` |
+| `ui` | `@ui` | Opens the Belfegor control panel. Use this if the `C` key is captured by another client mod. | `@ui` |
 | `stop` | `@stop` | Stops active automation. The global `+` key also aborts while a task is running. | `@stop` |
 | `status` | `@status` | Prints the current active task status. | `@status` |
 | `coords` | `@coords` | Prints the bot position. | `@coords` |
@@ -85,7 +86,7 @@ See [Shulker management](SHULKER_MANAGEMENT.md) for exact behavior and exclusion
 | `hero` | `@hero` | Kills nearby hostile mobs. | `@hero` |
 | `selfcare` | `@selfcare` | Experimental self-care/survival helper. | `@selfcare` |
 | `player` | `@player` | Starts autonomous exploration/learning/home-base mode. | `@player` |
-| `build` | `@build <roomType> [name]` | Expands the remembered base with a connected room. Types: `farmland`, `storage`, `workshop`, `mobfarm`, `empty`. | `@build farmland wheat_wing` |
+| `build` | `@build full [radius] [here]`, `@build validate`, `@build repair`, or `@build <roomType> [name]` | Builds the complete modular base, validates/repairs remembered rooms, or expands the remembered base with one connected room. Room placement avoids overlapping remembered footprints. Full mode builds/validates core camp, storage, workshop, hydrated crop farm, and roofed mob-farm room. | `@build full 12 here`, `@build repair`, `@build farmland wheat_wing` |
 | `home` | `@home [room]` | Navigates to the remembered camp center or named room/module center. | `@home farmland` |
 | `gamer` | `@gamer` | Runs the classic beat-the-game task. | `@gamer` |
 | `marvion` | `@marvion` | Runs the Marvion beat-the-game route. | `@marvion` |
@@ -119,5 +120,7 @@ Multiple commands can be chained with semicolons:
 
 ## UI command page
 
-Press `C`, open the command tab, select a command, and double-click an example to run it. The UI shows expected argument values, detailed descriptions, and examples from the same command metadata used by `@help`.
+Press `C` or run `@ui`, open the command tab, select a command, and double-click an example to run it. The UI shows categories, expected argument values, detailed descriptions, and examples from the same command metadata used by `@help` and the local LLM advisor.
+
+The command list can be searched by command name, category, description, or usage text. Categories include Reference, Control, Resources, Crafting, Storage, Navigation, Base, Autonomy, PvP, Combat, Survival, Nether, Client, Development, and Game completion.
 

@@ -47,6 +47,10 @@ public class BotBehaviour {
         return current().escapeLava;
     }
 
+    public boolean shouldAutoMLG() {
+        return current().autoMLG;
+    }
+
     /// Parameters
 
     /**
@@ -56,6 +60,11 @@ public class BotBehaviour {
      */
     public void setEscapeLava(boolean allow) {
         current().escapeLava = allow;
+        current().applyState();
+    }
+
+    public void setAutoMLG(boolean allow) {
+        current().autoMLG = allow;
         current().applyState();
     }
 
@@ -324,6 +333,7 @@ public class BotBehaviour {
 
         // Other necessary stuff
         public boolean escapeLava = true;
+        public boolean autoMLG = true;
 
         public State() {
             this(null);
@@ -345,6 +355,7 @@ public class BotBehaviour {
                 conversionSlots.addAll(toCopy.conversionSlots);
                 forceFieldPlayers = toCopy.forceFieldPlayers;
                 escapeLava = toCopy.escapeLava;
+                autoMLG = toCopy.autoMLG;
                 placementProtectedItems.addAll(toCopy.placementProtectedItems);
                 placedBlocks.addAll(toCopy.placedBlocks);
             }

@@ -58,6 +58,7 @@ public class CraftAuditTask extends Task {
     private int _index = 0;
     private RecipeRegistry.CraftPlan _plan;
     private List<Map.Entry<Item, Integer>> _giveQueue = new ArrayList<>();
+    private Map<Item, Integer> _expectedResources = new LinkedHashMap<>();
     private int _giveIndex = 0;
     private int _cooldownTicks = 0;
     private int _resetStep = 0;
@@ -140,7 +141,8 @@ public class CraftAuditTask extends Task {
                 }
                 Item item = _items.get(_index);
                 _plan = _registry.buildLeafResourcePlan(item, 1);
-                _giveQueue = expandGiveResources(normalizeGiveResources(_plan));
+                _expectedResources = normalizeGiveResources(_plan);
+                _giveQueue = expandGiveResources(_expectedResources);
                 _giveIndex = 0;
                 _itemTicks = 0;
                 _activeTask = null;
@@ -150,11 +152,11 @@ public class CraftAuditTask extends Task {
                         + " resources=" + describeResources(_giveQueue)
                         + " failures=" + _plan.failures);
                 if (!_plan.failures.isEmpty()) {
-                    skipCurrent("plan failures " + _plan.failures);
+                    failCurrent("plan failures " + _plan.failures);
                     return null;
                 }
                 if (TaskCatalogue.getItemTask(item, 1) == null) {
-                    skipCurrent("TaskCatalogue has no task for craftable recipe output");
+                    failCurrent("TaskCatalogue has no task for craftable recipe output");
                     return null;
                 }
                 _phase = Phase.GIVE;
@@ -167,6 +169,7 @@ public class CraftAuditTask extends Task {
                 }
                 if (_giveIndex >= _giveQueue.size()) {
                     _phase = Phase.WAIT_RESOURCES;
+                    _itemTicks = 0;
                     return null;
                 }
                 Map.Entry<Item, Integer> entry = _giveQueue.get(_giveIndex++);
@@ -177,6 +180,8 @@ public class CraftAuditTask extends Task {
             case WAIT_RESOURCES -> {
                 if (hasGivenResources(mod)) {
                     _phase = Phase.CRAFT;
+                    _itemTicks = 0;
+                    _activeTask = null;
                     return null;
                 }
                 if (++_itemTicks > 20 * 15) {
@@ -193,6 +198,7 @@ public class CraftAuditTask extends Task {
                 if (mod.getItemStorage().getItemCountInventoryOnly(item) >= 1) {
                     _phase = Phase.STORE;
                     _activeTask = null;
+                    _itemTicks = 0;
                     return null;
                 }
                 if (_activeTask == null || _activeTask.stopped() || _activeTask.isFinished(mod)) {
@@ -215,7 +221,7 @@ public class CraftAuditTask extends Task {
                 Item item = _items.get(_index);
                 int count = mod.getItemStorage().getItemCountInventoryOnly(item);
                 if (count <= 0) {
-                    passCurrent("crafted and no longer in inventory; assumed stored");
+                    passCurrent("crafted and output no longer in inventory after storage phase");
                     return null;
                 }
                 if (_activeTask == null || _activeTask.stopped() || _activeTask.isFinished(mod)) {
@@ -235,6 +241,10 @@ public class CraftAuditTask extends Task {
                 _phase = Phase.RESET;
                 _resetStep = 0;
                 _cooldownTicks = 0;
+                _activeTask = null;
+                _plan = null;
+                _giveQueue = new ArrayList<>();
+                _expectedResources = new LinkedHashMap<>();
                 return null;
             }
             case DONE -> {
@@ -251,10 +261,10 @@ public class CraftAuditTask extends Task {
             selected.addAll(all);
         } else {
             Item item = RecipeRegistry.getItemByName(normalizeName(_target));
-            if (item != null && _registry.isCraftable(item) && TaskCatalogue.getItemTask(item, 1) != null) {
+            if (item != null && _registry.isCraftable(item)) {
                 selected.add(item);
             } else {
-                writeLog("SKIP target=" + _target + " reason=not a craftable Belfegor task target");
+                writeLog("SKIP target=" + _target + " reason=not a bundled craftable recipe target");
             }
         }
         if (_limit > 0 && selected.size() > _limit) {
@@ -268,16 +278,12 @@ public class CraftAuditTask extends Task {
         for (String resourceName : TaskCatalogue.resourceNames()) {
             for (Item item : TaskCatalogue.getItemMatches(resourceName)) {
                 if (item != null && _registry.isCraftable(item)) {
-                    if (TaskCatalogue.getItemTask(item, 1) != null) {
-                        ordered.putIfAbsent(item, item);
-                    }
+                    ordered.putIfAbsent(item, item);
                 }
             }
         }
         for (Item item : _registry.getSortedCraftableItems()) {
-            if (TaskCatalogue.getItemTask(item, 1) != null) {
-                ordered.putIfAbsent(item, item);
-            }
+            ordered.putIfAbsent(item, item);
         }
         return new ArrayList<>(ordered.keySet());
     }
@@ -308,7 +314,7 @@ public class CraftAuditTask extends Task {
     }
 
     private boolean hasGivenResources(Belfegor mod) {
-        for (Map.Entry<Item, Integer> entry : _giveQueue) {
+        for (Map.Entry<Item, Integer> entry : _expectedResources.entrySet()) {
             if (mod.getItemStorage().getItemCountInventoryOnly(entry.getKey()) < entry.getValue()) {
                 return false;
             }

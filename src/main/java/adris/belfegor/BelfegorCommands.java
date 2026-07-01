@@ -12,6 +12,7 @@ public class BelfegorCommands {
         // List commands here
         Belfegor.getCommandExecutor().registerNewCommand(
                 new HelpCommand(),
+                new UiCommand(),
                 new GetCommand(),
                 new FollowCommand(),
                 new GiveCommand(),

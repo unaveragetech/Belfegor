@@ -4,17 +4,19 @@ This roadmap is intentionally practical. Belfegor’s main challenge is not “a
 
 ## Near term
 
+- Resolve the remaining visual UI display conflict observed in the heavily modded local profile: `@ui` executes, but the panel may not become visible when other overlay/screen mods are active.
+- Re-test the `C`/`@ui` panel in a clean Fabric profile and capture a final UI screenshot/video once stable.
 - Continue hardening inventory cursor recovery in every container/crafting path.
 - Add more structured shulker transaction tests and debug summaries.
 - Improve `@get` planning so carried shulker resources are chosen before gathering duplicates.
-- Expand the `C` UI settings controls for auto-shulker thresholds and timers.
+- Expand the `C`/`@ui` settings controls for auto-shulker thresholds and timers.
 - Add command-level progress estimates and clearer failure reasons.
 - Improve task oscillation diagnostics by showing the last task that interrupted the current one.
 
 ## Crafting and resources
 
 - Broaden recipe coverage for Minecraft `1.21.4`.
-- Improve mixed-material recipe handling, especially recipes that allow multiple wood/stone variants.
+- Continue improving mixed-material recipe handling. Wood-family aliases now resolve contextually for tested recipes, but stone variants, dyes, and more complex tags still need broader validation.
 - Add safer fallback behavior when a recipe is known but one ingredient source fails.
 - Record successful crafting routes into persistent memory and prefer faster routes later.
 - Separate “item visible in a container” from “item available in inventory right now.”
@@ -78,6 +80,19 @@ Possible future commands:
 - Keep shulker contents synchronized from NBT, open-container scans, and memory.
 - Support better shulker selection when multiple shulkers contain overlapping resources.
 - Add configurable auto-sort categories.
+
+## Schematic engine
+
+- Promote the current region builder into a general blueprint/printer engine.
+- Load `.litematic` and Sponge `.schem` files into an internal expected-block overlay.
+- Calculate exact material plans before building.
+- Require build supplies to be staged in a construction chest or shulkers inside that chest before printing starts.
+- Withdraw only working batches into inventory during construction.
+- Pause with a clear missing-material reason when a structure cannot be staged yet.
+- Compare the world to the blueprint every repair pass so dirt/air/wrong blocks cannot remain in completed floors or walls.
+- Preserve full block states for stairs, slabs, doors, logs, water, crops, and redstone instead of treating every target as a simple block ID.
+
+See [SCHEMATIC_ENGINE.md](SCHEMATIC_ENGINE.md) for the planned architecture.
 - Add optional reserved shulkers for food, ores, blocks, crafting supplies, and valuables.
 - Add shulker labels/fingerprints so the bot can distinguish boxes beyond slot position.
 - Build base storage rules around shulker categories.

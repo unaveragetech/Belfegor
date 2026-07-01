@@ -2,6 +2,7 @@ package adris.belfegor.tasks.resources;
 
 import adris.belfegor.Belfegor;
 import adris.belfegor.Debug;
+import adris.belfegor.debug.DebugLogger;
 import adris.belfegor.tasks.AbstractDoToClosestObjectTask;
 import adris.belfegor.tasks.ResourceTask;
 import adris.belfegor.tasks.construction.DestroyBlockTask;
@@ -154,6 +155,11 @@ public class MineAndCollectTask extends ResourceTask {
 
     private static class MineOrCollectTask extends AbstractDoToClosestObjectTask<Object> {
 
+        private static final int LOCAL_SCAN_RADIUS = 12;
+        private static final int LOCAL_SCAN_VERTICAL = 6;
+        private static final long LOCAL_SCAN_INTERVAL_MS = 2000;
+        private static final double LOCAL_SCAN_RECENTER_DISTANCE_SQ = 36;
+
         private final Block[] _blocks;
         private final ItemTarget[] _targets;
         private final Set<BlockPos> _blacklist = new HashSet<>();
@@ -161,6 +167,11 @@ public class MineAndCollectTask extends ResourceTask {
         private final Task _pickupTask;
         private Task _cachedWanderTask = null;
         private BlockPos _miningPos;
+        private BlockPos _lastLoggedLocalBlock;
+        private long _lastLocalLogMs;
+        private Vec3d _lastLocalScanOrigin;
+        private long _lastLocalScanMs;
+        private Optional<BlockPos> _lastLocalScanResult = Optional.empty();
 
         public MineOrCollectTask(Block[] blocks, ItemTarget[] targets) {
             _blocks = blocks;
@@ -187,6 +198,32 @@ public class MineAndCollectTask extends ResourceTask {
                 return WorldHelper.canBreak(mod, check);
             }, _blocks);
 
+            Optional<BlockPos> localBlock = cachedScanLoadedLocalBlocks(mod, pos);
+            if (localBlock.isPresent()) {
+                double trackerSq = closestBlock.isEmpty()
+                        ? Double.POSITIVE_INFINITY
+                        : closestBlock.get().getSquaredDistance(pos);
+                double localSq = localBlock.get().getSquaredDistance(pos);
+                if (localSq <= trackerSq + 16) {
+                    long now = System.currentTimeMillis();
+                    boolean changedLocal = _lastLoggedLocalBlock == null || !_lastLoggedLocalBlock.equals(localBlock.get());
+                    if ((closestBlock.isEmpty() || !closestBlock.get().equals(localBlock.get()))
+                            && (changedLocal || now - _lastLocalLogMs > 5000)) {
+                        _lastLoggedLocalBlock = localBlock.get();
+                        _lastLocalLogMs = now;
+                        DebugLogger.getInstance().log("RESOURCE-LOCALITY",
+                                "local-block-preferred target=" + Arrays.toString(_targets)
+                                        + " blocks=" + Arrays.toString(_blocks)
+                                        + " local=" + localBlock.get().toShortString()
+                                        + " localDist=" + Math.round(Math.sqrt(localSq))
+                                        + " tracker=" + closestBlock.map(BlockPos::toShortString).orElse("none")
+                                        + " trackerDist=" + (trackerSq == Double.POSITIVE_INFINITY
+                                        ? "inf" : String.valueOf(Math.round(Math.sqrt(trackerSq)))));
+                    }
+                    closestBlock = localBlock;
+                }
+            }
+
             Optional<ItemEntity> closestDrop = Optional.empty();
             if (mod.getEntityTracker().itemDropped(_targets)) {
                 closestDrop = mod.getEntityTracker().getClosestItemDrop(pos, _targets);
@@ -205,6 +242,45 @@ public class MineAndCollectTask extends ResourceTask {
             } else {
                 return closestBlock.map(Object.class::cast);
             }
+        }
+
+        private Optional<BlockPos> cachedScanLoadedLocalBlocks(Belfegor mod, Vec3d origin) {
+            long now = System.currentTimeMillis();
+            if (_lastLocalScanOrigin != null
+                    && now - _lastLocalScanMs < LOCAL_SCAN_INTERVAL_MS
+                    && _lastLocalScanOrigin.squaredDistanceTo(origin) < LOCAL_SCAN_RECENTER_DISTANCE_SQ) {
+                return _lastLocalScanResult;
+            }
+            _lastLocalScanOrigin = origin;
+            _lastLocalScanMs = now;
+            _lastLocalScanResult = scanLoadedLocalBlocks(mod, origin, LOCAL_SCAN_RADIUS, LOCAL_SCAN_VERTICAL);
+            return _lastLocalScanResult;
+        }
+
+        private Optional<BlockPos> scanLoadedLocalBlocks(Belfegor mod, Vec3d origin, int radius, int vertical) {
+            if (mod.getWorld() == null) return Optional.empty();
+            BlockPos center = BlockPos.ofFloored(origin);
+            BlockPos best = null;
+            double bestSq = Double.POSITIVE_INFINITY;
+            for (int dy = -vertical; dy <= vertical; dy++) {
+                for (int dx = -radius; dx <= radius; dx++) {
+                    for (int dz = -radius; dz <= radius; dz++) {
+                        if (dx * dx + dz * dz > radius * radius) continue;
+                        BlockPos candidate = center.add(dx, dy, dz);
+                        if (_blacklist.contains(candidate)) continue;
+                        if (mod.getBlockTracker().unreachable(candidate)) continue;
+                        if (!mod.getChunkTracker().isChunkLoaded(candidate)) continue;
+                        if (!mod.getBlockTracker().blockIsValid(candidate, _blocks)) continue;
+                        if (!WorldHelper.canBreak(mod, candidate)) continue;
+                        double sq = candidate.getSquaredDistance(origin);
+                        if (sq < bestSq) {
+                            bestSq = sq;
+                            best = candidate;
+                        }
+                    }
+                }
+            }
+            return Optional.ofNullable(best);
         }
 
         @Override

@@ -1,6 +1,7 @@
 package adris.belfegor.tasks.container;
 
 import adris.belfegor.Belfegor;
+import adris.belfegor.debug.DebugLogger;
 import adris.belfegor.tasks.InteractWithBlockTask;
 import adris.belfegor.tasks.construction.DestroyBlockTask;
 import adris.belfegor.tasks.movement.TimeoutWanderTask;
@@ -44,9 +45,14 @@ public abstract class AbstractDoToStorageContainerTask extends Task {
             // Optional<BlockPos> lastInteracted = mod.getItemStorage().getLastBlockPosInteraction();
             //if (lastInteracted.isPresent() && lastInteracted.get().equals(targetPos)) {
             Optional<ContainerCache> cache = mod.getItemStorage().getContainerAtPosition(targetPos);
-            if (cache.isPresent()) {
-                return onContainerOpenSubtask(mod, cache.get());
+            if (cache.isEmpty()) {
+                DebugLogger.getInstance().log("CONTAINER",
+                        "screen-open-cache-missing target=" + targetPos.toShortString()
+                                + " type=" + _currentContainerType
+                                + " task=" + toString()
+                                + " note=continuing open-screen subtask instead of re-opening container");
             }
+            return onContainerOpenSubtask(mod, cache.orElse(null));
             //}
         }
 

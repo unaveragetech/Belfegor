@@ -28,10 +28,11 @@ Behind that small command surface is a task engine that can gather resources, mi
 | Built jar | [`releases/belfegor-1.21.4-beta1.jar`](releases/belfegor-1.21.4-beta1.jar) |
 | Runtime bundle | [`releases/belfegor-1.21.4-beta1-runtime.zip`](releases/belfegor-1.21.4-beta1-runtime.zip) |
 | Release notes | [`docs/RELEASE_v1.21.4-beta1.md`](docs/RELEASE_v1.21.4-beta1.md) |
-| Jar SHA256 | `99F65E9FDA869DCC55F03D4497B31BB5DF84555817A557FF17DCA3B80C8155E8` |
+| Jar SHA256 | `343a24396fc52dc88ee2b30255de75e2cc92931031c473a8db83ae18bfae7f28` |
+| Runtime bundle SHA256 | `620cfccc69e8854c8da7c898cf23375a35579fd08494daea7b5cdeb0a7635c50` |
 | Mod id | `belfegor` |
 | Command prefix | `@` |
-| In-game UI | `C` |
+| In-game UI | `C` or `@ui` |
 | Global abort key | `+` while a task is running |
 
 The runtime bundle includes the current Belfegor jar, the Fabric API jar from the working `1.21.4` instance, the Baritone API jar from the working instance, release notes, checksums, and documentation.
@@ -62,7 +63,7 @@ It is currently beta software, with the most active engineering effort focused o
 | Craft audit harness | `@craftaudit` gives normalized leaf resources in a cheat-enabled test world, crafts through the real task system, stores outputs, and logs pass/fail results. |
 | PvP prep | `@stacked`, `@toolset`, and `@pvp` automate gear and combat preparation. |
 | Player mode | `@player` starts an autonomous explore/gather/craft/home-base loop and grows a remembered modular base. |
-| Base expansion | `@build farmland`, `@build storage`, `@build workshop`, and `@build mobfarm` add connected rooms; `@home [room]` navigates to remembered room centers. |
+| Base expansion | `@build full` builds, repairs, and route-validates the complete modular base; `@build validate`/`@build repair` checks remembered rooms and fixes incomplete modules; single-room builds avoid overlapping remembered footprints. The core campsite is now exported to `.minecraft/belfegor/schematics/base_core_*.belfegor_schematic.json` and validation checks world blocks against that saved blueprint. |
 | Local AI advisor | Packaged llama.cpp advisor can use `belfegor/models/Qwen3-1.7B-Q4_K_M.gguf` to answer `@ai` prompts and choose validated next commands during `@player`. |
 | Beat-the-game routes | `@gamer` and `@marvion` run classic autonomous completion routes. |
 | Butler | Authorized players can command the bot by whisper/private message. |
@@ -73,13 +74,21 @@ It is currently beta software, with the most active engineering effort focused o
 
 The current jar has been tested in the `1.21.4` MultiMC instance against the inventory cases that previously caused client locks:
 
+- command docs are now centralized and categorized; `@help`, the Commands UI, and the llama.cpp command catalogue share the same examples, categories, and expected input descriptions.
+- `@ui` opens the Belfegor control panel when another client mod captures the `C` key.
+- the Macros UI now has functional controls for creating, saving, reloading, running, pausing, stopping, duplicating, deleting, looping, adding, removing, and reordering macro steps.
+- the offline recipe registry rejects invalid empty recipes and resolves wood-family aliases contextually; for example `birch_wood` now plans with birch logs instead of generic/acacia logs.
+- `@craftaudit all 5` passed locally after the recipe-registry fix, with all tested wood-family recipes receiving the correct matching log family.
+- `@get cake` no longer creates the previous local-scan storm in the tested sample; loaded-block locality scanning is throttled/cached and the client stayed responsive while the task advanced into sugar cane and wheat dependencies.
 - `@shulker store [diamond 1, stick 2]` no longer loops on one inventory slot when the slot guard blocks a repeated click.
 - `@get diamond_shovel` retrieves a diamond from a catalogued carried shulker, returns leftover cursor items, picks the shulker back up, and then crafts the shovel.
 - `@get composter` accepts mixed slab variants in one craft, for example birch slabs plus oak slabs.
 - `@get anvil` expands ingots into iron blocks and then crafts the anvil through the guarded crafting table flow.
 - managed shulkers now prefer a jump-place-under-player placement path, then open from that known position.
 - shulker memory now stores slot-level catalogues: player inventory slot, shulker type, exact 27-slot internal contents, free slots, total count, and a contents fingerprint.
-- `@player` writes base memory and spatial awareness snapshots, starts larger modular base construction, records room/module centers and inspections, builds four-high walls, and can grow the camp through connected halls into farmland, storage, workshop, and mob-farm rooms.
+- `@player` writes base memory and spatial awareness snapshots, starts larger modular base construction, records room/module centers and inspections, builds four-high walls, and can grow the camp through connected halls into farmland, storage, workshop, and mob-farm rooms. `@build full` now performs that full base build deliberately, then validates navigation to remembered room centers.
+- Base validation is now schematic-backed for the core campsite: the expected cobblestone floor, walls, and room dividers are saved as a persisted blueprint and `@build validate` compares actual world blocks against it before declaring the base repaired.
+- LLM advisor defaults are intentionally conservative for gameplay: automatic player-mode calls are disabled unless enabled in settings, cooldown defaults to five minutes, context/token limits are reduced, and llama.cpp is capped to a small thread/batch count so it does not dominate the PC while Minecraft is running.
 
 See [`docs/TESTING.md`](docs/TESTING.md) for the current manual test matrix and known edge cases.
 
@@ -280,7 +289,7 @@ For developers and cheat-enabled test worlds, `@craftaudit` is the â€œmake t
 
 It uses the offline recipe catalogue, computes the leaf resources needed for each target, clears the test inventory between targets, gives only the needed resources/utilities, crafts through the normal Belfegor task engine, stores the result in ordinary containers, and writes a pass/skip/fail log under `.minecraft/belfegor/`. This is intentionally not a normal survival command; it is a regression harness for finding recipe, inventory, shulker, and crafting bugs.
 
-For low-level pathing and construction research, the repo includes a local [Baritone command reference](docs/BARITONE_COMMAND_REFERENCE.md) based on the bundled Baritone jar. Belfegor's campsite system uses Baritone APIs directly for region clearing and generated schematic builds, while `#help`, `#proc`, `#sel`, `#surface`, and related chat commands remain useful for in-game debugging.
+For low-level pathing and construction research, the repo includes a local [Baritone command reference](docs/BARITONE_COMMAND_REFERENCE.md) based on the bundled Baritone jar. Belfegor's campsite system uses Baritone APIs directly for region clearing and generated schematic builds, while `#build`, `#litematica`, `#help`, `#proc`, `#sel`, `#surface`, and related chat commands remain useful for in-game debugging. The current internal schematic file is Belfegor's validation source of truth; future `.litematic` import should adapt external schematics into that same blueprint model.
 
 ## System model
 
@@ -378,7 +387,7 @@ Open chat and run:
 @get crafting_table
 ```
 
-Press `C` to open the UI.
+Press `C` or run `@ui` to open the UI.
 
 ## The `C` UI
 
@@ -392,6 +401,10 @@ The Belfegor UI is meant to make the agent inspectable while it works:
 | Settings | Runtime toggles and configuration visibility. |
 | Shulkers | Indexed shulker memory and auto-sort mode. |
 | Log | Recent runtime/debug events. |
+
+The Macros tab is now an actual editor/runner: create a macro, edit its name/description, add command steps, reorder steps, toggle looping, and run/pause/stop it from the panel. Macro steps run through the same command executor as chat commands and wait for the user task lane before advancing.
+
+Known test note: in the current heavily modded local client, `@ui` logs that it is opening the panel, but overlay/client-screen conflicts can still prevent the panel from becoming visible. The code now creates a fresh screen instance and excludes `BelfegorScreen` from the generic screen-closing recovery chain; this should be rechecked in a cleaner client profile before calling the visual UI fully verified.
 
 ## Packaged llama.cpp advisor
 

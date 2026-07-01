@@ -6,6 +6,7 @@ import adris.belfegor.tasks.InteractWithBlockTask;
 import adris.belfegor.tasks.construction.PutOutFireTask;
 import adris.belfegor.tasks.movement.EnterNetherPortalTask;
 import adris.belfegor.tasks.movement.EscapeFromLavaTask;
+import adris.belfegor.tasks.movement.EscapeFromWaterTask;
 import adris.belfegor.tasks.movement.GetToBlockTask;
 import adris.belfegor.tasks.movement.SafeRandomShimmyTask;
 import adris.belfegor.tasksystem.TaskRunner;
@@ -48,6 +49,15 @@ public class WorldSurvivalChain extends SingleTaskChain {
 
         // Drowning
         handleDrowning(mod);
+
+        // Ocean/water escape. Swimming up alone is not enough if the bot
+        // starts in deep water or an ocean edge; pillar out when blocks exist.
+        if (shouldPillarOutOfWater(mod)) {
+            if (!(_mainTask instanceof EscapeFromWaterTask)) {
+                setTask(new EscapeFromWaterTask());
+            }
+            return 95;
+        }
 
         // Lava Escape
         if (isInLavaOhShit(mod) && mod.getBehaviour().shouldEscapeLava()) {
@@ -134,6 +144,29 @@ public class WorldSurvivalChain extends SingleTaskChain {
             mod.getInputControls().release(Input.JUMP);
             //mod.getClientBaritone().getInputOverrideHandler().setInputForceState(Input.JUMP, false);
         }
+    }
+
+    private boolean shouldPillarOutOfWater(Belfegor mod) {
+        if (mod.getPlayer() == null || mod.getWorld() == null) return false;
+        if (mod.getPlayer().isInLava()) return false;
+        if (!(mod.getPlayer().isTouchingWater()
+                || mod.getWorld().getBlockState(mod.getPlayer().getBlockPos()).getBlock() == Blocks.WATER
+                || mod.getWorld().getBlockState(mod.getPlayer().getBlockPos().down()).getBlock() == Blocks.WATER)) {
+            return false;
+        }
+        if (mod.getPlayer().isOnGround()
+                && !mod.getWorld().getBlockState(mod.getPlayer().getBlockPos()).getFluidState()
+                .isIn(net.minecraft.registry.tag.FluidTags.WATER)) {
+            return false;
+        }
+        return mod.getItemStorage().hasItem(Items.COBBLESTONE,
+                Items.COBBLED_DEEPSLATE,
+                Items.DIRT,
+                Items.NETHERRACK,
+                Items.STONE,
+                Items.OAK_PLANKS,
+                Items.SPRUCE_PLANKS,
+                Items.BIRCH_PLANKS);
     }
 
     private boolean isInLavaOhShit(Belfegor mod) {

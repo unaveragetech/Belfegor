@@ -40,7 +40,7 @@ releases/v1.21.4-beta1/mods/
 @get crafting_table
 ```
 
-6. Press `C` to open the Belfegor UI.
+6. Press `C` or run `@ui` to open the Belfegor UI.
 
 ## What this release does
 
@@ -58,7 +58,17 @@ Belfegor is a client-side Minecraft automation agent. It can:
 - run PvP preparation commands such as `@stacked` and `@toolset`;
 - run autonomous player mode with `@player`;
 - expose task state, command help, logs, and shulker memory through the `C` UI;
+- open the same UI with `@ui` when another client mod captures the `C` key;
+- edit and run macros from the UI with create/save/reload/run/pause/stop/duplicate/delete/loop/add/remove/reorder controls;
 - optionally allow trusted users to control the bot through Butler whispers.
+
+## Current hardening notes
+
+- `@craftaudit all 5` passed locally after the recipe-registry cleanup. The tested wood-family recipes received matching logs instead of generic wrong-family resources.
+- The recipe registry now rejects invalid empty recipes and resolves contextual aliases such as `log`, `planks`, and `slab` based on the output family when appropriate.
+- `@get cake` was rechecked after local loaded-block scan throttling; the client stayed responsive and the sampled log no longer showed the previous scan storm.
+- `@help ui`, `@status`, `@coords`, `@inventory`, and `@list` executed without command errors in the test instance.
+- Known issue: in the current heavily modded local test profile, `@ui` executes and logs `Opening Belfegor control panel.`, but the panel may still fail to become visible due to overlay/screen conflicts. Validate UI visuals in a clean profile before treating this release as UI-final.
 
 ## What this release cannot promise
 

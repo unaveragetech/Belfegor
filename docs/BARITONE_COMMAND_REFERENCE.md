@@ -1,116 +1,145 @@
 # Baritone Command Reference for Belfegor Development
 
-This file records the Baritone commands exposed by the bundled local Baritone jar used during Belfegor testing:
+This file records the Baritone commands exposed by the live Minecraft 1.21.4 test instance. It was refreshed from in-game `#help` output on 2026-06-29.
 
-`C:\Users\b0052\Desktop\baritone\dist\baritone-unoptimized-fabric-1.13.1.jar`
+Observed runtime:
 
-The commands below are available through Baritone chat control with the `#` prefix, for example `#help`, `#surface`, or `#sel clear`. Belfegor code should prefer Baritone's Java APIs for repeatable automation, but these commands are useful for in-game research, debugging, and manual recovery.
+- Minecraft: `1.21.4`
+- Baritone: `1.11.1-2-ga0f100f4`
+- Prefix: `#`, for example `#help`, `#proc`, `#sel cleararea`
 
-## Command discovery
+Belfegor should prefer Baritone Java APIs for repeatable automation, but these chat commands are useful for live research, manual recovery, and mapping future base-builder features onto native Baritone capabilities.
 
-| Command | Use |
+## Full command catalogue
+
+Live `#help` returned 6 pages:
+
+| Page | Commands |
 | --- | --- |
-| `#help` | Lists available Baritone commands. |
-| `#help <command>` | Shows detailed help for one command, for example `#help sel`. |
-| `#proc` | Shows active Baritone processes. Useful when Belfegor appears to have overlapping movement/build goals. |
-| `#eta` | Shows estimated time for the active path/process when available. |
-| `#version` | Prints Baritone version/build information. |
-| `#set` | Lists/settings interface for Baritone settings. |
-| `#set <setting> <value>` | Changes a Baritone setting for the current client. Use carefully during tests and document non-default settings. |
+| 1/6 | `help`, `set`, `modified`, `reset`, `goal`, `goto`, `path`, `proc` |
+| 2/6 | `eta`, `version`, `repack`, `build`, `litematica`, `come`, `axis`, `forcecancel` |
+| 3/6 | `gc`, `invert`, `tunnel`, `render`, `farm`, `follow`, `explorefilter`, `reloadall` |
+| 4/6 | `saveall`, `explore`, `blacklist`, `find`, `mine`, `click`, `surface`, `thisway` |
+| 5/6 | `waypoints`, `sethome`, `home`, `sel`, `elytra`, `pause`, `resume`, `paused` |
+| 6/6 | `cancel` |
 
-## Movement and navigation
+## Command discovery and process control
 
-| Command | Use |
-| --- | --- |
-| `#goto <x> <y> <z>` | Path to a coordinate. Supports relative coordinates such as `~ ~ ~`. |
-| `#goto <x> <z>` | Path to an X/Z goal when the datatype parser accepts it. |
-| `#goto <block>` | Path to the nearest matching block, for example `#goto chest`. |
-| `#goal <x> <y> <z>` | Set a goal without necessarily starting a path. |
-| `#path` | Start pathing to the current goal. |
-| `#come` | Path to the player/camera target depending on context. Handy for manual recovery. |
-| `#thisway <distance>` | Continue in the direction the player is facing for a distance. |
-| `#surface` / `#top` | Path upward to the closest surface-like air space. Useful when base-building tests strand the bot underground. |
-| `#follow <entity/player>` | Follow a player/entity target. |
-| `#forcecancel` | Force-cancel Baritone's active work. Use when `#proc` shows a stale process. |
+| Command | Aliases | Expected values / usage | Notes for Belfegor |
+| --- | --- | --- | --- |
+| `#help` |  | `#help`; `#help <command>`; `#help <page>` | Canonical live help. Use this when Baritone behavior changes. |
+| `#proc` |  | `#proc` | Shows the active Baritone process. Use when Belfegor appears to have overlapping movement/build goals. |
+| `#eta` |  | `#eta` | Shows current ETA when a path/process exists. |
+| `#version` |  | `#version` | Prints Baritone version information. |
+| `#pause` | `#p`, `#paws` | `#pause` | Pauses active pathing/building/following. |
+| `#resume` | `#r`, `#unpause`, `#unpaws` | `#resume` | Resumes a paused process. |
+| `#paused` |  | `#paused` | Reports whether Baritone is paused. |
+| `#cancel` | `#c`, `#stop` | `#cancel` | Normal cancel. |
+| `#forcecancel` |  | `#forcecancel` | Stronger cancel. Use for stale builder/pathing state before rerunning a Belfegor phase. |
+
+## Settings and cache commands
+
+| Command | Aliases | Expected values / usage | Notes |
+| --- | --- | --- | --- |
+| `#set` | `#setting`, `#settings` | `#set`; `#set list [page]`; `#set <setting>`; `#set <setting> <value>`; `#set toggle <setting>`; `#set save`; `#set load [filename]` | Almost all Baritone behavior is setting-driven. Document any non-default setting used in tests. |
+| `#modified` | `#mod`, `#baritone`, `#modifiedsettings` | Alias for `#set modified ...` | Lists modified settings. |
+| `#reset` |  | Alias for `#set reset ...`; `#set reset all`; `#set reset <setting>` | Reset carefully during tests. |
+| `#repack` | `#rescan` | `#repack` | Re-caches chunks around the player. |
+| `#reloadall` |  | `#reloadall` | Reloads Baritone's cache for this world. |
+| `#saveall` |  | `#saveall` | Saves Baritone's cache for this world. |
+| `#gc` |  | `#gc` | Calls `System.gc()`. Diagnostic only. |
+| `#render` |  | `#render` | Fixes glitched chunk rendering. |
+
+## Navigation and goals
+
+| Command | Aliases | Expected values / usage | Notes for Belfegor |
+| --- | --- | --- | --- |
+| `#goal` |  | `#goal`; `#goal reset/clear/none`; `#goal <y>`; `#goal <x> <z>`; `#goal <x> <y> <z>` | Sets a goal without necessarily starting pathing. Coordinates accept `~`. |
+| `#path` |  | `#path` | Starts pathing toward the current goal. |
+| `#goto` |  | `#goto <block>`; `#goto <y>`; `#goto <x> <z>`; `#goto <x> <y> <z>` | Direct path command. Coordinates accept `~`. |
+| `#come` |  | `#come` | Heads toward the camera; useful with freecam/manual recovery. |
+| `#axis` | `#highway` | `#axis` | Goals nearest axis where `X=0` or `Z=0`. |
+| `#invert` |  | `#invert` | Runs away from the current goal. |
+| `#surface` | `#top` | `#surface`; `#top` | Heads toward closest surface-like/highest air space. Useful when a bot is trapped underground or inside a bad build. |
+| `#thisway` | `#forward` | `#thisway <distance>` | Creates a `GoalXZ` in the current look direction. |
+| `#follow` |  | `#follow entities`; `#follow entity <entity1> <entity2> ...`; `#follow players`; `#follow player <username1> <username2> ...` | Follow entity/player targets. |
+| `#elytra` |  | `#elytra`; `#elytra reset`; `#elytra repack`; `#elytra supported` | Nether elytra pathing to the current goal when native support exists. |
 
 ## Resource and world interaction
 
-| Command | Use |
-| --- | --- |
-| `#mine <block...>` | Mine one or more block types. Example: `#mine cobblestone`. |
-| `#farm` | Farm supported crops in the nearby area. |
-| `#pickup <item...>` | Pick up nearby dropped items. |
-| `#find <block...>` | Locate known cached blocks. |
-| `#tunnel` | Dig a tunnel using Baritone's tunnel process. |
-| `#explore` | Explore new chunks/terrain. |
-| `#explorefilter` | Configure explore filtering. |
-| `#blacklist` | Manage blacklisted blocks/locations for current Baritone processes. |
+| Command | Aliases | Expected values / usage | Notes for Belfegor |
+| --- | --- | --- | --- |
+| `#mine` |  | `#mine <block>`; example `#mine diamond_ore` | Searches for and mines individual blocks. Help points to legit mine settings via `#set l legitMine`. |
+| `#find` |  | `#find <block> [...]` | Searches Baritone cache. Tab completion only suggests cached blocks; uncached blocks cannot be found. |
+| `#farm` |  | `#farm`; `#farm <range>`; `#farm <range> <waypoint>` | Harvests mature crops and replants. Future Belfegor farm-room maintenance can use this within remembered farm bounds. |
+| `#tunnel` |  | `#tunnel`; `#tunnel <height> <width> <depth>` | Mines straight in look direction. Default is 1x2. |
+| `#explore` |  | `#explore`; `#explore <x> <z>` | Random exploration from current or specified X/Z. |
+| `#explorefilter` |  | `#explorefilter <path> [invert]` | JSON format: `[{"x":0,"z":0},...]`. With `invert`, listed chunks are treated as not explored. |
+| `#blacklist` |  | `#blacklist` | While going to a block, blacklists the closest block so Baritone will not attempt it again. |
+| `#click` |  | `#click` | Opens Baritone click helper/debug UI. |
+
+## Waypoints
+
+| Command | Aliases | Expected values / usage | Notes |
+| --- | --- | --- | --- |
+| `#waypoints` | `#waypoint`, `#wp` | `#wp list`; `#wp list <tag>`; `#wp save`; `#wp save [tag] [name] [pos]`; `#wp info <tag/name>`; `#wp delete <tag/name>`; `#wp restore <n>`; `#wp clear <tag>`; `#wp goal <tag/name>`; `#wp goto <tag/name>` | Waypoints have a tag and optional name. Missing save args default to a `USER` waypoint at current position. |
+| `#sethome` |  | Alias for `#waypoints save home ...` | Sets a Baritone home waypoint. Separate from Belfegor `@home` memory. |
+| `#home` |  | Alias for `#waypoints goto home ...` | Paths to Baritone home waypoint. |
 
 ## Selection and area operations
 
-The `#sel` command is the most relevant command family for future base-building work. The local class exposes aliases `#sel`, `#selection`, and `#s`.
+The `#sel` command is the most important live Baritone command family for base-building research. It exposes aliases `#sel`, `#selection`, and `#s`.
 
-| Command | Use |
-| --- | --- |
-| `#sel pos1` | Set selection position 1 to the viewer/player position. |
-| `#sel pos1 <x> <y> <z>` | Set selection position 1 explicitly. |
-| `#sel pos2` | Set selection position 2 and add the selection. `pos1` must be set first. |
-| `#sel pos2 <x> <y> <z>` | Set selection position 2 explicitly and add the selection. |
-| `#sel clear` | Clear all selections. |
-| `#sel undo` | Undo the last selection step. |
-| `#sel cleararea` | Clear selected area to air. This maps conceptually to Belfegor's `ClearRegionTask`. |
-| `#sel set <block>` | Fill selected area with a block. |
-| `#sel replace <from...> <to>` | Replace matching blocks inside the selection. |
-| `#sel walls <block>` | Build/fill the walls of a selection. |
-| `#sel shell <block>` | Fill the shell/perimeter of a selection. |
-| `#sel expand <direction> <amount>` | Expand the current selection. |
-| `#sel contract <direction> <amount>` | Contract the current selection. |
-| `#sel shift <direction> <amount>` | Move the current selection. |
-| `#sel copy` / `#sel paste` | Clipboard-style schematic operations, when available. |
+Live help notes:
 
-For Belfegor base building, the equivalent internal pattern is:
+- Selections are “WorldEdit-like”.
+- Selections can clear areas, fill blocks, build walls/shells, copy, paste, and reshape regions.
+- `expand`, `contract`, and `shift` target selectors support `a/all`, `n/newest`, and `o/oldest`.
 
-1. Compute the room/hall bounding boxes.
-2. Use `ClearRegionTask`, which calls Baritone builder clearing for the full region.
-3. Generate floor, wall, roof, and fixture target lists.
-4. Use `BuildRegionSchematicTask`, which calls Baritone's builder process with one in-memory schematic per phase.
-5. Save the result into `BaseMemory` and `LocationMemory` so `@home <room>` can route to the remembered center.
+| Command | Aliases | Expected values / usage | Belfegor mapping |
+| --- | --- | --- | --- |
+| `#sel pos1` | `p1`, `1` | `#sel pos1`; `#sel pos1 <x> <y> <z>` | Set selection position 1 to current or relative position. |
+| `#sel pos2` | `p2`, `2` | `#sel pos2`; `#sel pos2 <x> <y> <z>` | Set selection position 2 to current or relative position. |
+| `#sel clear` | `c` | `#sel clear` | Clear the selection. |
+| `#sel undo` | `u` | `#sel undo` | Undo last selection action. |
+| `#sel set` | `fill`, `s`, `f` | `#sel set [block]` | Fill all selections with a block. Conceptually maps to generated floor/fill phases. |
+| `#sel walls` | `w` | `#sel walls [block]` | Fill walls only. Conceptually maps to perimeter/room wall phases. |
+| `#sel shell` | `shl` | `#sel shell [block]` | Fill walls, ceiling, and floor. Useful for mob-room shells. |
+| `#sel sphere` | `sph` | `#sel sphere [block]` | Fill selected bounds with a sphere. Not currently used by base builder. |
+| `#sel hsphere` | `hsph` | `#sel hsphere [block]` | Hollow sphere. |
+| `#sel cylinder` | `cyl` | `#sel cylinder [block] <axis>` | Cylinder bounded by selection; default axis is `y`. |
+| `#sel hcylinder` | `hcyl` | `#sel hcylinder [block] <axis>` | Hollow cylinder. |
+| `#sel cleararea` | `ca` | `#sel cleararea` | Equivalent to `set air`. Conceptually maps to `ClearRegionTask`. |
+| `#sel replace` | `r` | `#sel replace <blocks...> <with>` | Replace matching blocks inside selection. |
+| `#sel copy` | `cp` | `#sel copy <x> <y> <z>` | Copy selected area relative to specified/current position. |
+| `#sel paste` | `p` | `#sel paste <x> <y> <z>` | Build copied area relative to specified/current position. |
+| `#sel expand` |  | `#sel expand <target> <direction> <blocks>` | Useful model for deriving clearance volumes from room/hall boxes. |
+| `#sel contract` |  | `#sel contract <target> <direction> <blocks>` | Resize target selection inward. |
+| `#sel shift` |  | `#sel shift <target> <direction> <blocks>` | Move target selection without resizing. |
 
 ## Schematic/build commands
 
-| Command | Use |
-| --- | --- |
-| `#build <schematic>` | Load a schematic from the Minecraft `schematics` folder and build it at the current feet position. |
-| `#build <schematic> <x> <y> <z>` | Build a schematic at an explicit origin. |
-| `#schematica` | Schematica integration command where supported. |
-| `#litematica` | Litematica integration command where supported. |
+| Command | Expected values / usage | Notes |
+| --- | --- | --- |
+| `#build` | `#build <filename>`; `#build <filename> <x> <y> <z>` | Loads and builds `<filename>.schematic`, optionally at custom origin. |
+| `#litematica` | `#litematica`; `#litematica <#>` | Builds the currently loaded Litematica schematic. |
 
-Belfegor does not need on-disk schematics for ordinary campsite rooms. It builds generated in-memory schematics for floors, walls, roofs, and halls so every room can be derived from base memory and room type.
+Belfegor now saves an internal on-disk blueprint for the core campsite at `.minecraft/belfegor/schematics/base_core_<dimension>_<x>_<y>_<z>.belfegor_schematic.json`. Validation loads that file and checks every expected block against the world before marking the core complete.
 
-## Render, cache, and maintenance
-
-| Command | Use |
-| --- | --- |
-| `#render` | Toggle/query Baritone rendering settings. |
-| `#reloadall` | Reload Baritone caches/settings where supported. |
-| `#saveall` | Save Baritone cache data. |
-| `#gc` | Request Java garbage collection. Useful only for diagnostics. |
-| `#repack` | Repack Baritone cached world data. |
-| `#axis` | Axis helper command. |
-| `#click` | Click helper/debug command. |
-| `#invert` | Invert selection/goal-related state where supported. |
-| `#elytra` | Elytra pathing command where supported. |
+Current code still uses generated in-memory Baritone schematics through `BuildRegionSchematicTask` for execution. The saved blueprint is the validation/source-of-truth layer; Baritone's `#build` and `#litematica` command families are the native execution/interoperability layer for future imported schematics.
 
 ## Belfegor base-building policy
 
-Belfegor's campsite system should not place one block, walk away, then come back for another block. That pattern indicates overlapping small goals. The intended construction policy is:
+Belfegor's campsite system should not place one block, walk away, then come back for another block. That pattern indicates overlapping small goals or stale Baritone processes. The intended construction policy is:
 
-- clear the full room and hall space first;
-- place the floor as one generated schematic phase;
-- place the wall shell as one generated schematic phase;
-- place the roof as one generated schematic phase when the room type needs a roof, such as `mob_farm`;
-- place fixtures after the shell is done;
-- only then perform farmland-specific steps such as water placement, tilling, and planting;
-- remember every module center, hall, direction, dimensions, and status in base memory.
+1. Run supply preflight without placing overflow storage into unbuilt terrain.
+2. Build the central campsite/core first.
+3. Place or reuse the central construction staging chest inside the campsite storage anchor.
+4. Free inventory into that central chest only after the floor/walls exist.
+5. Clear the full room/hall space before placing new room blocks.
+6. Place floor, walls, and roof as generated schematic phases.
+7. Place fixtures after the shell is done.
+8. For farmland, dig/fill the 2x2 water source first, then till only hydrated soil, then plant.
+9. Save every module center, hall, direction, dimensions, and status in `BaseMemory` and `LocationMemory`.
 
-For test recovery, use `#proc` to inspect active Baritone processes and `#forcecancel` if a stale Baritone process survives after Belfegor has stopped.
+For test recovery, use `#proc` to inspect active Baritone processes and `#forcecancel` if a stale process survives after Belfegor has stopped.

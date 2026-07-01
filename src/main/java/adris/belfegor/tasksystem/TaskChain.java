@@ -7,6 +7,8 @@ import java.util.List;
 
 public abstract class TaskChain {
 
+    public static final int MAX_TASK_DEPTH_PER_TICK = 96;
+
     private final List<Task> _cachedTaskChain = new ArrayList<>();
 
     public TaskChain(TaskRunner runner) {
@@ -41,6 +43,19 @@ public abstract class TaskChain {
 
     void addTaskToChain(Task task) {
         _cachedTaskChain.add(task);
+    }
+
+    boolean isOverDepthLimit() {
+        return _cachedTaskChain.size() > MAX_TASK_DEPTH_PER_TICK;
+    }
+
+    String describeTaskChain() {
+        StringBuilder result = new StringBuilder();
+        for (int i = 0; i < _cachedTaskChain.size(); i++) {
+            if (i > 0) result.append(" -> ");
+            result.append(_cachedTaskChain.get(i));
+        }
+        return result.toString();
     }
 
     public String toString() {

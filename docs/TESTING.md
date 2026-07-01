@@ -58,12 +58,19 @@ Expected behavior:
 
 The latest local test pass verified:
 
+- `@help ui`, `@status`, `@coords`, `@inventory`, and `@list` executed without command errors in the `1.21.4` test instance.
+- `@ui` is registered and executes, logging `Opening Belfegor control panel.` In the current heavily modded test profile, the screen still did not become visible, so visual UI verification remains a release-blocking follow-up for a clean client profile or the next UI patch.
+- the Macros tab code now provides create/save/reload/run/pause/stop/duplicate/delete/loop/add/remove/reorder controls and compiles cleanly.
+- `@craftaudit all 5` passed after recipe-registry cleanup. The audit gave matching wood-family resources: acacia wood used acacia logs, birch wood used birch logs, dark oak wood used dark oak logs, oak wood used oak logs, and jungle wood used jungle logs.
+- `@get cake` no longer produced a local scan storm in the sampled run. The bot advanced through normal dependencies and the recent log tail contained one `RESOURCE-LOCALITY` line while the Java process remained responsive.
 - `@shulker store [diamond 1, stick 2]` no longer produced the old repeated `SLOT-STUCK slot=28` loop.
 - `@get diamond_shovel` retrieved from a catalogued carried shulker and crafted successfully.
 - `@get composter` crafted successfully using birch and oak slabs together.
 - `@get anvil` crafted successfully from ingots through iron blocks.
 - `@player` generated base memory and spatial awareness.
 - `@player` begins from a radius-8 home plan and can expand toward radius 18 over later passes.
+- `@build full [radius] [here]` serializes the complete base build: core camp, storage, workshop, hydrated crop farm, roofed mob-farm chamber, and route validation to remembered room centers.
+- Full-base farm validation must start from a clean inventory, then give the bot at least one chest, one shulker box, four water buckets, seeds, a hoe, dirt, and cobblestone. The farm is not considered complete unless the room contains a 2x2 infinite water source before tilling/planting begins.
 - `@player` skips auto-shulker sorting while in HOME/build mode so base construction is not starved by inventory-pressure sorting.
 - `@player` began clearing a modular base and wrote planned modules with room centers, inspection records, and progress counters.
 - Shulker pickup timeout spam was fixed by targeting one dropped placed shulker and by releasing/recovering the transaction when a matching carried shulker is present.
@@ -74,6 +81,7 @@ The latest local test pass verified:
 
 ## Known edge cases to keep testing
 
+- The Belfegor control panel can still fail to become visible in the current heavily modded local profile even though `@ui` executes. Suspected causes are client overlay/screen conflicts. The code now uses a fresh screen instance and excludes `BelfegorScreen` from the generic screen-closing chain, but this needs a clean-profile visual verification.
 - Shulker placement can still choose awkward geometry where the block above is air but the bot cannot open the shulker reliably. Current behavior recovers by breaking and picking up the shulker; placement scoring should improve.
 - Auto shulker mode can interrupt long base-building work when inventory pressure is high. The transaction is safe, but scheduling should become less jumpy.
 - Some command smoke tests are intentionally shallow because destructive/world-changing commands need controlled worlds.

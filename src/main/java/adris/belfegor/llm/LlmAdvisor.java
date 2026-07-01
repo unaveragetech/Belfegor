@@ -205,6 +205,8 @@ public class LlmAdvisor {
                     "-m", model.getAbsolutePath(),
                     "-c", String.valueOf(mod.getModSettings().getLlmContextSize()),
                     "-n", String.valueOf(mod.getModSettings().getLlmMaxTokens()),
+                    "-t", String.valueOf(mod.getModSettings().getLlmMaxThreads()),
+                    "-b", String.valueOf(mod.getModSettings().getLlmBatchSize()),
                     "--temp", "0.2",
                     "-f", _promptFile.getAbsolutePath()
             );

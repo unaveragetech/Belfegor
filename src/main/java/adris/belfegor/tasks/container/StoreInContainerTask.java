@@ -3,6 +3,7 @@ package adris.belfegor.tasks.container;
 import adris.belfegor.Belfegor;
 import adris.belfegor.TaskCatalogue;
 import adris.belfegor.tasks.slot.MoveItemToSlotFromInventoryTask;
+import adris.belfegor.tasksystem.ITaskCanForce;
 import adris.belfegor.tasksystem.Task;
 import adris.belfegor.trackers.storage.ContainerCache;
 import adris.belfegor.util.ItemTarget;
@@ -10,6 +11,8 @@ import adris.belfegor.util.helpers.StorageHelper;
 import adris.belfegor.util.slots.Slot;
 import net.minecraft.item.ItemStack;
 import net.minecraft.util.math.BlockPos;
+import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gui.screen.ingame.HandledScreen;
 
 import java.util.Arrays;
 import java.util.List;
@@ -18,7 +21,7 @@ import java.util.Optional;
 /**
  * Moves items from your inventory to a storage container.
  */
-public class StoreInContainerTask extends AbstractDoToStorageContainerTask {
+public class StoreInContainerTask extends AbstractDoToStorageContainerTask implements ITaskCanForce {
 
     private final BlockPos _targetContainer;
     private final boolean _getIfNotPresent;
@@ -52,6 +55,11 @@ public class StoreInContainerTask extends AbstractDoToStorageContainerTask {
 
     @Override
     protected Task onTick(Belfegor mod) {
+        if (_toStore.length == 0 && StorageHelper.getItemStackInCursorSlot().isEmpty()) {
+            StorageHelper.closeScreen();
+            setDebugState("Nothing to store; releasing container.");
+            return null;
+        }
         // Get more if we don't have & "get if not present" is true.
         if (_getIfNotPresent) {
             for (ItemTarget target : _toStore) {
@@ -65,9 +73,19 @@ public class StoreInContainerTask extends AbstractDoToStorageContainerTask {
     }
 
     @Override
+    public boolean shouldForce(Belfegor mod, Task interruptingCandidate) {
+        return !StorageHelper.getItemStackInCursorSlot().isEmpty()
+                || (_storedItems != null
+                && _storedItems.getUnstoredItemTargetsYouCanStore(mod, _toStore).length > 0
+                && MinecraftClient.getInstance().currentScreen instanceof HandledScreen);
+    }
+
+    @Override
     protected void onStop(Belfegor mod, Task interruptTask) {
         super.onStop(mod, interruptTask);
-        _storedItems.stopTracking();
+        if (_storedItems != null) {
+            _storedItems.stopTracking();
+        }
     }
 
     @Override
@@ -92,19 +110,40 @@ public class StoreInContainerTask extends AbstractDoToStorageContainerTask {
                     setDebugState("CONTAINER FULL!");
                     return null;
                 }
-                setDebugState("Moving to slot...");
-                return new MoveItemToSlotFromInventoryTask(target, toMoveTo.get());
+                ItemStack destinationStack = StorageHelper.getItemStackInSlot(toMoveTo.get());
+                int destinationSpace;
+                if (destinationStack.isEmpty()) {
+                    destinationSpace = stackIn.getMaxCount();
+                } else if (target.matches(destinationStack.getItem())) {
+                    destinationSpace = Math.max(0, destinationStack.getMaxCount() - destinationStack.getCount());
+                } else {
+                    destinationSpace = 0;
+                }
+                if (destinationSpace <= 0) {
+                    setDebugState("CONTAINER SLOT FULL!");
+                    return null;
+                }
+                int moveCount = Math.min(target.getTargetCount(), Math.min(stackIn.getCount(), destinationSpace));
+                ItemTarget moveTarget = new ItemTarget(target, moveCount);
+                setDebugState("Moving to slot " + moveTarget + " space=" + destinationSpace);
+                return new MoveItemToSlotFromInventoryTask(moveTarget, toMoveTo.get());
             }
             setDebugState("SHOULD NOT HAPPEN! No valid items detected.");
         }
-        setDebugState("SHOULD NOT HAPPEN! All items stored but we're still trying.");
+        if (StorageHelper.getItemStackInCursorSlot().isEmpty()) {
+            StorageHelper.closeScreen();
+        }
+        setDebugState("All requested items stored; releasing container.");
         return null;
     }
 
     @Override
     public boolean isFinished(Belfegor mod) {
         // We've stored all items
-        return _storedItems != null && _storedItems.getUnstoredItemTargetsYouCanStore(mod, _toStore).length == 0;
+        return StorageHelper.getItemStackInCursorSlot().isEmpty()
+                && (_toStore.length == 0
+                || (_storedItems != null
+                && _storedItems.getUnstoredItemTargetsYouCanStore(mod, _toStore).length == 0));
     }
 
     @Override

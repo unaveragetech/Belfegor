@@ -96,7 +96,7 @@ public class RecipeRegistry {
                 JsonObject recipeObj = elem.getAsJsonObject();
                 try {
                     RecipeEntry entry = parseRecipe(recipeObj);
-                    if (entry != null) {
+                    if (entry != null && isValidCraftingRecipe(entry.recipe)) {
                         _recipesByOutput
                                 .computeIfAbsent(entry.outputItem, k -> new ArrayList<>())
                                 .add(entry);
@@ -132,9 +132,9 @@ public class RecipeRegistry {
 
         CraftingRecipe recipe;
         if ("shaped".equals(type) && obj.has("pattern")) {
-            recipe = parseShapedRecipe(obj.getAsJsonArray("pattern"), outputCount);
+            recipe = parseShapedRecipe(obj.getAsJsonArray("pattern"), outputCount, outputItem);
         } else if ("shapeless".equals(type) && obj.has("ingredients")) {
-            recipe = parseShapelessRecipe(obj.getAsJsonArray("ingredients"), outputCount);
+            recipe = parseShapelessRecipe(obj.getAsJsonArray("ingredients"), outputCount, outputItem);
         } else {
             return null;
         }
@@ -144,7 +144,7 @@ public class RecipeRegistry {
         return new RecipeEntry(outputItem, outputCount, recipe, type);
     }
 
-    private CraftingRecipe parseShapedRecipe(JsonArray pattern, int outputCount) {
+    private CraftingRecipe parseShapedRecipe(JsonArray pattern, int outputCount, Item outputItem) {
         int height = pattern.size();
         if (height == 0) return null;
 
@@ -164,11 +164,9 @@ public class RecipeRegistry {
             for (int x = 0; x < row.size(); x++) {
                 JsonElement cell = row.get(x);
                 if (!cell.isJsonNull()) {
-                    String ingredientName = cell.getAsString();
-                    Item ingredient = getItemByName(ingredientName);
-                    if (ingredient != null) {
-                        slots[y * 3 + x] = new ItemTarget(expandSimilarIngredient(ingredient));
-                    }
+                    ItemTarget ingredient = getIngredientTargetByName(cell.getAsString(), outputItem);
+                    if (ingredient == null) return null;
+                    slots[y * 3 + x] = ingredient;
                 }
             }
         }
@@ -188,7 +186,7 @@ public class RecipeRegistry {
         return CraftingRecipe.newShapedRecipe(slots, outputCount);
     }
 
-    private CraftingRecipe parseShapelessRecipe(JsonArray ingredients, int outputCount) {
+    private CraftingRecipe parseShapelessRecipe(JsonArray ingredients, int outputCount, Item outputItem) {
         if (ingredients.size() > 9) return null;
 
         ItemTarget[] slots = new ItemTarget[9];
@@ -197,11 +195,9 @@ public class RecipeRegistry {
         for (int i = 0; i < ingredients.size(); i++) {
             JsonElement elem = ingredients.get(i);
             if (!elem.isJsonNull()) {
-                String ingredientName = elem.getAsString();
-                Item ingredient = getItemByName(ingredientName);
-                if (ingredient != null) {
-                    slots[i] = new ItemTarget(expandSimilarIngredient(ingredient));
-                }
+                ItemTarget ingredient = getIngredientTargetByName(elem.getAsString(), outputItem);
+                if (ingredient == null) return null;
+                slots[i] = ingredient;
             }
         }
 
@@ -240,7 +236,9 @@ public class RecipeRegistry {
      */
     public boolean isCraftable(Item item) {
         if (!_loaded) load();
-        return _recipesByOutput.containsKey(item);
+        List<RecipeEntry> recipes = _recipesByOutput.get(item);
+        if (recipes == null || recipes.isEmpty()) return false;
+        return recipes.stream().anyMatch(entry -> isValidCraftingRecipe(entry.recipe));
     }
 
     /**
@@ -379,6 +377,71 @@ public class RecipeRegistry {
         if (contains(ItemHelper.WOOL, ingredient)) return ItemHelper.WOOL;
         if (contains(ItemHelper.CARPET, ingredient)) return ItemHelper.CARPET;
         return new Item[]{ingredient};
+    }
+
+    private ItemTarget getIngredientTargetByName(String name, Item outputItem) {
+        String normalized = name == null ? "" : name.trim();
+        if (normalized.isEmpty()) return null;
+        ItemTarget woodSpecific = getWoodSpecificIngredient(normalized, outputItem);
+        if (woodSpecific != null) return woodSpecific;
+        return switch (normalized) {
+            case "planks", "#minecraft:planks", "minecraft:planks" -> new ItemTarget(ItemHelper.PLANKS);
+            case "log", "logs", "#minecraft:logs", "minecraft:logs" -> new ItemTarget(ItemHelper.LOG);
+            case "stripped_logs", "#minecraft:stripped_logs", "minecraft:stripped_logs" -> new ItemTarget(ItemHelper.STRIPPED_LOGS);
+            case "wood_slab", "wooden_slab", "slab", "#minecraft:wooden_slabs", "minecraft:wooden_slabs" -> new ItemTarget(ItemHelper.WOOD_SLAB);
+            case "wool", "#minecraft:wool", "minecraft:wool" -> new ItemTarget(ItemHelper.WOOL);
+            case "carpet", "#minecraft:wool_carpets", "minecraft:wool_carpets" -> new ItemTarget(ItemHelper.CARPET);
+            default -> {
+                Item ingredient = getItemByName(normalized);
+                yield ingredient == null ? null : new ItemTarget(expandSimilarIngredient(ingredient));
+            }
+        };
+    }
+
+    private ItemTarget getWoodSpecificIngredient(String normalized, Item outputItem) {
+        if (outputItem == null) return null;
+        ItemHelper.WoodItems wood = null;
+        String outputId = itemId(outputItem);
+        for (ItemHelper.WoodItems candidate : ItemHelper.getWoodItems()) {
+            if (candidate == null || candidate.prefix == null) continue;
+            if (outputId.contains(":" + candidate.prefix + "_")) {
+                wood = candidate;
+                break;
+            }
+        }
+        if (wood == null) return null;
+        return switch (normalized) {
+            case "planks", "#minecraft:planks", "minecraft:planks" ->
+                    wood.planks == null ? null : new ItemTarget(wood.planks, 1);
+            case "log", "logs", "#minecraft:logs", "minecraft:logs" ->
+                    wood.log == null ? null : new ItemTarget(wood.log, 1);
+            case "stripped_logs", "#minecraft:stripped_logs", "minecraft:stripped_logs" ->
+                    wood.strippedLog == null ? null : new ItemTarget(wood.strippedLog, 1);
+            case "wood_slab", "wooden_slab", "slab", "#minecraft:wooden_slabs", "minecraft:wooden_slabs" ->
+                    wood.slab == null ? null : new ItemTarget(wood.slab, 1);
+            default -> null;
+        };
+    }
+
+    private boolean isValidCraftingRecipe(CraftingRecipe recipe) {
+        if (recipe == null) return false;
+        if (recipe.outputCount() <= 0) return false;
+        if (recipe.getSlotCount() != 4 && recipe.getSlotCount() != 9) return false;
+        if (recipe.getFilledSlotCount() <= 0) return false;
+        for (ItemTarget slot : recipe.getSlots()) {
+            if (slot == null || slot.isEmpty()) continue;
+            Item[] matches = slot.getMatches();
+            if (matches == null || matches.length == 0) return false;
+            boolean hasRealItem = false;
+            for (Item match : matches) {
+                if (match != null && match != net.minecraft.item.Items.AIR) {
+                    hasRealItem = true;
+                    break;
+                }
+            }
+            if (!hasRealItem) return false;
+        }
+        return true;
     }
 
     private boolean contains(Item[] group, Item item) {

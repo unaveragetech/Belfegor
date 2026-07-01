@@ -10,6 +10,7 @@ import adris.belfegor.tasks.container.ShulkerInteractionTask;
 import adris.belfegor.tasksystem.Task;
 import adris.belfegor.tasksystem.TaskChain;
 import adris.belfegor.tasksystem.TaskRunner;
+import adris.belfegor.commandsystem.CommandDocumentation;
 import com.google.gson.*;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
@@ -25,7 +26,7 @@ import java.util.*;
 public class BelfegorScreen extends Screen {
     private final Belfegor mod;
     private int selectedTab = 0;
-    private static final String[] TAB_NAMES = {"Tasks", "Macros", "Commands", "Settings", "Shulkers", "Log"};
+    private static final String[] TAB_NAMES = {"Tasks", "Macros", "Commands", "Settings", "Shulkers", "Schematics", "Log"};
 
     // Colors - modern dark theme
     private static final int BG = 0xFF0D1117;
@@ -69,9 +70,12 @@ public class BelfegorScreen extends Screen {
     private int settingsScrollOffset = 0;
     private int logScrollOffset = 0;
     private int shulkerScrollOffset = 0;
+    private int schematicScrollOffset = 0;
     private int commandScrollOffset = 0;
     private int selectedCommandIndex = 0;
     private final List<CommandExampleHitbox> commandExampleHitboxes = new ArrayList<>();
+    private final List<UiButtonHitbox> macroButtonHitboxes = new ArrayList<>();
+    private final List<CommandExampleHitbox> schematicCommandHitboxes = new ArrayList<>();
     private String lastClickedCommandExample = "";
     private long lastCommandExampleClickTime = 0;
     private String statusMessage = "";
@@ -303,7 +307,8 @@ public class BelfegorScreen extends Screen {
             case 2 -> renderCommandsTab(ctx, mouseX, mouseY, y);
             case 3 -> renderSettingsTab(ctx, mouseX, mouseY, y);
             case 4 -> renderShulkersTab(ctx, mouseX, mouseY, y);
-            case 5 -> renderLogTab(ctx, mouseX, mouseY, y);
+            case 5 -> renderSchematicsTab(ctx, mouseX, mouseY, y);
+            case 6 -> renderLogTab(ctx, mouseX, mouseY, y);
         }
     }
 
@@ -507,13 +512,17 @@ public class BelfegorScreen extends Screen {
     // ======================== MACROS TAB ========================
 
     private void renderMacrosTab(DrawContext ctx, int mouseX, int mouseY, int y) {
+        macroButtonHitboxes.clear();
         MacroRunner runner = getMacroRunner();
         List<MacroChain> macros = MacroStorage.getMacros();
         int listW = this.width * 2 / 5;
 
         ctx.fill(10, y, listW, this.height - 36, BG_LIGHTER);
         drawText(ctx, "Macros (" + macros.size() + ")", 14, y + 4, TEXT_BRIGHT);
-        int listY = y + 20;
+        renderButton(ctx, 14, y + 20, 58, y + 36, "New", "macro:new", mouseX, mouseY, ACCENT);
+        renderButton(ctx, 76, y + 20, 134, y + 36, "Save", "macro:save", mouseX, mouseY, SUCCESS);
+        renderButton(ctx, 138, y + 20, 204, y + 36, "Reload", "macro:reload", mouseX, mouseY, WARNING);
+        int listY = y + 42;
 
         if (runner != null && runner.isRunning()) {
             ctx.fill(12, listY, listW - 2, listY + 14, 0xFF2A2A0A);
@@ -532,16 +541,39 @@ public class BelfegorScreen extends Screen {
         }
 
         int rightX = listW + 10;
+        macroNameInput.setX(rightX + 4);
+        macroNameInput.setY(y + 42);
+        macroNameInput.setWidth(Math.max(120, (this.width - rightX - 24) / 3));
+        macroStepInput.setX(rightX + 8);
+        macroStepInput.setY(y + 78);
+        macroStepInput.setWidth(Math.max(160, this.width - rightX - 24));
+        macroDescInput.setX(rightX + macroNameInput.getWidth() + 12);
+        macroDescInput.setY(y + 42);
+        macroDescInput.setWidth(Math.max(160, this.width - macroDescInput.getX() - 14));
         ctx.fill(rightX, y, this.width - 10, this.height - 36, BG_LIGHTER);
         if (selectedMacroIndex >= 0 && selectedMacroIndex < macros.size()) {
             MacroChain m = macros.get(selectedMacroIndex);
-            drawText(ctx, m.getName(), rightX + 4, y + 4, TEXT_BRIGHT);
-            int ry = y + 20;
-            if (m.getDescription() != null && !m.getDescription().isEmpty()) { drawText(ctx, m.getDescription(), rightX + 4, ry, TEXT_DIM); ry += 14; }
-            ry += 4;
+            drawText(ctx, "Macro editor", rightX + 4, y + 4, TEXT_BRIGHT);
+            int buttonY = y + 20;
+            renderButton(ctx, rightX + 4, buttonY, rightX + 60, buttonY + 16, "Run", "macro:run", mouseX, mouseY, SUCCESS);
+            renderButton(ctx, rightX + 64, buttonY, rightX + 124, buttonY + 16, runner != null && runner.isPaused() ? "Resume" : "Pause", "macro:pause", mouseX, mouseY, WARNING);
+            renderButton(ctx, rightX + 128, buttonY, rightX + 188, buttonY + 16, "Stop", "macro:stop", mouseX, mouseY, ERROR);
+            renderButton(ctx, rightX + 192, buttonY, rightX + 266, buttonY + 16, "Duplicate", "macro:duplicate", mouseX, mouseY, ACCENT);
+            renderButton(ctx, rightX + 270, buttonY, rightX + 330, buttonY + 16, "Delete", "macro:delete", mouseX, mouseY, ERROR);
+            renderButton(ctx, rightX + 334, buttonY, rightX + 404, buttonY + 16, m.isLoop() ? "Loop:on" : "Loop:off", "macro:loop", mouseX, mouseY, m.isLoop() ? SUCCESS : TEXT_DIM);
+
+            int ry = y + 42;
+            drawText(ctx, "Name and description are editable. Press Save after changes.", rightX + 4, ry, TEXT_DIM);
+            ry += 38;
+            renderButton(ctx, rightX + 4, ry, rightX + 84, ry + 16, "Add step", "macro:add-step", mouseX, mouseY, SUCCESS);
+            renderButton(ctx, rightX + 88, ry, rightX + 156, ry + 16, "Remove", "macro:remove-step", mouseX, mouseY, ERROR);
+            renderButton(ctx, rightX + 160, ry, rightX + 210, ry + 16, "Up", "macro:step-up", mouseX, mouseY, ACCENT);
+            renderButton(ctx, rightX + 214, ry, rightX + 274, ry + 16, "Down", "macro:step-down", mouseX, mouseY, ACCENT);
+            ry += 22;
             drawText(ctx, "Steps:", rightX + 4, ry, TEXT);
             ry += 14;
             for (int i = 0; i < m.getSteps().size(); i++) {
+                if (ry + 13 > this.height - 42) break;
                 MacroStep step = m.getSteps().get(i);
                 ctx.fill(rightX + 2, ry - 1, this.width - 12, ry + 11, i == selectedMacroStepIndex ? HIGHLIGHT : BG_LIGHTER);
                 drawText(ctx, (i + 1) + ". " + step.toString(), rightX + 6, ry, step.isEnabled() ? TEXT : TEXT_DIM);
@@ -557,7 +589,9 @@ public class BelfegorScreen extends Screen {
                 }
             }
         } else {
-            drawText(ctx, "Select a macro", rightX + 4, y + 4, TEXT_DIM);
+            drawText(ctx, "Select a macro or click New.", rightX + 4, y + 4, TEXT_DIM);
+            drawText(ctx, "Macros run one command at a time and wait for the active user task to finish before advancing.",
+                    rightX + 4, y + 18, TEXT_DIM);
         }
     }
 
@@ -586,6 +620,9 @@ public class BelfegorScreen extends Screen {
             var command = commands.get(i);
             drawText(ctx, "@" + command.getName(), 16, listY + 2,
                     selected ? TEXT_BRIGHT : ACCENT);
+            String category = CommandDocumentation.categoryFor(command.getName());
+            drawText(ctx, category, listW - textRenderer.getWidth(category) - 8, listY + 2,
+                    selected ? WARNING : TEXT_DIM);
             listY += 16;
         }
 
@@ -600,6 +637,8 @@ public class BelfegorScreen extends Screen {
         int detailY = top + 7;
         String prefix = mod.getModSettings().getCommandPrefix();
         drawText(ctx, prefix + command.getName(), rightX + 8, detailY, TEXT_BRIGHT);
+        String category = CommandDocumentation.categoryFor(command.getName());
+        drawText(ctx, category, this.width - textRenderer.getWidth(category) - 18, detailY, WARNING);
         detailY += 17;
         for (String line : wrapText(command.getDetailedDescription(), this.width - rightX - 28)) {
             drawText(ctx, line, rightX + 8, detailY, TEXT);
@@ -661,10 +700,81 @@ public class BelfegorScreen extends Screen {
                 new ArrayList<>(Belfegor.getCommandExecutor().allCommands());
         result.removeIf(command -> !search.isEmpty()
                 && !command.getName().toLowerCase().contains(search)
+                && !CommandDocumentation.categoryFor(command.getName()).toLowerCase().contains(search)
                 && !command.getDescription().toLowerCase().contains(search)
                 && !command.getHelpRepresentation().toLowerCase().contains(search));
         result.sort(Comparator.comparing(adris.belfegor.commandsystem.Command::getName));
         return result;
+    }
+
+    // ======================== SCHEMATICS TAB ========================
+
+    private void renderSchematicsTab(DrawContext ctx, int mouseX, int mouseY, int y) {
+        schematicCommandHitboxes.clear();
+        Path importDir = Path.of(MinecraftClient.getInstance().runDirectory.getAbsolutePath(),
+                "belfegor", "schematics", "imported");
+        ctx.fill(10, y, this.width - 10, this.height - 36, BG_LIGHTER);
+        drawText(ctx, "SCHEMATIC BUILDER", 14, y + 5, ACCENT);
+        y += 20;
+        drawText(ctx, "Import command:", 14, y, TEXT_DIM);
+        y += 13;
+        drawText(ctx, "@build base import \"C:\\path\\to\\building.litematic\" optional_name", 18, y, SUCCESS);
+        y += 16;
+        drawText(ctx, "Placement origin is your current player block. Belfegor copies the file, parses the block palette,",
+                14, y, TEXT);
+        y += 12;
+        drawText(ctx, "creates a staging chest, collects/deposits required resources, then builds and remembers the structure.",
+                14, y, TEXT);
+        y += 18;
+        drawText(ctx, "Imported folder: " + importDir, 14, y, TEXT_DIM);
+        y += 18;
+
+        List<Path> files = listSchematicFiles(importDir);
+        drawText(ctx, "KNOWN IMPORTS (" + files.size() + ")", 14, y, ACCENT);
+        y += 16;
+        if (files.isEmpty()) {
+            drawText(ctx, "No imported schematics yet. Run the import command with a .litematic file path.",
+                    18, y, TEXT_DIM);
+            return;
+        }
+
+        int maxVisible = Math.max(1, (this.height - y - 46) / 36);
+        schematicScrollOffset = Math.min(schematicScrollOffset, Math.max(0, files.size() - maxVisible));
+        for (int i = schematicScrollOffset;
+             i < files.size() && i - schematicScrollOffset < maxVisible; i++) {
+            Path file = files.get(i);
+            String fileName = file.getFileName().toString();
+            ctx.fill(14, y - 2, this.width - 14, y + 31, BG_LIGHT);
+            drawText(ctx, fileName, 20, y, TEXT_BRIGHT);
+            y += 12;
+            String command = "@build base import \"" + file.toAbsolutePath() + "\" "
+                    + fileName.replaceAll("\\.[^.]+$", "").replaceAll("[^a-zA-Z0-9_.-]", "_");
+            boolean hover = mouseX >= 20 && mouseX <= this.width - 18 && mouseY >= y - 2 && mouseY <= y + 11;
+            ctx.fill(18, y - 2, this.width - 18, y + 11, hover ? HIGHLIGHT : BG_LIGHT);
+            drawText(ctx, command, 20, y, SUCCESS);
+            schematicCommandHitboxes.add(new CommandExampleHitbox(18, y - 2, this.width - 18, y + 11, command));
+            y += 24;
+        }
+    }
+
+    private List<Path> listSchematicFiles(Path importDir) {
+        try {
+            Files.createDirectories(importDir);
+            try (var stream = Files.list(importDir)) {
+                return stream
+                        .filter(Files::isRegularFile)
+                        .filter(path -> {
+                            String name = path.getFileName().toString().toLowerCase(Locale.ROOT);
+                            return name.endsWith(".litematic")
+                                    || name.endsWith(".json")
+                                    || name.endsWith(".belfegor_schematic");
+                        })
+                        .sorted(Comparator.comparing(path -> path.getFileName().toString().toLowerCase(Locale.ROOT)))
+                        .toList();
+            }
+        } catch (Exception ignored) {
+            return new ArrayList<>();
+        }
     }
 
     private List<String> wrapText(String text, int maxWidth) {
@@ -906,6 +1016,17 @@ public class BelfegorScreen extends Screen {
             showStatus("Auto shulker mode: " + next);
             return true;
         }
+        if (selectedTab == 5 && button == 0) {
+            for (CommandExampleHitbox hitbox : schematicCommandHitboxes) {
+                if (hitbox.contains(mouseX, mouseY)) {
+                    commandInput.setText(hitbox.command);
+                    selectedTab = 2;
+                    onTabSwitch();
+                    showStatus("Loaded command into Commands tab. Press Enter to run.");
+                    return true;
+                }
+            }
+        }
         if (selectedTab == 1) return handleMacrosClick(mouseX, mouseY, button);
         return super.mouseClicked(mouseX, mouseY, button);
     }
@@ -1012,25 +1133,123 @@ public class BelfegorScreen extends Screen {
     }
 
     private boolean handleMacrosClick(double mouseX, double mouseY, int button) {
+        if (button == 0) {
+            for (UiButtonHitbox hitbox : macroButtonHitboxes) {
+                if (hitbox.contains(mouseX, mouseY)) {
+                    handleMacroAction(hitbox.action);
+                    return true;
+                }
+            }
+        }
         int listW = this.width * 2 / 5;
         var macros = MacroStorage.getMacros();
         int y = 32;
-        if (mouseX < listW && mouseY > y + 20) {
-            int clicked = Math.max(0, scrollOffset) + (int)((mouseY - y - 20) / 16);
+        if (mouseX < listW && mouseY > y + 42) {
+            int clicked = Math.max(0, scrollOffset) + (int)((mouseY - y - 42) / 16);
             if (clicked >= 0 && clicked < macros.size()) { selectedMacroIndex = clicked; selectedMacroStepIndex = -1; updateMacroButtons(); }
             return true;
         }
         if (mouseX > listW + 5 && mouseY > y && selectedMacroIndex >= 0 && selectedMacroIndex < macros.size()) {
             var macro = macros.get(selectedMacroIndex);
-            int ry = y + 20;
-            if (macro.getDescription() != null && !macro.getDescription().isEmpty()) ry += 14;
-            ry += 18;
+            int ry = y + 118;
             for (int i = 0; i < macro.getSteps().size(); i++) {
                 if (mouseY >= ry - 1 && mouseY <= ry + 11) { selectedMacroStepIndex = i; return true; }
                 ry += 13;
             }
         }
         return false;
+    }
+
+    private void handleMacroAction(String action) {
+        List<MacroChain> macros = MacroStorage.getMacros();
+        MacroRunner runner = getMacroRunner();
+        switch (action) {
+            case "macro:new" -> {
+                String base = "New Macro";
+                String name = base;
+                int n = 2;
+                while (MacroStorage.getMacro(name) != null) name = base + " " + n++;
+                MacroChain macro = new MacroChain(name, "Describe what this macro does.");
+                macro.addStep(new MacroStep("status", "Example safe command"));
+                MacroStorage.addMacro(macro);
+                selectedMacroIndex = macros.size() - 1;
+                selectedMacroStepIndex = -1;
+                updateMacroButtons();
+                showStatus("Created macro. Edit fields and Save.");
+            }
+            case "macro:save" -> {
+                if (selectedMacroIndex >= 0 && selectedMacroIndex < macros.size()) {
+                    MacroChain macro = macros.get(selectedMacroIndex);
+                    String newName = macroNameInput.getText().trim();
+                    if (!newName.isEmpty()) macro.setName(newName);
+                    macro.setDescription(macroDescInput.getText().trim());
+                    MacroStorage.save();
+                    showStatus("Macro saved");
+                } else {
+                    MacroStorage.save();
+                    showStatus("Macros saved");
+                }
+            }
+            case "macro:reload" -> {
+                MacroStorage.load();
+                selectedMacroIndex = Math.min(selectedMacroIndex, Math.max(0, MacroStorage.getMacros().size() - 1));
+                selectedMacroStepIndex = -1;
+                updateMacroButtons();
+                showStatus("Macros reloaded");
+            }
+            case "macro:run" -> {
+                if (selectedMacroIndex >= 0 && selectedMacroIndex < macros.size() && runner != null) {
+                    runner.startMacro(macros.get(selectedMacroIndex));
+                    eventLog.task("Started macro: " + macros.get(selectedMacroIndex).getName());
+                    showStatus("Macro started");
+                }
+            }
+            case "macro:pause" -> {
+                if (runner != null && runner.isRunning()) {
+                    if (runner.isPaused()) runner.resume();
+                    else runner.pause();
+                    showStatus(runner.isPaused() ? "Macro paused" : "Macro resumed");
+                }
+            }
+            case "macro:stop" -> {
+                if (runner != null) {
+                    runner.stop();
+                    showStatus("Macro stopped");
+                }
+            }
+            case "macro:duplicate" -> {
+                if (selectedMacroIndex >= 0 && selectedMacroIndex < macros.size()) {
+                    MacroChain copy = macros.get(selectedMacroIndex).duplicate(macros.get(selectedMacroIndex).getName() + " Copy");
+                    MacroStorage.addMacro(copy);
+                    selectedMacroIndex = macros.size() - 1;
+                    selectedMacroStepIndex = -1;
+                    updateMacroButtons();
+                    showStatus("Macro duplicated");
+                }
+            }
+            case "macro:delete" -> {
+                if (selectedMacroIndex >= 0 && selectedMacroIndex < macros.size()) {
+                    String name = macros.get(selectedMacroIndex).getName();
+                    MacroStorage.removeMacro(name);
+                    selectedMacroIndex = Math.min(selectedMacroIndex, macros.size() - 1);
+                    selectedMacroStepIndex = -1;
+                    updateMacroButtons();
+                    showStatus("Deleted macro: " + name);
+                }
+            }
+            case "macro:loop" -> {
+                if (selectedMacroIndex >= 0 && selectedMacroIndex < macros.size()) {
+                    MacroChain macro = macros.get(selectedMacroIndex);
+                    macro.setLoop(!macro.isLoop());
+                    MacroStorage.save();
+                    showStatus("Loop " + (macro.isLoop() ? "enabled" : "disabled"));
+                }
+            }
+            case "macro:add-step" -> addMacroStepFromInput();
+            case "macro:remove-step" -> deleteSelectedMacroStep();
+            case "macro:step-up" -> moveSelectedMacroStep(-1);
+            case "macro:step-down" -> moveSelectedMacroStep(1);
+        }
     }
 
     private void onTabSwitch() {
@@ -1044,8 +1263,8 @@ public class BelfegorScreen extends Screen {
         macroStepInput.setEditable(selectedTab == 1);
         macroDescInput.setVisible(selectedTab == 1);
         macroDescInput.setEditable(selectedTab == 1);
-        logFilterInput.setVisible(selectedTab == 5);
-        logFilterInput.setEditable(selectedTab == 5);
+        logFilterInput.setVisible(selectedTab == 6);
+        logFilterInput.setEditable(selectedTab == 6);
         settingsSearchInput.setVisible(selectedTab == 3);
         settingsSearchInput.setEditable(selectedTab == 3);
 
@@ -1079,7 +1298,8 @@ public class BelfegorScreen extends Screen {
         }
         if (selectedTab == 3) { settingsScrollOffset = Math.max(0, settingsScrollOffset - (int)(v * 16)); return true; }
         if (selectedTab == 4) { shulkerScrollOffset = Math.max(0, shulkerScrollOffset - (int) v); return true; }
-        if (selectedTab == 5) { logScrollOffset = Math.max(0, logScrollOffset - (int) v); return true; }
+        if (selectedTab == 5) { schematicScrollOffset = Math.max(0, schematicScrollOffset - (int) v); return true; }
+        if (selectedTab == 6) { logScrollOffset = Math.max(0, logScrollOffset - (int) v); return true; }
         return super.mouseScrolled(mouseX, mouseY, h, v);
     }
 
@@ -1143,22 +1363,32 @@ public class BelfegorScreen extends Screen {
         }
 
         // Log filter
-        if (selectedTab == 5 && logFilterInput.isFocused()) eventLog.setFilter(logFilterInput.getText());
+        if (selectedTab == 6 && logFilterInput.isFocused()) eventLog.setFilter(logFilterInput.getText());
 
         return super.keyPressed(keyCode, scanCode, modifiers);
     }
 
     private void addMacroStepFromInput() {
-        if (selectedMacroIndex < 0) return;
+        if (selectedMacroIndex < 0) {
+            showStatus("Select a macro first");
+            return;
+        }
         var macros = MacroStorage.getMacros();
         if (selectedMacroIndex >= macros.size()) return;
         String cmd = macroStepInput.getText().trim();
-        if (cmd.isEmpty()) return;
+        if (cmd.isEmpty()) {
+            showStatus("Type a command in the step field first");
+            return;
+        }
+        if (cmd.startsWith(mod.getModSettings().getCommandPrefix())) {
+            cmd = cmd.substring(mod.getModSettings().getCommandPrefix().length());
+        }
         var macro = macros.get(selectedMacroIndex);
         macro.addStep(new MacroStep(cmd, ""));
         macroStepInput.setText("");
         MacroStorage.save();
         eventLog.task("Added step to '" + macro.getName() + "': " + cmd);
+        showStatus("Step added");
     }
 
     private void deleteSelectedMacroStep() {
@@ -1170,6 +1400,31 @@ public class BelfegorScreen extends Screen {
             macro.removeStep(selectedMacroStepIndex);
             selectedMacroStepIndex = Math.min(selectedMacroStepIndex, macro.getSteps().size() - 1);
             MacroStorage.save();
+            showStatus("Step removed");
+        }
+    }
+
+    private void moveSelectedMacroStep(int direction) {
+        if (selectedMacroIndex < 0 || selectedMacroStepIndex < 0) return;
+        var macros = MacroStorage.getMacros();
+        if (selectedMacroIndex >= macros.size()) return;
+        var macro = macros.get(selectedMacroIndex);
+        int target = selectedMacroStepIndex + direction;
+        if (target < 0 || target >= macro.getSteps().size()) return;
+        macro.moveStep(selectedMacroStepIndex, target);
+        selectedMacroStepIndex = target;
+        MacroStorage.save();
+        showStatus("Step moved");
+    }
+
+    private void renderButton(DrawContext ctx, int x1, int y1, int x2, int y2, String label,
+                              String action, int mouseX, int mouseY, int color) {
+        boolean hover = mouseX >= x1 && mouseX <= x2 && mouseY >= y1 && mouseY <= y2;
+        ctx.fill(x1, y1, x2, y2, hover ? HIGHLIGHT : BG_LIGHT);
+        ctx.fill(x1, y2 - 1, x2, y2, color);
+        drawCenteredText(ctx, label, (x1 + x2) / 2, y1 + 4, hover ? TEXT_BRIGHT : color);
+        if (action != null && action.startsWith("macro:")) {
+            macroButtonHitboxes.add(new UiButtonHitbox(x1, y1, x2, y2, action));
         }
     }
 
@@ -1197,6 +1452,26 @@ public class BelfegorScreen extends Screen {
             this.x2 = x2;
             this.y2 = y2;
             this.command = command;
+        }
+
+        boolean contains(double x, double y) {
+            return x >= x1 && x <= x2 && y >= y1 && y <= y2;
+        }
+    }
+
+    private static final class UiButtonHitbox {
+        final int x1;
+        final int y1;
+        final int x2;
+        final int y2;
+        final String action;
+
+        UiButtonHitbox(int x1, int y1, int x2, int y2, String action) {
+            this.x1 = x1;
+            this.y1 = y1;
+            this.x2 = x2;
+            this.y2 = y2;
+            this.action = action;
         }
 
         boolean contains(double x, double y) {

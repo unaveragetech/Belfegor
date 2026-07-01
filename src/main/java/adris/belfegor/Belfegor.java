@@ -812,7 +812,11 @@ public class Belfegor implements ModInitializer {
      */
     public void openScreen() {
         if (inGame()) {
-            MinecraftClient.getInstance().setScreen(_BelfegorScreen);
+            MinecraftClient client = MinecraftClient.getInstance();
+            client.execute(() -> {
+                _BelfegorScreen = new BelfegorScreen(this);
+                client.setScreen(_BelfegorScreen);
+            });
         }
     }
 

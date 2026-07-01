@@ -166,9 +166,11 @@ Memory files live in `.minecraft/belfegor/` and are intentionally human-readable
 - wall height, currently four blocks for campsite and mob-farm walls;
 - exterior clearance, currently five blocks around the outside of the wall;
 - status, such as `set_by_player_mode`, `planned`, `clear_complete`, `wall_complete`, or `complete`;
-- modules for the core room, perimeter wall, crafting anchor, smelting anchor, storage anchor, starter farm, roofed mob-farm chamber, and entrance/exit.
+- modules for the core room, perimeter wall, crafting anchor, smelting anchor, storage anchor, hydrated starter farm, roofed mob-farm chamber, and entrance/exit.
 - module centers, dimensions, progress counters, status, and notes;
 - inspection records that track checked, blocked, missing, and complete target counts.
+
+Farm rooms are treated as infrastructure, not decoration. Belfegor builds water first: a centered 2x2 infinite water source provides bucket refills and keeps the surrounding 9x9-style farm hydrated. Only blocks inside the planned hydration range are tilled and planted.
 
 `@player` sets a home base when it starts, and `BuildCampsiteTask` updates the base record as it clears/levels terrain, builds the floor, builds the four-high wall, builds interior room dividers, builds a roofed mob-farm chamber, places utility blocks, and plans the crop farm module. The current base radius starts at 8 and can expand up to 18 over later home-building passes. This gives the bot a persistent structure plan it can expand in later sessions instead of treating each run as a brand-new camp.
 

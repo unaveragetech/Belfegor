@@ -5,6 +5,7 @@ import adris.belfegor.Debug;
 import adris.belfegor.tasksystem.TaskChain;
 import adris.belfegor.tasksystem.TaskRunner;
 import adris.belfegor.tasksystem.ITaskUsesCraftingGrid;
+import adris.belfegor.ui.BelfegorScreen;
 import adris.belfegor.util.helpers.ItemHelper;
 import adris.belfegor.util.helpers.LookHelper;
 import adris.belfegor.util.helpers.StorageHelper;
@@ -105,9 +106,11 @@ public class PlayerInteractionFixChain extends TaskChain {
             return Float.NEGATIVE_INFINITY;
         }
 
-        // Refresh inventory
+        // Refresh inventory only while idle. During long user tasks (especially
+        // base construction and overflow storage), this global duct-tape swap
+        // can fight the task-owned slot state and spam the log every 30s.
         if (_generalDuctTapeSwapTimeout.elapsed()) {
-            if (!mod.getControllerExtras().isBreakingBlock()) {
+            if (!mod.getUserTaskChain().isActive() && !mod.getControllerExtras().isBreakingBlock()) {
                 Debug.logMessage("Refreshed inventory...");
                 mod.getSlotHandler().refreshInventory();
                 _generalDuctTapeSwapTimeout.reset();
@@ -189,7 +192,8 @@ public class PlayerInteractionFixChain extends TaskChain {
         }
         // We're in the player screen/a screen we DON'T want to cancel out of
         if (openScreen == null || openScreen instanceof ChatScreen || openScreen instanceof GameMenuScreen
-                || openScreen instanceof DeathScreen || openScreen instanceof InventoryScreen) {
+                || openScreen instanceof DeathScreen || openScreen instanceof InventoryScreen
+                || openScreen instanceof BelfegorScreen) {
             _mouseMovingButScreenOpenTimeout.reset();
             return false;
         }

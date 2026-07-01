@@ -2,6 +2,7 @@ package adris.belfegor.tasks.slot;
 
 import adris.belfegor.Belfegor;
 import adris.belfegor.Debug;
+import adris.belfegor.tasksystem.ITaskCanForce;
 import adris.belfegor.tasksystem.Task;
 import adris.belfegor.util.ItemTarget;
 import adris.belfegor.util.helpers.StlHelper;
@@ -16,7 +17,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.Function;
 
-public class MoveItemToSlotTask extends Task {
+public class MoveItemToSlotTask extends Task implements ITaskCanForce {
 
     private final ItemTarget _toMove;
     private final Slot _destination;
@@ -31,6 +32,12 @@ public class MoveItemToSlotTask extends Task {
     @Override
     protected void onStart(Belfegor mod) {
 
+    }
+
+    @Override
+    public boolean shouldForce(Belfegor mod, Task interruptingCandidate) {
+        ItemStack cursor = StorageHelper.getItemStackInCursorSlot();
+        return !cursor.isEmpty() && _toMove.matches(cursor.getItem());
     }
 
     @Override
@@ -80,6 +87,15 @@ public class MoveItemToSlotTask extends Task {
             }
 
             int currentlyPlaced = Arrays.asList(validItems).contains(atTarget.getItem()) ? atTarget.getCount() : 0;
+            if (isStorageDestination(_destination)
+                    && (atTarget.isEmpty() || Arrays.asList(validItems).contains(atTarget.getItem()))) {
+                // For storage containers, exact slot count is not semantically
+                // important. Place the whole held stack instead of right-clicking
+                // one item per tick; this keeps large schematic deposits from
+                // crawling while preserving exact placement for crafting grids.
+                mod.getSlotHandler().clickSlot(_destination, 0, SlotActionType.PICKUP);
+                return null;
+            }
             if (currentHeld.getCount() + currentlyPlaced <= _toMove.getTargetCount()) {
                 // Just place all of 'em
                 mod.getSlotHandler().clickSlot(_destination, 0, SlotActionType.PICKUP);
@@ -114,6 +130,11 @@ public class MoveItemToSlotTask extends Task {
     @Override
     protected String toDebugString() {
         return "Moving " + _toMove + " to " + _destination;
+    }
+
+    private boolean isStorageDestination(Slot slot) {
+        String simpleName = slot.getClass().getSimpleName();
+        return simpleName.contains("ChestSlot");
     }
 
     private Optional<Slot> getBestSlotToPickUp(Belfegor mod, Item[] validItems) {

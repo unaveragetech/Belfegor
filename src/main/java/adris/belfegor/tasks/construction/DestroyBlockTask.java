@@ -281,6 +281,17 @@ public class DestroyBlockTask extends Task implements ITaskRequiresGrounded {
             mod.getBlockTracker().requestBlockUnreachable(_pos);
         }
 
+        BlockState targetState = mod.getWorld().getBlockState(_pos);
+        if (equipBestToolForTarget(mod, targetState)) {
+            return null;
+        }
+        if (targetState.isToolRequired() && !equippedToolCanHarvest(targetState)) {
+            setDebugState("Waiting for suitable tool before mining " + targetState.getBlock()
+                    + " at " + _pos.toShortString());
+            mod.getClientBaritone().getInputOverrideHandler().setInputForceState(Input.CLICK_LEFT, false);
+            return null;
+        }
+
         // Check if the block above the position is not solid, the player is above the position,
         // and the player is within a distance of 0.89 blocks from the position
         if (!WorldHelper.isSolid(mod, _pos.up()) && mod.getPlayer().getPos().y > _pos.getY() && _pos.isWithinDistance(mod.getPlayer().isOnGround() ? mod.getPlayer().getPos() : mod.getPlayer().getPos().add(0, -1, 0), 0.89)) {
@@ -304,25 +315,6 @@ public class DestroyBlockTask extends Task implements ITaskRequiresGrounded {
             mod.getClientBaritone().getBuilderProcess().onLostControl();
             if (!LookHelper.isLookingAt(mod, reach.get())) {
                 LookHelper.lookAt(mod, reach.get());
-            }
-            BlockState state = mod.getWorld().getBlockState(_pos);
-            Optional<Slot> bestToolSlot = StorageHelper.getBestToolSlot(mod, state);
-            Slot currentEquipped = PlayerSlot.getEquipSlot();
-            // if baritone is running, only accept tools OUTSIDE OF HOTBAR!
-            // Baritone will take care of tools inside the hotbar.
-            if (bestToolSlot.isPresent() && bestToolSlot.get() != currentEquipped) {
-                // ONLY equip if the item class is STRICTLY different (otherwise we swap around a lot)
-                if (StorageHelper.getItemStackInSlot(currentEquipped).getItem() != StorageHelper.getItemStackInSlot(bestToolSlot.get()).getItem()) {
-                    boolean isAllowedToManage = !mod.getClientBaritone().getPathingBehavior().isPathing()
-                            && !mod.getFoodChain().isTryingToEat();
-                    if (isAllowedToManage) {
-                        Debug.logMessage("Found better tool in inventory, equipping.");
-                        ItemStack bestToolItemStack = StorageHelper.getItemStackInSlot(bestToolSlot.get());
-                        Item bestToolItem = bestToolItemStack.getItem();
-                        mod.getSlotHandler().forceEquipItem(bestToolItem);
-                    }
-                    return null;
-                }
             }
             mod.getClientBaritone().getInputOverrideHandler().setInputForceState(Input.CLICK_LEFT, true);
         } else {
@@ -351,6 +343,34 @@ public class DestroyBlockTask extends Task implements ITaskRequiresGrounded {
             }
         }
         return null;
+    }
+
+    private boolean equipBestToolForTarget(Belfegor mod, BlockState state) {
+        if (state == null || state.isAir()) return false;
+        if (mod.getFoodChain().isTryingToEat()) return false;
+        if (equippedToolCanHarvest(state)) return false;
+        Optional<Slot> bestToolSlot = StorageHelper.getBestToolSlot(mod, state);
+        if (bestToolSlot.isEmpty()) return false;
+        Slot currentEquipped = PlayerSlot.getEquipSlot();
+        if (bestToolSlot.get().equals(currentEquipped)) return false;
+        ItemStack current = StorageHelper.getItemStackInSlot(currentEquipped);
+        ItemStack best = StorageHelper.getItemStackInSlot(bestToolSlot.get());
+        if (best.isEmpty()) return false;
+        if (current.getItem() == best.getItem()) return false;
+        Item bestToolItem = best.getItem();
+        Debug.logInternal("DestroyBlockTask equipping best tool "
+                + bestToolItem
+                + " for " + state.getBlock()
+                + " at " + _pos.toShortString()
+                + " from " + bestToolSlot.get()
+                + " current=" + currentEquipped);
+        boolean requested = mod.getSlotHandler().forceEquipItem(bestToolItem);
+        return requested || state.isToolRequired();
+    }
+
+    private boolean equippedToolCanHarvest(BlockState state) {
+        ItemStack equipped = StorageHelper.getItemStackInSlot(PlayerSlot.getEquipSlot());
+        return equipped != null && !equipped.isEmpty() && equipped.isSuitableFor(state);
     }
 
     /**

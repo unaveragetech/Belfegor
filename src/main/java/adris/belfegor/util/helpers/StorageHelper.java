@@ -25,6 +25,7 @@ import net.minecraft.client.network.ClientPlayerEntity;
 import net.minecraft.component.DataComponentTypes;
 import net.minecraft.entity.player.PlayerInventory;
 import net.minecraft.item.*;
+import net.minecraft.registry.Registries;
 import net.minecraft.screen.*;
 import org.apache.commons.lang3.ArrayUtils;
 import adris.belfegor.ItemInfo.ToolIdentifier;
@@ -156,7 +157,7 @@ public class StorageHelper {
                 if (!slot.isSlotInPlayerInventory())
                     continue;
                 ItemStack stack = getItemStackInSlot(slot);
-                if (ToolIdentifier.isTool(stack.getName().toString().toLowerCase())) {
+                if (ToolIdentifier.isTool(Registries.ITEM.getId(stack.getItem()).getPath())) {
                     if (stack.isSuitableFor(state)) {
                         double speed = BaritoneCompat.calculateSpeedVsBlock(stack, state);
                         if (speed > highestSpeed) {
@@ -214,9 +215,10 @@ public class StorageHelper {
                 if (!ItemHelper.canThrowAwayStack(mod, stack))
                     continue;
                 Item item = stack.getItem();
-                if (ToolIdentifier.isTool(item.getName().toString().toLowerCase())) {
+                String itemId = Registries.ITEM.getId(item).getPath();
+                if (ToolIdentifier.isTool(itemId)) {
                     Class c = item.getClass();
-                    int level = ToolDurabilityMapping.getDurability(item.getName().toString().toLowerCase());
+                    int level = ToolDurabilityMapping.getDurability(itemId);
                     int prevBest = bestMaterials.getOrDefault(c, 0);
                     if (level > prevBest) {
                         // We had a WORSE tool before.
@@ -267,8 +269,10 @@ public class StorageHelper {
                 return possibleSlots.stream().min((leftSlot, rightSlot) -> {
                     ItemStack left = StorageHelper.getItemStackInSlot(leftSlot),
                             right = StorageHelper.getItemStackInSlot(rightSlot);
-                    boolean leftIsTool = ToolIdentifier.isTool(left.getItem().getName().toString().toLowerCase());
-                    boolean rightIsTool = ToolIdentifier.isTool(right.getItem().getName().toString().toLowerCase());
+                    String leftId = Registries.ITEM.getId(left.getItem()).getPath();
+                    String rightId = Registries.ITEM.getId(right.getItem()).getPath();
+                    boolean leftIsTool = ToolIdentifier.isTool(leftId);
+                    boolean rightIsTool = ToolIdentifier.isTool(rightId);
                     // Prioritize tools over materials.
                     if (rightIsTool && !leftIsTool) {
                         return -1;
@@ -279,8 +283,10 @@ public class StorageHelper {
                         // Prioritize material type, then durability.
                         Item leftTool = (Item) left.getItem();
                         Item rightTool = (Item) right.getItem();
-                        if (ToolDurabilityMapping.getDurability(leftTool.getName().toString().toLowerCase()) != ToolDurabilityMapping.getDurability(rightTool.getName().toString().toLowerCase()) ) {
-                            return (int) (ToolDurabilityMapping.getDurability(leftTool.getName().toString().toLowerCase()) - ToolDurabilityMapping.getDurability(rightTool.getName().toString().toLowerCase()));
+                        String leftToolId = Registries.ITEM.getId(leftTool).getPath();
+                        String rightToolId = Registries.ITEM.getId(rightTool).getPath();
+                        if (ToolDurabilityMapping.getDurability(leftToolId) != ToolDurabilityMapping.getDurability(rightToolId) ) {
+                            return (int) (ToolDurabilityMapping.getDurability(leftToolId) - ToolDurabilityMapping.getDurability(rightToolId));
                         }
                         // We want less damage.
                         return left.getDamage() - right.getDamage();
