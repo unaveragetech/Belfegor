@@ -813,16 +813,26 @@ public class Belfegor implements ModInitializer {
     public void openScreen() {
         MinecraftClient client = MinecraftClient.getInstance();
         if (!inGame()) {
+            DebugLogger.getInstance().log("UI-OPEN", "ignored reason=not-in-game");
             return;
         }
         if (!client.isOnThread()) {
+            DebugLogger.getInstance().log("UI-OPEN", "rescheduling reason=not-client-thread");
             client.execute(this::openScreen);
             return;
         }
-        if (_BelfegorScreen == null) {
-            _BelfegorScreen = new BelfegorScreen(this);
-        }
+        String before = client.currentScreen == null ? "none" : client.currentScreen.getClass().getName();
+        DebugLogger.getInstance().log("UI-OPEN", "begin currentScreen=" + before);
+        _BelfegorScreen = new BelfegorScreen(this);
         client.setScreen(_BelfegorScreen);
+        String after = client.currentScreen == null ? "none" : client.currentScreen.getClass().getName();
+        DebugLogger.getInstance().log("UI-OPEN", "after-set currentScreen=" + after
+                + " expected=" + _BelfegorScreen.getClass().getName());
+        client.execute(() -> {
+            String nextTick = client.currentScreen == null ? "none" : client.currentScreen.getClass().getName();
+            DebugLogger.getInstance().log("UI-OPEN", "next-tick currentScreen=" + nextTick
+                    + " visible=" + (client.currentScreen instanceof BelfegorScreen));
+        });
     }
 
     public void log(String message) {

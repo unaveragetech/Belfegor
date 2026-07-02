@@ -4,14 +4,14 @@ This roadmap is intentionally practical. Belfegor’s main challenge is not “a
 
 ## Near term
 
-- Resolve the remaining visual UI display conflict observed in the heavily modded local profile: `@ui` executes, but the panel may not become visible when other overlay/screen mods are active.
+- Resolve the remaining visual UI display conflict observed in the heavily modded local profile. Current diagnostics show `@ui` sets `BelfegorScreen` as the active Minecraft screen and logs `UI-OPEN`; the remaining issue is visual/capture/profile-layer visibility when other overlay mods are active.
 - Re-test the `C`/`@ui` panel in a clean Fabric profile and capture a final UI screenshot/video once stable.
 - Continue hardening inventory cursor recovery in every container/crafting path.
 - Add more structured shulker transaction tests and debug summaries.
 - Improve `@get` planning so carried shulker resources are chosen before gathering duplicates.
 - Expand the `C`/`@ui` settings controls for auto-shulker thresholds and timers.
 - Add command-level progress estimates and clearer failure reasons.
-- Continue improving task oscillation diagnostics. Current builds keep a bounded in-session interruption history, show the last switch in `@status`, and expose a newest-first timeline through `@status history`; next step is showing repeated interrupt pairs directly in the UI.
+- Continue improving task oscillation diagnostics. Current builds keep a bounded in-session interruption history, show the last switch in `@status`, expose a newest-first timeline through `@status history`, and show recent/repeated interrupt pairs in the Tasks tab; next step is using that data to suggest or auto-dampen repeated oscillation loops.
 
 ## Crafting and resources
 

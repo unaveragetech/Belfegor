@@ -5,6 +5,7 @@ import adris.belfegor.macros.MacroChain;
 import adris.belfegor.macros.MacroRunner;
 import adris.belfegor.macros.MacroStep;
 import adris.belfegor.macros.MacroStorage;
+import adris.belfegor.debug.DebugLogger;
 import adris.belfegor.memory.ShulkerMemory;
 import adris.belfegor.tasks.container.ShulkerInteractionTask;
 import adris.belfegor.tasksystem.Task;
@@ -81,6 +82,7 @@ public class BelfegorScreen extends Screen {
     private String statusMessage = "";
     private long statusTime = 0;
     private long lastShulkerUiSync = 0;
+    private boolean renderLogged = false;
 
     // Settings editing state
     private JsonObject settingsJson;
@@ -97,6 +99,10 @@ public class BelfegorScreen extends Screen {
 
     @Override
     protected void init() {
+        renderLogged = false;
+        DebugLogger.getInstance().log("UI-OPEN", "init width=" + this.width
+                + " height=" + this.height
+                + " tab=" + selectedTab);
         int inputY = this.height - 26;
         commandInput = new TextFieldWidget(textRenderer, 10, inputY, this.width - 80, 20, Text.literal(""));
         commandInput.setPlaceholder(Text.literal("Type command... (e.g. get diamond 3)"));
@@ -266,6 +272,13 @@ public class BelfegorScreen extends Screen {
 
     @Override
     public void render(DrawContext ctx, int mouseX, int mouseY, float delta) {
+        if (!renderLogged) {
+            renderLogged = true;
+            DebugLogger.getInstance().log("UI-OPEN", "render width=" + this.width
+                    + " height=" + this.height
+                    + " mouse=" + mouseX + "," + mouseY
+                    + " tab=" + selectedTab);
+        }
         ctx.fill(0, 0, this.width, this.height, BG);
         renderTabBar(ctx, mouseX, mouseY);
         renderContent(ctx, mouseX, mouseY, delta);
@@ -354,6 +367,9 @@ public class BelfegorScreen extends Screen {
         ctx.fill(10, y, this.width - 10, y + 1, BORDER);
         y += 4;
 
+        y = renderInterruptHistoryPanel(ctx, runner, y);
+        y += 4;
+
         ctx.fill(10, y, this.width - 10, y + 16, BG_LIGHTER);
         drawText(ctx, "TASK CHAINS", 14, y + 3, ACCENT);
         y += 18;
@@ -394,6 +410,58 @@ public class BelfegorScreen extends Screen {
         } else {
             drawText(ctx, "  none", 14, y, TEXT_DIM);
         }
+    }
+
+    private int renderInterruptHistoryPanel(DrawContext ctx, TaskRunner runner, int y) {
+        List<TaskRunner.InterruptSnapshot> history = runner.getInterruptHistory();
+        ctx.fill(10, y, this.width - 10, y + 16, BG_LIGHTER);
+        drawText(ctx, "INTERRUPT HISTORY", 14, y + 3, WARNING);
+        drawText(ctx, history.size() + " recorded this session", this.width - 150, y + 3, TEXT_DIM);
+        y += 18;
+
+        if (history.isEmpty()) {
+            drawText(ctx, "  No task-chain interruptions recorded. If a task starts bouncing, they will appear here and in @status history.", 14, y, TEXT_DIM);
+            return y + 14;
+        }
+
+        TaskRunner.InterruptSnapshot last = history.get(history.size() - 1);
+        drawText(ctx, "  Last: " + formatInterruptSnapshot(last), 14, y, TEXT_BRIGHT);
+        y += 13;
+
+        Map<String, Integer> pairCounts = new LinkedHashMap<>();
+        for (TaskRunner.InterruptSnapshot interrupt : history) {
+            String key = interrupt.fromChain() + " -> " + interrupt.toChain();
+            pairCounts.put(key, pairCounts.getOrDefault(key, 0) + 1);
+        }
+        List<Map.Entry<String, Integer>> sortedPairs = new ArrayList<>(pairCounts.entrySet());
+        sortedPairs.sort((a, b) -> Integer.compare(b.getValue(), a.getValue()));
+        int maxPairs = Math.min(3, sortedPairs.size());
+        for (int i = 0; i < maxPairs; i++) {
+            Map.Entry<String, Integer> pair = sortedPairs.get(i);
+            int color = pair.getValue() > 2 ? ERROR : pair.getValue() > 1 ? WARNING : TEXT_DIM;
+            drawText(ctx, "  Pair x" + pair.getValue() + ": " + pair.getKey(), 14, y, color);
+            y += 12;
+        }
+
+        int shown = 0;
+        for (int i = history.size() - 1; i >= 0 && shown < 4; i--, shown++) {
+            if (y + 12 > this.height - 92) break;
+            drawText(ctx, "  #" + (history.size() - i) + " " + formatInterruptSnapshot(history.get(i)), 14, y, shown == 0 ? TEXT : TEXT_DIM);
+            y += 12;
+        }
+        return y;
+    }
+
+    private String formatInterruptSnapshot(TaskRunner.InterruptSnapshot interrupt) {
+        String root = interrupt.interruptedRoot().isBlank() ? "unknown" : interrupt.interruptedRoot();
+        if (root.length() > 42) {
+            root = root.substring(0, 39) + "...";
+        }
+        return interrupt.fromChain()
+                + " -> " + interrupt.toChain()
+                + " | " + interrupt.outcome()
+                + " | " + interrupt.ageMs() + "ms"
+                + " | root=" + root;
     }
 
     // ======================== SHULKERS TAB ========================
