@@ -27,7 +27,7 @@ nether
 | `help` | `@help <command>` | Lists commands or shows detailed help for one command. | `@help`, `@help shulker` |
 | `ui` | `@ui` | Opens the same Belfegor control panel as pressing `C`. | `@ui` |
 | `stop` | `@stop` | Stops active automation. The global `+` key also aborts while a task is running. | `@stop` |
-| `status` | `@status` | Prints the current active task status, active task chain, and the last task-chain interrupt snapshot when available. | `@status` |
+| `status` | `@status <mode> <count>` | Prints the current active task status, active task chain, and the last task-chain interrupt snapshot when available. Use `@status history` or `@status history 10` to show recent task-chain switches newest-first. | `@status`, `@status history`, `@status history 10` |
 | `coords` | `@coords` | Prints the bot position. | `@coords` |
 | `reload_settings` | `@reload_settings` | Reloads settings and butler whitelist/blacklist files. | `@reload_settings` |
 | `gamma` | `@gamma <value=1.0>` | Sets brightness/gamma. | `@gamma 10` |

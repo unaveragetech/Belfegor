@@ -63,6 +63,7 @@ The latest local test pass verified:
 - `@status` is intercepted at chat-screen submit time and no longer falls through to Baritone as an unknown `@status` command in the heavily modded profile.
 - `@baritone proc`, `@baritone help sel`, `@baritone sel clear`, and `@help baritone` were run in-game after rebuild/restart. The chat showed Belfegor responses and `belfegor_debug.log` recorded `BARITONE-CMD`/`BARITONE-PROC`.
 - `@status` was re-smoked after the task-interrupt diagnostic patch. Idle state still prints `No tasks currently running`; after a future chain switch it will also show the last interrupt snapshot.
+- `@status history 10` was run live after rebuild/reinstall and correctly reported `No task interruptions recorded this session` in a fresh idle test world. `@help status` also showed the new optional `mode` and `count` inputs plus `@status history` examples.
 - `@ui` is registered and now calls the same shared screen-opening method used by the `C` keybind. Regression check: press `C`, close the menu, then run `@ui`; both should open the same Belfegor control panel without the generic screen-recovery chain closing it.
 - the Macros tab code now provides create/save/reload/run/pause/stop/duplicate/delete/loop/add/remove/reorder controls and compiles cleanly.
 - `@craftaudit all 5` passed after recipe-registry cleanup. The audit gave matching wood-family resources: acacia wood used acacia logs, birch wood used birch logs, dark oak wood used dark oak logs, oak wood used oak logs, and jungle wood used jungle logs.

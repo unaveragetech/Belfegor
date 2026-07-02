@@ -11,7 +11,7 @@ This roadmap is intentionally practical. Belfegor’s main challenge is not “a
 - Improve `@get` planning so carried shulker resources are chosen before gathering duplicates.
 - Expand the `C`/`@ui` settings controls for auto-shulker thresholds and timers.
 - Add command-level progress estimates and clearer failure reasons.
-- Continue improving task oscillation diagnostics. Current builds remember the last chain interruption and show it in `@status`; next step is a UI timeline of repeated interrupt pairs.
+- Continue improving task oscillation diagnostics. Current builds keep a bounded in-session interruption history, show the last switch in `@status`, and expose a newest-first timeline through `@status history`; next step is showing repeated interrupt pairs directly in the UI.
 
 ## Crafting and resources
 

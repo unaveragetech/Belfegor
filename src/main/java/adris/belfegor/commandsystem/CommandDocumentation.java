@@ -17,7 +17,7 @@ public final class CommandDocumentation {
             Map.entry("goto", List.of("@goto 100 64 -200", "@goto 100 -200 overworld")),
             Map.entry("idle", List.of("@idle")),
             Map.entry("coords", List.of("@coords")),
-            Map.entry("status", List.of("@status")),
+            Map.entry("status", List.of("@status", "@status history", "@status history 10")),
             Map.entry("inventory", List.of("@inventory", "@inventory diamond")),
             Map.entry("locate_structure", List.of("@locate_structure stronghold")),
             Map.entry("stop", List.of("@stop")),
@@ -118,7 +118,7 @@ public final class CommandDocumentation {
             case "equip" -> "Equips one item or a list of armor/tool items from inventory, storage, or newly crafted resources.";
             case "goto" -> "Travels to XYZ, XZ, or Y coordinates. A dimension may be appended when cross-dimensional travel is required.";
             case "coords" -> "Prints Belfegor's current position and dimension.";
-            case "status" -> "Prints the current task, active task chain, and last task-chain interruption snapshot when available. This helps diagnose oscillation loops where one chain repeatedly steals control from another.";
+            case "status" -> "Prints the current task, active task chain, and last task-chain interruption snapshot when available. Use @status history or @status history <count> to review recent chain switches and diagnose oscillation loops where one chain repeatedly steals control from another.";
             case "inventory" -> "Prints inventory contents or the count of a specific item.";
             case "list" -> "Lists known obtainable items from the task catalogue.";
             case "stop" -> "Cancels the current task/macro/automation lane. The global + key is the emergency abort equivalent while tasks are running.";

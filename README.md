@@ -28,7 +28,7 @@ Behind that small command surface is a task engine that can gather resources, mi
 | Built jar | [`releases/belfegor-1.21.4-beta1.jar`](releases/belfegor-1.21.4-beta1.jar) |
 | Runtime bundle | [`releases/belfegor-1.21.4-beta1-runtime.zip`](releases/belfegor-1.21.4-beta1-runtime.zip) |
 | Release notes | [`docs/RELEASE_v1.21.4-beta1.md`](docs/RELEASE_v1.21.4-beta1.md) |
-| Jar SHA256 | `82caebfbe94169fd5756123b9d722d7267da555771023884e48b2dd2b3837a6f` |
+| Jar SHA256 | `06018f67d479225a7fda3a00f44f130ed282e251a08920ad9c621289dbb77897` |
 | Runtime bundle SHA256 | `620cfccc69e8854c8da7c898cf23375a35579fd08494daea7b5cdeb0a7635c50` |
 | Mod id | `belfegor` |
 | Command prefix | `@` |
@@ -78,7 +78,7 @@ The current jar has been tested in the `1.21.4` MultiMC instance against the inv
 - `@ui` now opens the Belfegor control panel through the same shared method as the `C` keybind, so command and key behavior stay aligned.
 - Belfegor commands are now intercepted at chat-screen submit time before Baritone can consume `@...` as native input; this fixes the profile where `@status` produced a Baritone unknown-command error.
 - `@baritone` exposes a controlled native Baritone bridge for diagnostics and construction testing. Verified locally: `@baritone proc`, `@baritone help sel`, and `@baritone sel clear` execute through Baritone's command manager and log `BARITONE-CMD`/`BARITONE-PROC`.
-- Task oscillation diagnostics now remember the last chain interruption. `@status` reports the active task chain and, after an interrupt occurs, the last `from -> to` chain switch, whether the interrupted task was reset or force-continued, the interrupted root task, and the age of the event. Debug logs also write structured `TASK-INTERRUPT` entries.
+- Task oscillation diagnostics now remember recent chain interruptions. `@status` reports the active task chain and last switch; `@status history` and `@status history 10` show a newest-first session timeline of recent `from -> to` chain switches, whether the interrupted task was reset or force-continued, the interrupted root task, and the age of each event. Debug logs also write structured `TASK-INTERRUPT` entries.
 - the Macros UI now has functional controls for creating, saving, reloading, running, pausing, stopping, duplicating, deleting, looping, adding, removing, and reordering macro steps.
 - the offline recipe registry rejects invalid empty recipes and resolves wood-family aliases contextually; for example `birch_wood` now plans with birch logs instead of generic/acacia logs.
 - `@craftaudit all 5` passed locally after the recipe-registry fix, with all tested wood-family recipes receiving the correct matching log family.

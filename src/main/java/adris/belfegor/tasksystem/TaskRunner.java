@@ -6,11 +6,14 @@ import adris.belfegor.debug.DebugLogger;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.ArrayDeque;
 import java.util.List;
 
 public class TaskRunner {
+    private static final int MAX_INTERRUPT_HISTORY = 20;
 
     private final ArrayList<TaskChain> _chains = new ArrayList<>();
+    private final ArrayDeque<InterruptSnapshot> _interruptHistory = new ArrayDeque<>();
     private final Belfegor _mod;
     private boolean _active;
 
@@ -77,9 +80,17 @@ public class TaskRunner {
         return _lastInterrupt;
     }
 
+    public List<InterruptSnapshot> getInterruptHistory() {
+        return List.copyOf(_interruptHistory);
+    }
+
     public void annotateLastInterrupt(String outcome, Task interruptedRoot, boolean actuallyInterrupted) {
         if (_lastInterrupt == null) return;
         _lastInterrupt = _lastInterrupt.withOutcome(outcome, interruptedRoot, actuallyInterrupted);
+        if (!_interruptHistory.isEmpty()) {
+            _interruptHistory.removeLast();
+            _interruptHistory.addLast(_lastInterrupt);
+        }
         DebugLogger.getInstance().log("TASK-INTERRUPT",
                 "outcome=" + _lastInterrupt.outcome()
                         + " from=" + _lastInterrupt.fromChain()
@@ -99,6 +110,10 @@ public class TaskRunner {
                 "",
                 false,
                 reason);
+        _interruptHistory.addLast(_lastInterrupt);
+        while (_interruptHistory.size() > MAX_INTERRUPT_HISTORY) {
+            _interruptHistory.removeFirst();
+        }
         DebugLogger.getInstance().log("TASK-INTERRUPT",
                 "reason=" + reason
                         + " from=" + _lastInterrupt.fromChain()
