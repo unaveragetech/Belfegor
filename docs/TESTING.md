@@ -27,6 +27,12 @@ Before a reinstall test, close Minecraft and MultiMC, build the jar, copy it int
 | Abort key | Start any long task, press `+` | Active task stops and inventory control returns. | Chat message `Automation aborted with +` |
 | Player-mode shulker pressure | Seed a full inventory plus carried shulker, run `@player` | Auto shulker transactions complete or recover; lock is released. | `SHULKER-LOCK released`, no repeated `pickup timeout` spam |
 | Jump-place shulker | Clear a 3x5 headroom column, carry a shulker, run `@shulker store diamond 1` | Shulker is placed directly under the player by jumping, then opened/used/recovered. | `SHULKER-PLACE jump-placed under player` |
+| Camp stockpile | Run `@camp`, then `@stockpile stone starter`, then `@stockpile cobblestone 512` | Crafts/keeps stone tools, gathers starter resources or the targeted resource, returns to the locked camp storage room, and deposits into the remembered storage chest rather than stale distant containers. | `Camp stockpile`, `Storing in container`, `home_room_storage` |
+| Base storage ledger | Deposit resources with `@stockpile cobblestone 512`, then inspect `.minecraft/belfegor/belfegor_base_storage.json` | Camp/storage chests are remembered and successful deposits update known counts for later planning. | `BASE-STORAGE record-stored`, `belfegor_base_storage.json` |
+| Surplus ore vein | In survival near an iron/coal vein, run a small ore/resource get task | After the requested count is met, nearby ore in the same bounded vein radius is mined instead of abandoned. | `Mining nearby surplus ore from current vein` |
+| Home lock reset | Run `@camp`, move away, run `@camp` or `@build full here`, then run `@drop home` and `@camp` again | Existing home is reused until `@drop home`; only after dropping home can a new location become camp. | `home_lock`, `Dropped home lock`, `home_campsite` |
+| Camp bed/door memory | Run `@camp`, then `@home` from outside the wall | Camp places/clicks a bed in the core room, records `home_door`, and routes via the remembered doorway instead of breaking through walls. | `home_spawn_bed`, `home_door`, `bed_complete` |
+| Build Y-level recovery | Start `@camp`/`@player`, then force the bot below the build plane in water or a pit while it still has cobblestone | The active campsite build pauses, swims/jumps first, then pillars only if needed until the player returns to the camp Y level before continuing utility/bed placement. | `Y-RECOVERY start`, `Y-RECOVERY pillar`, `Recovering to campsite Y` |
 
 ## Player mode and base tests
 
@@ -51,8 +57,10 @@ Expected behavior:
 
 - `.minecraft/belfegor/belfegor_bases.json` is created or updated.
 - `.minecraft/belfegor/belfegor_spatial_awareness.json` is created or updated.
-- `@player` sets a home base and eventually starts `Build expandable base`.
-- Base memory records a larger expandable base plan: four-high perimeter wall, five-block exterior clearance, interior room dividers, core room, crafting workshop, smelting workshop, storage wing, crop farm, and roofed mob-farm chamber with a two-wide entrance.
+- `@player` sets a home base only when none exists, then reuses that locked home across later runs.
+- `@player` should call the camp stockpile helper after the first camp exists, so surplus resources are staged in the storage room before later build phases.
+- Base memory records a larger expandable base plan: four-high perimeter wall, five-block exterior clearance, interior room dividers, core room, crafting workshop, smelting workshop, storage wing, crop farm, roofed mob-farm chamber, a clicked bed/spawn anchor, and a two-wide remembered entrance.
+- If the bot falls below the active camp/build plane, construction tasks should recover to the remembered home Y level before continuing. This prevents the old failure where a water fall left the bot trying to build a camp from the ocean floor or a lower cave layer.
 - Spatial awareness records nearby block counts, liquids, headroom, flat floor columns, entities, dropped items, and notable blocks.
 
 ## Current tested results
@@ -72,12 +80,18 @@ The latest local test pass verified:
 - the Macros tab code now provides create/save/reload/run/pause/stop/duplicate/delete/loop/add/remove/reorder controls and compiles cleanly.
 - `@craftaudit all 5` passed after recipe-registry cleanup. The later full `@craftaudit all` run supersedes this smoke result and proves the entire current registry.
 - `@get cake` no longer produced a local scan storm in the sampled run. The bot advanced through normal dependencies and the recent log tail contained one `RESOURCE-LOCALITY` line while the Java process remained responsive.
+- Home locking is now a regression target: `@camp`, `@build full here`, expansion commands, stockpile, and `@player` should reuse the existing configured home until `@drop home` clears it.
+- Base storage is now a regression target: overflow and stockpile should prefer remembered camp/storage chests and update `belfegor_base_storage.json` only after successful `StoreInContainerTask` completion.
+- Ore tasks should not abandon nearby blocks in the same vein once the original target is met; surplus-vein mining is intentionally bounded so it does not become endless cave wandering.
+- Non-diamond mining recovery requests spare wood/stone/iron pickaxes when creating a missing pickaxe; diamond recovery still requests one diamond pickaxe only.
 - `@shulker store [diamond 1, stick 2]` no longer produced the old repeated `SLOT-STUCK slot=28` loop.
 - `@get diamond_shovel` retrieved from a catalogued carried shulker and crafted successfully.
 - `@get composter` crafted successfully using birch and oak slabs together.
 - `@get anvil` crafted successfully from ingots through iron blocks.
 - `@player` generated base memory and spatial awareness.
 - `@player` begins from a radius-8 home plan and can expand toward radius 18 over later passes.
+- `@player`/`@camp` bed interaction now treats a real bed click attempt as a completed spawn-anchor action instead of waiting forever on `InteractWithBlockTask.isFinished()`, which intentionally never returns true.
+- Campsite construction now has a dedicated Y-level recovery task for falls into water/pits. Water survival remains swim-first; build recovery pillars only when returning to a known construction plane.
 - `@build full [radius] [here]` serializes the complete base build: core camp, storage, workshop, hydrated crop farm, roofed mob-farm chamber, and route validation to remembered room centers.
 - Full-base farm validation must start from a clean inventory, then give the bot at least one chest, one shulker box, four water buckets, seeds, a hoe, dirt, and cobblestone. The farm is not considered complete unless the room contains a 2x2 infinite water source before tilling/planting begins.
 - `@player` skips auto-shulker sorting while in HOME/build mode so base construction is not starved by inventory-pressure sorting.
@@ -96,6 +110,7 @@ The latest local test pass verified:
 - Auto shulker mode can interrupt long base-building work when inventory pressure is high. The transaction is safe, but scheduling should become less jumpy.
 - Some command smoke tests are intentionally shallow because destructive/world-changing commands need controlled worlds.
 - Server inventories, lag, anticheat, and custom plugins are not covered by the local singleplayer matrix.
+- If a sandbox/network-limited Codex session cannot reinstall the jar or launch the MultiMC instance, treat compile/live-test status as blocked and rerun this matrix from an unrestricted local session before publishing a release.
 
 ## UI and command-registry regression tests
 

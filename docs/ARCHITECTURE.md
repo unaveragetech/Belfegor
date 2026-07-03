@@ -174,6 +174,10 @@ Farm rooms are treated as infrastructure, not decoration. Belfegor builds water 
 
 `@player` sets a home base when it starts, and `BuildCampsiteTask` updates the base record as it clears/levels terrain, builds the floor, builds the four-high wall, builds interior room dividers, builds a roofed mob-farm chamber, places utility blocks, and plans the crop farm module. The current base radius starts at 8 and can expand up to 18 over later home-building passes. This gives the bot a persistent structure plan it can expand in later sessions instead of treating each run as a brand-new camp.
 
+Construction tasks distinguish hazard survival from build-plane recovery. Normal water handling is swim/path-first and should not spend blocks just because the bot touched water. When a remembered campsite/build task detects that the player has fallen below the home Y level, it runs `RecoverToYLevelTask`: jump/swim first, then pillar only if needed until the player is back at the build plane. This prevents the old class of failures where a fall into water or a pit caused the bot to continue camp logic from the wrong Y level.
+
+The campsite bed is also treated as a remembered fixture rather than an ordinary endless interaction. Once the bed exists and the bed interaction reports a click attempt, the camp records `home_room_bed`/`home_spawn_bed` and lets `@player` continue. This avoids waiting on generic block-interaction tasks that intentionally never report finished.
+
 The current large-base plan uses:
 
 - a four-high exterior perimeter wall;

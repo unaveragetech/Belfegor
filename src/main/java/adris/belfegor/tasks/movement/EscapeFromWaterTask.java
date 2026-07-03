@@ -3,6 +3,7 @@ package adris.belfegor.tasks.movement;
 import adris.belfegor.Belfegor;
 import adris.belfegor.debug.DebugLogger;
 import adris.belfegor.tasksystem.Task;
+import adris.belfegor.util.helpers.StorageHelper;
 import adris.belfegor.util.helpers.WorldHelper;
 import baritone.api.utils.input.Input;
 import net.minecraft.block.Block;
@@ -41,15 +42,33 @@ public class EscapeFromWaterTask extends Task {
     };
 
     private static final int MAX_TICKS = 220;
+    private static final int STALLED_TICKS_BEFORE_COOLDOWN = 100;
+    private static final long FAILURE_COOLDOWN_MS = 30_000L;
+    private static long _suppressUntilMs = 0;
     private int _ticks;
     private int _placeAttempts;
+    private int _stalledTicks;
+    private BlockPos _lastFeet;
+    private boolean _failedStalled;
+    private int _highestY;
+    private int _noRiseTicks;
+
+    public static boolean isSuppressed() {
+        return System.currentTimeMillis() < _suppressUntilMs;
+    }
 
     @Override
     protected void onStart(Belfegor mod) {
         _ticks = 0;
         _placeAttempts = 0;
+        _stalledTicks = 0;
+        _lastFeet = null;
+        _failedStalled = false;
+        _highestY = Integer.MIN_VALUE;
+        _noRiseTicks = 0;
         mod.getBehaviour().push();
         mod.getClientBaritone().getPathingBehavior().cancelEverything();
+        StorageHelper.closeScreen();
         DebugLogger.getInstance().logImmediate("WATER-ESCAPE",
                 "start pos=" + (mod.getPlayer() == null ? "null" : mod.getPlayer().getBlockPos()));
     }
@@ -60,6 +79,18 @@ public class EscapeFromWaterTask extends Task {
         if (mod.getPlayer() == null || mod.getWorld() == null) return null;
 
         BlockPos feet = mod.getPlayer().getBlockPos();
+        if (feet.equals(_lastFeet)) {
+            _stalledTicks++;
+        } else {
+            _stalledTicks = 0;
+            _lastFeet = feet;
+        }
+        if (feet.getY() > _highestY) {
+            _highestY = feet.getY();
+            _noRiseTicks = 0;
+        } else {
+            _noRiseTicks++;
+        }
         boolean touchingWater = mod.getPlayer().isTouchingWater()
                 || isWater(mod, feet)
                 || isWater(mod, feet.down());
@@ -69,9 +100,44 @@ public class EscapeFromWaterTask extends Task {
             return null;
         }
 
+        if (!shouldSpendBlocks(mod)) {
+            _failedStalled = true;
+            _suppressUntilMs = System.currentTimeMillis() + FAILURE_COOLDOWN_MS;
+            DebugLogger.getInstance().logImmediate("WATER-ESCAPE",
+                    "not a rescue condition; refusing to spend blocks"
+                            + " feet=" + feet.toShortString()
+                            + " air=" + mod.getPlayer().getAir() + "/" + mod.getPlayer().getMaxAir()
+                            + " touchingWater=" + touchingWater);
+            return null;
+        }
+
+        if (_stalledTicks > STALLED_TICKS_BEFORE_COOLDOWN && mod.getPlayer().getAir() >= mod.getPlayer().getMaxAir() - 10) {
+            _failedStalled = true;
+            _suppressUntilMs = System.currentTimeMillis() + FAILURE_COOLDOWN_MS;
+            DebugLogger.getInstance().logImmediate("WATER-ESCAPE",
+                    "stalled; suppressing survival interrupt for " + FAILURE_COOLDOWN_MS + "ms"
+                            + " feet=" + feet.toShortString()
+                            + " attempts=" + _placeAttempts
+                            + " air=" + mod.getPlayer().getAir() + "/" + mod.getPlayer().getMaxAir());
+            return null;
+        }
+
         mod.getClientBaritone().getPathingBehavior().cancelEverything();
         mod.getInputControls().hold(Input.JUMP);
         mod.getInputControls().forceLook(mod.getPlayer().getYaw(), 90);
+
+        if (!shouldPlaceEmergencyPillar(mod)) {
+            setDebugState("Swimming up/out of water before spending blocks");
+            if (_ticks % 20 == 0) {
+                DebugLogger.getInstance().log("WATER-ESCAPE",
+                        "swim-only tick=" + _ticks
+                                + " feet=" + feet.toShortString()
+                                + " highestY=" + _highestY
+                                + " noRiseTicks=" + _noRiseTicks
+                                + " air=" + mod.getPlayer().getAir() + "/" + mod.getPlayer().getMaxAir());
+            }
+            return null;
+        }
 
         Item equip = firstAvailableBlock(mod);
         if (equip == null) {
@@ -122,6 +188,18 @@ public class EscapeFromWaterTask extends Task {
                 .orElse(null);
     }
 
+    private boolean shouldSpendBlocks(Belfegor mod) {
+        if (mod.getPlayer() == null) return false;
+        return mod.getPlayer().getAir() <= mod.getPlayer().getMaxAir() / 3;
+    }
+
+    private boolean shouldPlaceEmergencyPillar(Belfegor mod) {
+        if (mod.getPlayer() == null) return false;
+        int air = mod.getPlayer().getAir();
+        int maxAir = mod.getPlayer().getMaxAir();
+        return _noRiseTicks > 25 || air <= Math.max(20, maxAir / 15);
+    }
+
     private boolean isWater(Belfegor mod, BlockPos pos) {
         if (mod.getWorld() == null || pos == null) return false;
         Block block = mod.getWorld().getBlockState(pos).getBlock();
@@ -136,7 +214,8 @@ public class EscapeFromWaterTask extends Task {
                 || isWater(mod, feet)
                 || isWater(mod, feet.down());
         return (!touchingWater && (mod.getPlayer().isOnGround() || WorldHelper.isSolid(mod, feet.down())))
-                || _ticks > MAX_TICKS;
+                || _ticks > MAX_TICKS
+                || _failedStalled;
     }
 
     @Override
@@ -150,6 +229,7 @@ public class EscapeFromWaterTask extends Task {
         DebugLogger.getInstance().logImmediate("WATER-ESCAPE",
                 "stop ticks=" + _ticks
                         + " attempts=" + _placeAttempts
+                        + " stalled=" + _failedStalled
                         + " interruptedBy=" + (interruptTask == null ? "clean" : interruptTask.toString()));
     }
 

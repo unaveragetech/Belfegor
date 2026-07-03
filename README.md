@@ -7,6 +7,8 @@ At its simplest, Belfegor lets you type commands like:
 ```text
 @get diamond_shovel
 @toolset iron
+@stockpile stone starter
+@stockpile cobblestone 512
 @stacked
 @shulker store diamond 3
 @shulker retrieve stick 8
@@ -63,7 +65,9 @@ It is currently beta software, with the most active engineering effort focused o
 | Craft/screen audit harness | `@craftaudit all` proves the craftable registry end-to-end; `@craftaudit screens` proves supported Minecraft handled screens open/close without inventory hangs. |
 | PvP prep | `@stacked`, `@toolset`, and `@pvp` automate gear and combat preparation. |
 | Player mode | `@player` starts an autonomous explore/gather/craft/home-base loop and grows a remembered modular base. |
-| Base expansion | `@build full` builds, repairs, and route-validates the complete modular base; `@build validate`/`@build repair` checks remembered rooms and fixes incomplete modules; single-room builds avoid overlapping remembered footprints. The core campsite is now exported to `.minecraft/belfegor/schematics/base_core_*.belfegor_schematic.json` and validation checks world blocks against that saved blueprint. |
+| Base expansion | `@build full` builds, repairs, and route-validates the complete modular base; `@build validate`/`@build repair` checks remembered rooms and fixes incomplete modules; single-room builds avoid overlapping remembered footprints. Home is locked once established and is not overwritten by later camp/build/player passes unless `@drop home` is run. The core campsite is now exported to `.minecraft/belfegor/schematics/base_core_*.belfegor_schematic.json` and validation checks world blocks against that saved blueprint. |
+| Camp stockpiling | `@stockpile` gathers practical base supplies or a targeted resource, prepares a toolset, returns to the locked home, and deposits into the remembered storage-room chest. |
+| Base storage economy | Camp/storage chests are remembered as a growing storage network, with persisted known counts in `.minecraft/belfegor/belfegor_base_storage.json` so future tasks can reason about supplies already stored at home. |
 | Local AI advisor | Packaged llama.cpp advisor can use `belfegor/models/Qwen3-1.7B-Q4_K_M.gguf` to answer `@ai` prompts and choose validated next commands during `@player`. |
 | Beat-the-game routes | `@gamer` and `@marvion` run classic autonomous completion routes. |
 | Butler | Authorized players can command the bot by whisper/private message. |
@@ -86,6 +90,12 @@ The current jar has been tested in the `1.21.4` MultiMC instance against the inv
 - proof videos and exact output logs are archived in [`docs/media/audit-proof-2026-07-02`](docs/media/audit-proof-2026-07-02/README.md).
 - the recipe registry now has targeted corrections for real 1.21.4 edge cases found during full audit work, including dyed wool/candles/concrete powder/stained glass/terracotta, dark prismarine, bamboo planks, and pale-oak wood-family recipes.
 - `@get cake` no longer creates the previous local-scan storm in the tested sample; loaded-block locality scanning is throttled/cached and the client stayed responsive while the task advanced into sugar cane and wheat dependencies.
+- home/camp memory is now intentionally locked: `@camp`, `@build full here`, expansions, stockpile, and `@player` reuse the configured home instead of silently switching to a nearby base. Use `@drop home` before deliberately establishing a new camp. The core camp records its two-wide doorway and places/clicks a bed inside so respawn/navigation memory has real anchors.
+- campsite construction now includes build-plane recovery: if the bot falls below the remembered home Y level during `@camp`/`@player`, it pauses construction, swims/jumps first, then pillars back only when needed before resuming utility or bed placement. This keeps water/pit accidents from turning into a wrong-Y base build.
+- bed/spawn anchoring no longer waits for a generic interaction task to report finished; a successful bed click attempt is remembered as the campsite spawn-anchor action so `@player` can advance past the bed phase.
+- mining requirement recovery now asks for spare wood/stone/iron pickaxes when a new non-diamond pick is needed, while diamond recovery still crafts only one diamond pickaxe.
+- base storage now has a persistent agenda instead of being only emergency overflow: camp/storage chests are remembered as a network, successful deposits update known item counts, overflow prefers remembered home storage, and `@player`/`@stockpile` can count known base supplies before gathering more.
+- ore mining now has a bounded surplus-vein mode: after the requested ore/resource target is satisfied, Belfegor keeps mining nearby ore blocks from the current vein instead of leaving obvious resources behind.
 - `@shulker store [diamond 1, stick 2]` no longer loops on one inventory slot when the slot guard blocks a repeated click.
 - `@get diamond_shovel` retrieves a diamond from a catalogued carried shulker, returns leftover cursor items, picks the shulker back up, and then crafts the shovel.
 - `@get composter` accepts mixed slab variants in one craft, for example birch slabs plus oak slabs.
@@ -93,6 +103,7 @@ The current jar has been tested in the `1.21.4` MultiMC instance against the inv
 - managed shulkers now prefer a jump-place-under-player placement path, remember the exact block position, verify headroom, open from that known position, transfer exact quantities, recatalog, break, and pick the shulker back up.
 - shulker memory now stores slot-level catalogues: player inventory slot, shulker type, exact 27-slot internal contents, free slots, total count, and a contents fingerprint.
 - `@player` writes base memory and spatial awareness snapshots, starts larger modular base construction, records room/module centers and inspections, builds four-high walls, and can grow the camp through connected halls into farmland, storage, workshop, and mob-farm rooms. `@build full` now performs that full base build deliberately, then validates navigation to remembered room centers.
+- `@player` now calls a targeted camp stockpile helper after the core camp exists. The helper runs the same tool-prep path as `@toolset`, gathers wood/stone/coal/iron/dirt/seeds/fixtures or a user-requested resource such as `@stockpile cobblestone 512`, returns to the remembered storage room, and stores supplies in the camp chest instead of arbitrary cached containers.
 - Base validation is now schematic-backed for the core campsite: the expected cobblestone floor, walls, and room dividers are saved as a persisted blueprint and `@build validate` compares actual world blocks against it before declaring the base repaired.
 - LLM advisor defaults are intentionally conservative for gameplay: automatic player-mode calls are disabled unless enabled in settings, cooldown defaults to five minutes, context/token limits are reduced, and llama.cpp is capped to a small thread/batch count so it does not dominate the PC while Minecraft is running.
 

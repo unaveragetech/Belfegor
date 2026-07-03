@@ -50,8 +50,9 @@ public class WorldSurvivalChain extends SingleTaskChain {
         // Drowning
         handleDrowning(mod);
 
-        // Ocean/water escape. Swimming up alone is not enough if the bot
-        // starts in deep water or an ocean edge; pillar out when blocks exist.
+        // Last-resort water escape. Normal wet terrain should be handled by
+        // Baritone pathing/swimming; do not spend blocks just because the bot
+        // touched water.
         if (shouldPillarOutOfWater(mod)) {
             if (!(_mainTask instanceof EscapeFromWaterTask)) {
                 setTask(new EscapeFromWaterTask());
@@ -147,8 +148,10 @@ public class WorldSurvivalChain extends SingleTaskChain {
     }
 
     private boolean shouldPillarOutOfWater(Belfegor mod) {
+        if (EscapeFromWaterTask.isSuppressed()) return false;
         if (mod.getPlayer() == null || mod.getWorld() == null) return false;
         if (mod.getPlayer().isInLava()) return false;
+        if (mod.getPlayer().getAir() > mod.getPlayer().getMaxAir() / 3) return false;
         if (!(mod.getPlayer().isTouchingWater()
                 || mod.getWorld().getBlockState(mod.getPlayer().getBlockPos()).getBlock() == Blocks.WATER
                 || mod.getWorld().getBlockState(mod.getPlayer().getBlockPos().down()).getBlock() == Blocks.WATER)) {
