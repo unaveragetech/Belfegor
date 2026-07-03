@@ -1,6 +1,7 @@
 package adris.belfegor.tasks.construction;
 
 import adris.belfegor.Belfegor;
+import adris.belfegor.Settings;
 import adris.belfegor.TaskCatalogue;
 import adris.belfegor.memory.BaseMemory;
 import adris.belfegor.memory.LocationMemory;
@@ -198,14 +199,23 @@ public class BuildBaseExpansionTask extends Task {
     private void plan(Belfegor mod) {
         _dimension = WorldHelper.getCurrentDimension().name();
         BlockPos playerPos = mod.getPlayer() == null ? BlockPos.ORIGIN : mod.getPlayer().getBlockPos();
-        _base = BaseMemory.getInstance().nearestBase(playerPos, _dimension)
-                .orElseGet(() -> BaseMemory.getInstance().rememberBase(
-                        mod.getModSettings().getHomeBasePosition() == null
-                                ? playerPos
-                                : mod.getModSettings().getHomeBasePosition(),
-                        _dimension, 8, WALL_HEIGHT, 5, "created_by_build_command"));
+        BlockPos configuredHome = mod.getModSettings().getHomeBasePosition();
+        if (configuredHome != null) {
+            _base = BaseMemory.getInstance().baseAt(configuredHome, _dimension)
+                    .orElseGet(() -> BaseMemory.getInstance().rememberBase(
+                            configuredHome, _dimension, 8, WALL_HEIGHT, 5,
+                            "created_by_build_command_locked_home"));
+        } else {
+            _base = BaseMemory.getInstance().nearestBase(playerPos, _dimension)
+                    .orElseGet(() -> BaseMemory.getInstance().rememberBase(
+                            playerPos, _dimension, 8, WALL_HEIGHT, 5,
+                            "created_by_build_command_new_home"));
+        }
         _baseCenter = _base.center();
-        mod.getModSettings().setHomeBasePosition(_baseCenter);
+        if (configuredHome == null) {
+            mod.getModSettings().setHomeBasePosition(_baseCenter);
+            Settings.save(mod.getModSettings());
+        }
 
         _roomName = uniqueRoomName(_base, _requestedName, _type);
         _roomSize = switch (_type) {

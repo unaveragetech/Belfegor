@@ -383,6 +383,31 @@ public class BaseMemory {
                 .min(Comparator.comparingDouble(base -> base.distanceSq(pos)));
     }
 
+    public Optional<BaseRecord> baseAt(BlockPos center, String dimension) {
+        if (center == null) return Optional.empty();
+        String id = baseId(dimension, center);
+        BaseRecord exact = _bases.get(id);
+        if (exact != null) return Optional.of(exact);
+        return _bases.values().stream()
+                .filter(base -> dimension == null || dimension.isBlank() || dimension.equals(base.dimension))
+                .filter(base -> base.center().equals(center))
+                .findFirst();
+    }
+
+    public boolean forgetBase(BlockPos center, String dimension) {
+        if (center == null) return false;
+        int before = _bases.size();
+        _bases.entrySet().removeIf(entry -> {
+            BaseRecord base = entry.getValue();
+            if (base == null) return true;
+            if (dimension != null && !dimension.isBlank() && !dimension.equals(base.dimension)) return false;
+            return base.center().equals(center);
+        });
+        boolean removed = before != _bases.size();
+        if (removed) _dirty = true;
+        return removed;
+    }
+
     public int forgetAbandonedBasesFarFrom(BlockPos center, String dimension, double minimumDistance) {
         if (center == null) return 0;
         double minimumDistanceSq = Math.max(0, minimumDistance) * Math.max(0, minimumDistance);

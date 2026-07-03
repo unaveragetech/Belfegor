@@ -75,6 +75,7 @@ public class BuildSupplyPreflightTask extends Task {
     private final int _radius;
     private final boolean _placeStagingChest;
     private final boolean _freeInventorySpace;
+    private final boolean _includeFarmMaterials;
     private Phase _phase = Phase.STORAGE;
     private Task _activeTask;
     private String _dimension;
@@ -87,10 +88,18 @@ public class BuildSupplyPreflightTask extends Task {
     public BuildSupplyPreflightTask(BlockPos home, int radius,
                                     boolean placeStagingChest,
                                     boolean freeInventorySpace) {
+        this(home, radius, placeStagingChest, freeInventorySpace, true);
+    }
+
+    public BuildSupplyPreflightTask(BlockPos home, int radius,
+                                    boolean placeStagingChest,
+                                    boolean freeInventorySpace,
+                                    boolean includeFarmMaterials) {
         _home = home == null ? BlockPos.ORIGIN : home;
         _radius = Math.max(8, radius);
         _placeStagingChest = placeStagingChest;
         _freeInventorySpace = freeInventorySpace;
+        _includeFarmMaterials = includeFarmMaterials;
         _stagingChest = _home.add(2, 0, -2);
     }
 
@@ -137,8 +146,10 @@ public class BuildSupplyPreflightTask extends Task {
                     next(Phase.FIXTURES);
                     yield null;
                 }
-                Task task = ensureFarmSupplies(mod);
-                if (task != null) yield task;
+                if (_includeFarmMaterials) {
+                    Task task = ensureFarmSupplies(mod);
+                    if (task != null) yield task;
+                }
                 next(Phase.FIXTURES);
                 yield null;
             }
@@ -198,6 +209,9 @@ public class BuildSupplyPreflightTask extends Task {
                     + cobblestone + "/" + targetCobblestone);
             Task task = TaskCatalogue.getItemTask("cobblestone", targetCobblestone);
             if (task != null) return task;
+        }
+        if (!_includeFarmMaterials) {
+            return null;
         }
         int dirt = mod.getItemStorage().getItemCount(Items.DIRT);
         if (dirt < MIN_DIRT) {

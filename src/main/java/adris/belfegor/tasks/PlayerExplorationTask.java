@@ -5,17 +5,19 @@ import adris.belfegor.Debug;
 import adris.belfegor.Settings;
 import adris.belfegor.TaskCatalogue;
 import adris.belfegor.memory.BaseMemory;
+import adris.belfegor.memory.BaseStorageMemory;
 import adris.belfegor.memory.LocationMemory;
 import adris.belfegor.memory.SpatialAwareness;
 import adris.belfegor.llm.LlmAdvisor;
 import adris.belfegor.tasks.construction.BuildBaseExpansionTask;
 import adris.belfegor.tasks.construction.BuildCampsiteTask;
-import adris.belfegor.tasks.container.StoreInAnyContainerTask;
 import adris.belfegor.tasks.container.ShulkerInteractionTask;
 import adris.belfegor.tasks.movement.GetToBlockTask;
 import adris.belfegor.tasks.movement.PickupDroppedItemTask;
 import adris.belfegor.tasks.movement.TimeoutWanderTask;
+import adris.belfegor.tasks.resources.CampStockpileTask;
 import adris.belfegor.tasks.resources.KillAndLootTask;
+import adris.belfegor.tasks.resources.ToolSetTask;
 import adris.belfegor.tasksystem.Task;
 import adris.belfegor.trackers.BlockTracker;
 import adris.belfegor.util.ItemTarget;
@@ -316,19 +318,13 @@ public class PlayerExplorationTask extends Task {
         if (!_stockpileTimer.elapsed() || _phase == Phase.SURVIVE) return null;
         _stockpileTimer.reset();
         if (_homeBase == null || mod.getPlayer() == null) return null;
-        if (_homeBase.getSquaredDistance(mod.getPlayer().getBlockPos()) > 48 * 48) return null;
+        if (_campBuildCount <= 0) return null;
 
-        ItemTarget[] surplus = surplusTargetsInInventory(mod);
-        if (surplus.length > 0) {
-            return cacheTask("stockpile-store:" + Arrays.toString(surplus),
-                    new StoreInAnyContainerTask(false, false, surplus));
-        }
-
-        ItemTarget missing = firstMissingStockpileTarget(mod);
-        if (missing != null) {
-            return cacheTask("stockpile-get:" + missing, TaskCatalogue.getItemTask(missing));
-        }
-        return null;
+        CampStockpileTask.Profile profile = _campBuildCount >= 2
+                ? CampStockpileTask.Profile.BUILD
+                : CampStockpileTask.Profile.STARTER;
+        return cacheTask("camp-stockpile:" + profile.name().toLowerCase(),
+                new CampStockpileTask(ToolSetTask.Tier.STONE, profile));
     }
 
     private ItemTarget firstMissingStockpileTarget(Belfegor mod) {
@@ -339,8 +335,9 @@ public class PlayerExplorationTask extends Task {
                 new ItemTarget(Items.RAW_IRON, 18),
                 new ItemTarget(Items.WHEAT_SEEDS, 24)
         };
+        String dimension = WorldHelper.getCurrentDimension().name();
         for (ItemTarget target : desired) {
-            int have = mod.getItemStorage().getItemCount(target.getMatches());
+            int have = BaseStorageMemory.getInstance().availableAtBase(mod, _homeBase, dimension, target.getMatches());
             if (have < target.getTargetCount()) {
                 int batch = Math.min(target.getTargetCount() - have, target.getMatches()[0].getMaxCount());
                 return new ItemTarget(target.getMatches(), batch);

@@ -2,6 +2,7 @@ package adris.belfegor.tasks.container;
 
 import adris.belfegor.Belfegor;
 import adris.belfegor.TaskCatalogue;
+import adris.belfegor.memory.BaseStorageMemory;
 import adris.belfegor.tasks.slot.MoveItemToSlotFromInventoryTask;
 import adris.belfegor.tasksystem.ITaskCanForce;
 import adris.belfegor.tasksystem.Task;
@@ -28,6 +29,7 @@ public class StoreInContainerTask extends AbstractDoToStorageContainerTask imple
     private final ItemTarget[] _toStore;
 
     private ContainerStoredTracker _storedItems;
+    private boolean _recordedStorageMemory;
 
     public StoreInContainerTask(BlockPos targetContainer, boolean getIfNotPresent, ItemTarget... toStore) {
         _targetContainer = targetContainer;
@@ -51,6 +53,7 @@ public class StoreInContainerTask extends AbstractDoToStorageContainerTask imple
             });
         }
         _storedItems.startTracking();
+        _recordedStorageMemory = false;
     }
 
     @Override
@@ -83,6 +86,9 @@ public class StoreInContainerTask extends AbstractDoToStorageContainerTask imple
     @Override
     protected void onStop(Belfegor mod, Task interruptTask) {
         super.onStop(mod, interruptTask);
+        if (isFinished(mod)) {
+            recordStorageMemory(mod);
+        }
         if (_storedItems != null) {
             _storedItems.stopTracking();
         }
@@ -131,6 +137,7 @@ public class StoreInContainerTask extends AbstractDoToStorageContainerTask imple
             setDebugState("SHOULD NOT HAPPEN! No valid items detected.");
         }
         if (StorageHelper.getItemStackInCursorSlot().isEmpty()) {
+            recordStorageMemory(mod);
             StorageHelper.closeScreen();
         }
         setDebugState("All requested items stored; releasing container.");
@@ -157,5 +164,17 @@ public class StoreInContainerTask extends AbstractDoToStorageContainerTask imple
     @Override
     protected String toDebugString() {
         return "Storing in container[" + _targetContainer.toShortString() + "] " + Arrays.toString(_toStore);
+    }
+
+    private void recordStorageMemory(Belfegor mod) {
+        if (_recordedStorageMemory || _toStore.length == 0 || mod == null) return;
+        BlockPos home = mod.getModSettings().getHomeBasePosition();
+        if (home == null) return;
+        String dimension = adris.belfegor.util.helpers.WorldHelper.getCurrentDimension().name();
+        BaseStorageMemory.getInstance().rememberChest(home, dimension, _targetContainer,
+                "storage", false, "completed StoreInContainerTask");
+        BaseStorageMemory.getInstance().recordStored(home, dimension, _targetContainer, _toStore);
+        BaseStorageMemory.getInstance().save();
+        _recordedStorageMemory = true;
     }
 }

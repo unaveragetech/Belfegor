@@ -16,6 +16,7 @@ import adris.belfegor.macros.MacroRunner;
 import adris.belfegor.macros.MacroStorage;
 import adris.belfegor.memory.CraftingMemory;
 import adris.belfegor.memory.BaseMemory;
+import adris.belfegor.memory.BaseStorageMemory;
 import adris.belfegor.memory.DecisionEngine;
 import adris.belfegor.memory.LocationMemory;
 import adris.belfegor.memory.ShulkerMemory;
@@ -187,6 +188,11 @@ public class Belfegor implements ModInitializer {
             BaseMemory.init(new java.io.File("."));
         } catch (Exception e) {
             Debug.logWarning("Failed to initialize base memory: " + e.getMessage());
+        }
+        try {
+            BaseStorageMemory.init(new java.io.File("."));
+        } catch (Exception e) {
+            Debug.logWarning("Failed to initialize base storage memory: " + e.getMessage());
         }
         try {
             SpatialAwareness.init(new java.io.File("."));

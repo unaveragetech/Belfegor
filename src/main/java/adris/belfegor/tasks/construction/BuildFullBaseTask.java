@@ -1,6 +1,7 @@
 package adris.belfegor.tasks.construction;
 
 import adris.belfegor.Belfegor;
+import adris.belfegor.Settings;
 import adris.belfegor.memory.BaseMemory;
 import adris.belfegor.tasks.movement.GetToBlockTask;
 import adris.belfegor.tasksystem.Task;
@@ -72,15 +73,27 @@ public class BuildFullBaseTask extends Task {
         BlockPos playerPos = mod.getPlayer() == null ? BlockPos.ORIGIN : mod.getPlayer().getBlockPos();
         BlockPos configured = mod.getModSettings().getHomeBasePosition();
         _dimension = WorldHelper.getCurrentDimension().name();
-        if (_resume) {
+        boolean hasLockedHome = configured != null;
+        if (hasLockedHome) {
+            _home = configured;
+            if (_setHomeHere && !_resume) {
+                BaseMemory.getInstance().rememberInspection(_home, _dimension,
+                        "home_lock", "persistence",
+                        1, 0, 0, 1, "kept_existing_home",
+                        "@build full here ignored here-position because home is locked; run @drop home first");
+            }
+        } else if (_resume) {
             _home = BaseMemory.getInstance().nearestBase(playerPos, _dimension)
                     .map(BaseMemory.BaseRecord::center)
-                    .orElse(configured != null ? configured : playerPos);
+                    .orElse(playerPos);
         } else {
-            _home = (_setHomeHere || configured == null) ? chooseNearbyBuildSite(mod, playerPos) : configured;
+            _home = _setHomeHere ? chooseNearbyBuildSite(mod, playerPos) : playerPos;
         }
-        mod.getModSettings().setHomeBasePosition(_home);
-        if (_setHomeHere && !_resume) {
+        if (!hasLockedHome) {
+            mod.getModSettings().setHomeBasePosition(_home);
+            Settings.save(mod.getModSettings());
+        }
+        if (_setHomeHere && !_resume && !hasLockedHome) {
             BaseMemory.getInstance().forgetAbandonedBasesFarFrom(_home, _dimension, _radius * 4.0);
         }
         _restartExistingBase = (_resume || !_setHomeHere) && BaseMemory.getInstance().nearestBase(_home, _dimension)

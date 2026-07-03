@@ -2,6 +2,7 @@ package adris.belfegor.tasks.container;
 
 import adris.belfegor.Belfegor;
 import adris.belfegor.memory.BaseMemory;
+import adris.belfegor.memory.BaseStorageMemory;
 import adris.belfegor.tasksystem.ITaskCanForce;
 import adris.belfegor.tasksystem.Task;
 import adris.belfegor.util.ItemTarget;
@@ -70,7 +71,11 @@ public class OverflowInventoryTask extends Task implements ITaskCanForce {
         setDebugState("Storing overflow inventory in chest " + Arrays.toString(surplus));
         Optional<BlockPos> staging = findReadyConstructionStaging(mod);
         _delegate = staging
-                .<Task>map(pos -> new StoreInContainerTask(pos, false, surplus))
+                .<Task>map(pos -> {
+                    rememberStorageTarget(mod, pos, "overflow");
+                    BaseStorageMemory.getInstance().save();
+                    return new StoreInContainerTask(pos, false, surplus);
+                })
                 .orElseGet(() -> new StoreInAnyContainerTask(false, false, surplus));
         return _delegate;
     }
@@ -157,6 +162,12 @@ public class OverflowInventoryTask extends Task implements ITaskCanForce {
     private Optional<BlockPos> findReadyConstructionStaging(Belfegor mod) {
         if (mod.getPlayer() == null) return Optional.empty();
         String dimension = WorldHelper.getCurrentDimension().name();
+        BlockPos home = resolveHome(mod);
+        Optional<BlockPos> baseStorage = BaseStorageMemory.getInstance()
+                .bestChest(mod, home, dimension)
+                .filter(pos -> mod.getWorld().getBlockState(pos).getBlock() == Blocks.CHEST);
+        if (baseStorage.isPresent()) return baseStorage;
+
         Optional<BlockPos> remembered = BaseMemory.getInstance()
                 .findNearestModule(mod.getPlayer().getBlockPos(), dimension, "construction_staging_chest")
                 .or(() -> BaseMemory.getInstance()
@@ -166,9 +177,24 @@ public class OverflowInventoryTask extends Task implements ITaskCanForce {
         if (remembered.isPresent()) return remembered;
 
         return BaseMemory.getInstance()
-                .nearestBase(mod.getPlayer().getBlockPos(), dimension)
+                .baseAt(home, dimension)
+                .or(() -> BaseMemory.getInstance().nearestBase(mod.getPlayer().getBlockPos(), dimension))
                 .map(base -> base.center().add(2, 0, -2))
                 .filter(pos -> mod.getWorld().getBlockState(pos).getBlock() == Blocks.CHEST);
+    }
+
+    private BlockPos resolveHome(Belfegor mod) {
+        BlockPos configured = mod.getModSettings().getHomeBasePosition();
+        if (configured != null) return configured;
+        return mod.getPlayer() == null ? null : mod.getPlayer().getBlockPos();
+    }
+
+    private void rememberStorageTarget(Belfegor mod, BlockPos pos, String role) {
+        BlockPos home = resolveHome(mod);
+        if (home == null || pos == null) return;
+        String dimension = WorldHelper.getCurrentDimension().name();
+        BaseStorageMemory.getInstance().rememberChest(home, dimension, pos, role, false,
+                "overflow inventory target");
     }
 
     private void collectSurplusPass(Belfegor mod,

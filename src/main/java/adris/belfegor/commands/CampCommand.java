@@ -1,10 +1,13 @@
 package adris.belfegor.commands;
 
 import adris.belfegor.Belfegor;
+import adris.belfegor.Settings;
 import adris.belfegor.commandsystem.ArgParser;
 import adris.belfegor.commandsystem.Command;
 import adris.belfegor.commandsystem.CommandException;
+import adris.belfegor.memory.BaseMemory;
 import adris.belfegor.tasks.construction.BuildCampsiteTask;
+import adris.belfegor.util.helpers.WorldHelper;
 import net.minecraft.util.math.BlockPos;
 
 /**
@@ -33,8 +36,20 @@ public class CampCommand extends Command {
                 throw new CommandException("Usage: @camp [radius], for example @camp or @camp 10");
             }
         }
-        BlockPos home = mod.getPlayer().getBlockPos();
-        mod.getModSettings().setHomeBasePosition(home);
+        String dimension = WorldHelper.getCurrentDimension().name();
+        BlockPos configured = mod.getModSettings().getHomeBasePosition();
+        BlockPos home = configured != null
+                ? configured
+                : mod.getPlayer().getBlockPos();
+        if (configured == null) {
+            mod.getModSettings().setHomeBasePosition(home);
+            Settings.save(mod.getModSettings());
+        } else {
+            BaseMemory.getInstance().rememberInspection(home, dimension, "core", "home_lock",
+                    1, 0, 0, 1, "locked",
+                    "@camp reused existing home; run @drop home before choosing a new camp");
+            BaseMemory.getInstance().save();
+        }
         mod.runUserTask(new BuildCampsiteTask(home, radius), this::finish);
     }
 
@@ -45,9 +60,8 @@ public class CampCommand extends Command {
 
     @Override
     public String getDetailedDescription() {
-        return "Sets the current player position as Belfegor's home base, records it in settings, "
-                + "then clears, flattens, and builds the core campsite. Run this before @build "
-                + "when you want expansions to connect to a deliberate base instead of whatever "
-                + "nearest remembered base exists.";
+        return "Builds or repairs Belfegor's persistent home campsite. If no home is set, "
+                + "the current position becomes home. If a home already exists, @camp reuses it "
+                + "and will not move the base; run @drop home first if you intentionally want a new camp.";
     }
 }

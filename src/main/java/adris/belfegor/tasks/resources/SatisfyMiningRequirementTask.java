@@ -34,23 +34,23 @@ public class SatisfyMiningRequirementTask extends Task {
                     // Need planks -> need logs -> chop wood with axe first
                     return TaskCatalogue.getItemTask(Items.WOODEN_AXE, 1);
                 }
-                return TaskCatalogue.getItemTask(Items.WOODEN_PICKAXE, 1);
+                return TaskCatalogue.getItemTask(Items.WOODEN_PICKAXE, 2);
             case STONE:
                 // Make full stone tool set (need wooden pickaxe first to mine cobblestone)
                 if (!mod.getItemStorage().hasItem(Items.WOODEN_PICKAXE)) {
-                    return TaskCatalogue.getItemTask(Items.WOODEN_PICKAXE, 1);
+                    return TaskCatalogue.getItemTask(Items.WOODEN_PICKAXE, 2);
                 }
-                return TaskCatalogue.getItemTask(Items.STONE_PICKAXE, 1);
+                return TaskCatalogue.getItemTask(Items.STONE_PICKAXE, 2);
             case IRON:
                 // Make full iron tool set (need stone pickaxe first to mine iron)
                 if (!mod.getItemStorage().hasItem(Items.STONE_PICKAXE)) {
-                    return TaskCatalogue.getItemTask(Items.STONE_PICKAXE, 1);
+                    return TaskCatalogue.getItemTask(Items.STONE_PICKAXE, 2);
                 }
-                return TaskCatalogue.getItemTask(Items.IRON_PICKAXE, 1);
+                return TaskCatalogue.getItemTask(Items.IRON_PICKAXE, 2);
             case DIAMOND:
-                // Make full diamond tool set (need iron pickaxe first to mine diamonds)
+                // Diamond pickaxes are expensive; carry one good diamond pick and keep lower tiers as backups.
                 if (!mod.getItemStorage().hasItem(Items.IRON_PICKAXE)) {
-                    return TaskCatalogue.getItemTask(Items.IRON_PICKAXE, 1);
+                    return TaskCatalogue.getItemTask(Items.IRON_PICKAXE, 2);
                 }
                 return TaskCatalogue.getItemTask(Items.DIAMOND_PICKAXE, 1);
         }

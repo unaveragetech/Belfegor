@@ -41,6 +41,7 @@ nether
 |---|---|---|---|
 | `get` | `@get [items]` | Gets requested items using inventory, dropped items, containers, shulkers, gathering, crafting, mining, and smelting. | `@get diamond 3`, `@get diamond_shovel`, `@get [crafting_table, stick 8]` |
 | `toolset` | `@toolset [tier]` | Crafts a full tool set for `wood`, `stone`, `iron`, or `diamond`. | `@toolset iron`, `@toolset diamond` |
+| `stockpile` | `@stockpile [tier=stone] [starter/build]` or `@stockpile <item> [count] [tier]` | Returns to the locked remembered camp, prepares a toolset, gathers practical base supplies or one targeted resource, deposits them into the camp storage-room chest, and updates the base storage ledger. Run `@camp` or `@build full here` first. | `@stockpile`, `@stockpile stone starter`, `@stockpile cobblestone 512`, `@stockpile iron_ingot 32 iron`, `@stockpile stone build` |
 | `stacked` | `@stacked` | Gets a PvP loadout: diamond armor, diamond sword, shield, cooked beef, golden apples, planks, and ender pearls. | `@stacked` |
 | `equip` | `@equip [armors]` | Gets and equips armor items. | `@equip diamond_helmet`, `@equip [diamond_helmet, diamond_chestplate]` |
 | `food` | `@food [count]` | Collects a target amount of food value. | `@food 32` |
@@ -86,8 +87,9 @@ See [Shulker management](SHULKER_MANAGEMENT.md) for exact behavior and exclusion
 | `hero` | `@hero` | Kills nearby hostile mobs. | `@hero` |
 | `selfcare` | `@selfcare` | Experimental self-care/survival helper. | `@selfcare` |
 | `player` | `@player` | Starts autonomous exploration/learning/home-base mode. | `@player` |
-| `build` | `@build full [radius] [here]`, `@build validate`, `@build repair`, or `@build <roomType> [name]` | Builds the complete modular base, validates/repairs remembered rooms, or expands the remembered base with one connected room. Room placement avoids overlapping remembered footprints. Full mode builds/validates core camp, storage, workshop, hydrated crop farm, and roofed mob-farm room. | `@build full 12 here`, `@build repair`, `@build farmland wheat_wing` |
-| `home` | `@home [room]` | Navigates to the remembered camp center or named room/module center. | `@home farmland` |
+| `build` | `@build full [radius] [here]`, `@build validate`, `@build repair`, or `@build <roomType> [name]` | Builds the complete modular base, validates/repairs remembered rooms, or expands the locked remembered base with one connected room. Room placement avoids overlapping remembered footprints. Full mode builds/validates core camp, storage, workshop, hydrated crop farm, and roofed mob-farm room. Existing home is not moved; run `@drop home` first to start elsewhere. | `@build full 12 here`, `@build repair`, `@build farmland wheat_wing` |
+| `home` | `@home [room]` | Navigates to the locked remembered camp doorway/center or named room/module center. | `@home`, `@home farmland` |
+| `drop` | `@drop home` | Clears the locked home/base memory so the next `@camp` or `@build full here` can establish a new camp deliberately. | `@drop home` |
 | `baritone` | `@baritone <safe native command>` | Runs a controlled subset of native Baritone diagnostics/selection/build commands through Baritone's command manager. Useful for `#proc`, `#help sel`, `#sel clear`, `#surface`, `#forcecancel`, `#build`, and `#litematica` testing. | `@baritone proc`, `@baritone help sel`, `@baritone sel clear` |
 | `gamer` | `@gamer` | Runs the classic beat-the-game task. | `@gamer` |
 | `marvion` | `@marvion` | Runs the Marvion beat-the-game route. | `@marvion` |

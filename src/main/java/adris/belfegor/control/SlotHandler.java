@@ -241,12 +241,12 @@ private boolean isSameSlotStuck(int windowSlot, SlotActionType type) {
 
     public boolean forceEquipItem(Item toEquip) {
 
-        // Already equipped
-        if (StorageHelper.getItemStackInSlot(PlayerSlot.getEquipSlot()).getItem() == toEquip) return true;
-
         // Always equip to the second slot. First + last is occupied by baritone.
         if (_mod.getPlayer() == null) return false;
         _mod.getPlayer().getInventory().selectedSlot = 1;
+
+        // Already equipped
+        if (StorageHelper.getItemStackInSlot(PlayerSlot.getEquipSlot()).getItem() == toEquip) return true;
 
         // If our item is in our cursor, simply move it to the hotbar.
         boolean inCursor = StorageHelper.getItemStackInSlot(CursorSlot.SLOT).getItem() == toEquip;
@@ -255,11 +255,17 @@ private boolean isSameSlotStuck(int windowSlot, SlotActionType type) {
         if (itemSlots.size() != 0) {
             for (Slot ItemSlots : itemSlots) {
                 int hotbar = 1;
+                Slot equipSlot = PlayerSlot.getEquipSlot();
+                if (!inCursor
+                        && equipSlot != null
+                        && ItemSlots.getWindowSlot() == equipSlot.getWindowSlot()) {
+                    return true;
+                }
                 //_mod.getPlayer().getInventory().swapSlotWithHotbar();
                 clickSlotForce(Objects.requireNonNull(ItemSlots), inCursor ? 0 : hotbar, inCursor ? SlotActionType.PICKUP : SlotActionType.SWAP);
                 //registerSlotAction();
+                return true;
             }
-            return true;
         }
         return false;
     }

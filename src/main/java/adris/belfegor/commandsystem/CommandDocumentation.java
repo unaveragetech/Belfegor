@@ -44,9 +44,13 @@ public final class CommandDocumentation {
                     "@build base import \"C:\\Users\\you\\.minecraft\\schematics\\test\\camp.litematic\"",
                     "@build schematic import \"C:\\builds\\watchtower.litematic\" watchtower")),
             Map.entry("home", List.of("@home", "@home farmland", "@home shulker_vault")),
+            Map.entry("drop", List.of("@drop home")),
             Map.entry("baritone", List.of("@baritone proc", "@baritone help sel", "@baritone sel clear",
                     "@baritone surface", "@baritone forcecancel")),
             Map.entry("toolset", List.of("@toolset iron", "@toolset diamond")),
+            Map.entry("stockpile", List.of("@stockpile", "@stockpile stone starter",
+                    "@stockpile cobblestone 512", "@stockpile iron_ingot 32 iron",
+                    "@stockpile wood starter", "@stockpile stone build")),
             Map.entry("store", List.of("@store diamond 3", "@store [diamond 3, gold_ingot 8]")),
             Map.entry("retrieve", List.of("@retrieve diamond 3")),
             Map.entry("shulker", List.of("@shulker list", "@shulker store diamond 3",
@@ -71,6 +75,7 @@ public final class CommandDocumentation {
             Map.entry("food", "Resources"),
             Map.entry("meat", "Resources"),
             Map.entry("toolset", "Crafting"),
+            Map.entry("stockpile", "Base"),
             Map.entry("craftaudit", "Development"),
             Map.entry("test", "Development"),
             Map.entry("deposit", "Storage"),
@@ -81,6 +86,7 @@ public final class CommandDocumentation {
             Map.entry("goto", "Navigation"),
             Map.entry("follow", "Navigation"),
             Map.entry("home", "Navigation"),
+            Map.entry("drop", "Control"),
             Map.entry("baritone", "Development"),
             Map.entry("locate_structure", "Navigation"),
             Map.entry("camp", "Base"),
@@ -135,11 +141,13 @@ public final class CommandDocumentation {
             case "hero" -> "Prioritizes nearby hostile mob defense.";
             case "selfcare" -> "Experimental survival helper for food, safety, and basic recovery. Still treated as unfinished.";
             case "player" -> "Starts autonomous player mode. Belfegor establishes a remembered base, builds a core camp, expands rooms over time, manages shulkers, gathers resources, practices crafts, upgrades tools, and can consult the local llama.cpp advisor without interrupting active tasks.";
-            case "camp" -> "Sets the current position as the remembered home base and builds the core expandable campsite. Run this before @build when you want room expansions connected to a deliberate camp.";
-            case "build" -> "Expands the remembered base with a connected room, runs @build full to build the complete modular base, imports external .litematic/.json schematics with @build base import \"file\", or runs @build validate/@build repair to inspect and fix incomplete remembered rooms. Imported schematics are copied into belfegor/schematics/imported, parsed into Belfegor's internal blueprint, assigned a staging chest, resource-counted, built, and remembered for later navigation/repair. Placement is footprint-aware to avoid overlapping rooms. Full mode builds core campsite, storage, workshop, hydrated crop farmland, roofed mob-farm room, repair validation, and route validation.";
-            case "home" -> "Routes to the remembered home base or to a named room/module center created by @player or @build. Examples: @home, @home farmland, @home shulker_vault.";
+            case "camp" -> "Builds or repairs the core expandable campsite at the locked home. If no home exists, the current position becomes home. Once home exists, @camp will not move it; run @drop home first if you deliberately want a new camp. The camp records a two-wide doorway and places/clicks a bed inside.";
+            case "build" -> "Expands the locked remembered base with a connected room, runs @build full to build the complete modular base, imports external .litematic/.json schematics with @build base import \"file\", or runs @build validate/@build repair to inspect and fix incomplete remembered rooms. Imported schematics are copied into belfegor/schematics/imported, parsed into Belfegor's internal blueprint, assigned a staging chest, resource-counted, built, and remembered for later navigation/repair. Placement is footprint-aware to avoid overlapping rooms. Full mode builds core campsite, storage, workshop, hydrated crop farmland, roofed mob-farm room, repair validation, and route validation. Existing home is never overwritten by build commands; use @drop home to reset.";
+            case "home" -> "Routes to the locked remembered home base, remembered doorway, or a named room/module center created by @player or @build. Examples: @home, @home farmland, @home shulker_vault.";
+            case "drop" -> "Clears the locked home/base/camp memory so the next @camp or @build full here can establish a new base deliberately. Example: @drop home.";
             case "baritone" -> "Controlled bridge to native Baritone diagnostics and area/build commands. Supported examples include @baritone proc, @baritone help sel, @baritone sel clear, @baritone surface, @baritone forcecancel, @baritone build <schematic> [x y z], and @baritone litematica. Belfegor's own construction tasks use native builder/selection APIs internally, while this command is for testing, recovery, and command reference.";
-            case "toolset" -> "Crafts one pickaxe, axe, shovel, sword, and hoe at the requested material tier.";
+            case "toolset" -> "Crafts one pickaxe, axe, shovel, and sword at the requested material tier.";
+            case "stockpile" -> "Returns to the locked remembered camp, ensures the storage-room chest exists, prepares a wood/stone/iron/diamond toolset through the same toolset task, gathers practical base resources, and deposits them into the camp storage chest. Use @stockpile stone starter for a small reserve, @stockpile stone build before larger @build work, or point at one resource such as @stockpile cobblestone 512 / @stockpile iron_ingot 32 iron.";
             case "locate_structure" -> "Uses Minecraft structure location support to find a generated structure, then reports or navigates according to the command behavior.";
             case "coverwithsand" -> "Nether utility that covers dangerous lava using sand-style falling blocks.";
             case "coverwithblocks" -> "Nether utility that covers dangerous lava using available solid blocks.";

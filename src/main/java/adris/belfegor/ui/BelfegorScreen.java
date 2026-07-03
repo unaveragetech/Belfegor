@@ -6,6 +6,7 @@ import adris.belfegor.macros.MacroRunner;
 import adris.belfegor.macros.MacroStep;
 import adris.belfegor.macros.MacroStorage;
 import adris.belfegor.debug.DebugLogger;
+import adris.belfegor.memory.BaseStorageMemory;
 import adris.belfegor.memory.ShulkerMemory;
 import adris.belfegor.tasks.container.ShulkerInteractionTask;
 import adris.belfegor.tasksystem.Task;
@@ -27,7 +28,7 @@ import java.util.*;
 public class BelfegorScreen extends Screen {
     private final Belfegor mod;
     private int selectedTab = 0;
-    private static final String[] TAB_NAMES = {"Tasks", "Macros", "Commands", "Settings", "Shulkers", "Schematics", "Log"};
+    private static final String[] TAB_NAMES = {"Tasks", "Macros", "Commands", "Settings", "Storage", "Shulkers", "Schematics", "Log"};
 
     // Colors - modern dark theme
     private static final int BG = 0xFF0D1117;
@@ -319,9 +320,10 @@ public class BelfegorScreen extends Screen {
             case 1 -> renderMacrosTab(ctx, mouseX, mouseY, y);
             case 2 -> renderCommandsTab(ctx, mouseX, mouseY, y);
             case 3 -> renderSettingsTab(ctx, mouseX, mouseY, y);
-            case 4 -> renderShulkersTab(ctx, mouseX, mouseY, y);
-            case 5 -> renderSchematicsTab(ctx, mouseX, mouseY, y);
-            case 6 -> renderLogTab(ctx, mouseX, mouseY, y);
+            case 4 -> renderStorageTab(ctx, mouseX, mouseY, y);
+            case 5 -> renderShulkersTab(ctx, mouseX, mouseY, y);
+            case 6 -> renderSchematicsTab(ctx, mouseX, mouseY, y);
+            case 7 -> renderLogTab(ctx, mouseX, mouseY, y);
         }
     }
 
@@ -462,6 +464,94 @@ public class BelfegorScreen extends Screen {
                 + " | " + interrupt.outcome()
                 + " | " + interrupt.ageMs() + "ms"
                 + " | root=" + root;
+    }
+
+    // ======================== STORAGE TAB ========================
+
+    private void renderStorageTab(DrawContext ctx, int mouseX, int mouseY, int y) {
+        List<BaseStorageMemory.StorageNetwork> networks = BaseStorageMemory.getInstance().networks();
+        ctx.fill(10, y, this.width - 10, this.height - 36, BG_LIGHTER);
+        drawText(ctx, "BASE STORAGE MEMORY", 14, y + 5, ACCENT);
+        y += 20;
+        drawText(ctx, "Persistent ledger used by @player, @camp, @stockpile, overflow storage, and build staging.",
+                14, y, TEXT);
+        y += 13;
+        drawText(ctx, "File: belfegor/belfegor_base_storage.json", 14, y, TEXT_DIM);
+        y += 18;
+
+        if (networks.isEmpty()) {
+            drawText(ctx, "No remembered storage networks yet. Build a camp or run @stockpile after setting home.",
+                    14, y, TEXT_DIM);
+            return;
+        }
+
+        int totalChests = 0;
+        int totalKnownItems = 0;
+        for (BaseStorageMemory.StorageNetwork network : networks) {
+            totalChests += network.chests.size();
+            for (Integer count : network.knownCounts.values()) totalKnownItems += Math.max(0, count);
+        }
+        ctx.fill(14, y - 2, this.width - 14, y + 28, BG_LIGHT);
+        drawText(ctx, "Networks: " + networks.size()
+                        + "   Chests: " + totalChests
+                        + "   Known stored items: " + totalKnownItems,
+                18, y + 3, TEXT_BRIGHT);
+        drawText(ctx, "Newest networks are shown first. Counts are updated when Belfegor deposits or audits storage.",
+                18, y + 16, TEXT_DIM);
+        y += 38;
+
+        int networkIndex = 0;
+        for (BaseStorageMemory.StorageNetwork network : networks) {
+            if (y > this.height - 62) break;
+            int blockHeight = 48 + Math.min(5, Math.max(1, network.knownCounts.size())) * 12
+                    + Math.min(3, Math.max(0, network.chests.size())) * 12;
+            ctx.fill(14, y - 2, this.width - 14, Math.min(this.height - 38, y + blockHeight),
+                    networkIndex++ % 2 == 0 ? BG_LIGHTER : BG_LIGHT);
+            drawText(ctx, "Home " + network.homeX + ", " + network.homeY + ", " + network.homeZ
+                            + "  phase=" + network.phase,
+                    18, y + 2, TEXT_BRIGHT);
+            y += 13;
+            drawText(ctx, "Dimension: " + network.dimension
+                            + "  updated=" + String.format("%tT", new Date(network.lastUpdated)),
+                    18, y, TEXT_DIM);
+            y += 13;
+            drawText(ctx, "Chests:", 18, y, ACCENT);
+            y += 12;
+            if (network.chests.isEmpty()) {
+                drawText(ctx, "  (none remembered)", 24, y, TEXT_DIM);
+                y += 12;
+            } else {
+                int shown = 0;
+                for (BaseStorageMemory.StorageChest chest : network.chests) {
+                    if (shown++ >= 3) {
+                        drawText(ctx, "  ... +" + (network.chests.size() - shown + 1) + " more", 24, y, TEXT_DIM);
+                        y += 12;
+                        break;
+                    }
+                    drawText(ctx, "  " + chest.role + " @ "
+                                    + chest.x + ", " + chest.y + ", " + chest.z
+                                    + (chest.doubleChest ? " double" : ""),
+                            24, y, TEXT);
+                    y += 12;
+                }
+            }
+            drawText(ctx, "Top known items:", 18, y, ACCENT);
+            y += 12;
+            if (network.knownCounts.isEmpty()) {
+                drawText(ctx, "  (no item counts recorded yet)", 24, y, TEXT_DIM);
+                y += 12;
+            } else {
+                int shown = 0;
+                List<Map.Entry<String, Integer>> entries = new ArrayList<>(network.knownCounts.entrySet());
+                entries.sort((a, b) -> Integer.compare(b.getValue(), a.getValue()));
+                for (Map.Entry<String, Integer> entry : entries) {
+                    if (shown++ >= 5 || y > this.height - 46) break;
+                    drawText(ctx, "  " + entry.getKey() + " x" + entry.getValue(), 24, y, SUCCESS);
+                    y += 12;
+                }
+            }
+            y += 10;
+        }
     }
 
     // ======================== SHULKERS TAB ========================
@@ -631,12 +721,13 @@ public class BelfegorScreen extends Screen {
             renderButton(ctx, rightX + 334, buttonY, rightX + 404, buttonY + 16, m.isLoop() ? "Loop:on" : "Loop:off", "macro:loop", mouseX, mouseY, m.isLoop() ? SUCCESS : TEXT_DIM);
 
             int ry = y + 42;
-            drawText(ctx, "Name and description are editable. Press Save after changes.", rightX + 4, ry, TEXT_DIM);
+            drawText(ctx, "Name, description, and selected step are editable. Press Save/Update after changes.", rightX + 4, ry, TEXT_DIM);
             ry += 38;
             renderButton(ctx, rightX + 4, ry, rightX + 84, ry + 16, "Add step", "macro:add-step", mouseX, mouseY, SUCCESS);
-            renderButton(ctx, rightX + 88, ry, rightX + 156, ry + 16, "Remove", "macro:remove-step", mouseX, mouseY, ERROR);
-            renderButton(ctx, rightX + 160, ry, rightX + 210, ry + 16, "Up", "macro:step-up", mouseX, mouseY, ACCENT);
-            renderButton(ctx, rightX + 214, ry, rightX + 274, ry + 16, "Down", "macro:step-down", mouseX, mouseY, ACCENT);
+            renderButton(ctx, rightX + 88, ry, rightX + 158, ry + 16, "Update", "macro:update-step", mouseX, mouseY, WARNING);
+            renderButton(ctx, rightX + 162, ry, rightX + 230, ry + 16, "Remove", "macro:remove-step", mouseX, mouseY, ERROR);
+            renderButton(ctx, rightX + 234, ry, rightX + 284, ry + 16, "Up", "macro:step-up", mouseX, mouseY, ACCENT);
+            renderButton(ctx, rightX + 288, ry, rightX + 348, ry + 16, "Down", "macro:step-down", mouseX, mouseY, ACCENT);
             ry += 22;
             drawText(ctx, "Steps:", rightX + 4, ry, TEXT);
             ry += 14;
@@ -1064,7 +1155,7 @@ public class BelfegorScreen extends Screen {
                 }
             }
         }
-        if (selectedTab == 4 && button == 0 && mouseY >= 32 && mouseY <= 54
+        if (selectedTab == 5 && button == 0 && mouseY >= 32 && mouseY <= 54
                 && mouseX >= this.width - 94 && mouseX <= this.width - 14) {
             boolean current = settingsJson.has("autoShulkerMode")
                     && settingsJson.get("autoShulkerMode").getAsBoolean();
@@ -1073,7 +1164,7 @@ public class BelfegorScreen extends Screen {
             showStatus("Auto shulker " + (!current ? "enabled" : "disabled"));
             return true;
         }
-        if (selectedTab == 4 && button == 0 && mouseY >= 60 && mouseY <= 82
+        if (selectedTab == 5 && button == 0 && mouseY >= 60 && mouseY <= 82
                 && mouseX >= this.width - 132 && mouseX <= this.width - 14) {
             String current = settingsJson.has("autoShulkerSortMode")
                     ? settingsJson.get("autoShulkerSortMode").getAsString()
@@ -1084,7 +1175,7 @@ public class BelfegorScreen extends Screen {
             showStatus("Auto shulker mode: " + next);
             return true;
         }
-        if (selectedTab == 5 && button == 0) {
+        if (selectedTab == 6 && button == 0) {
             for (CommandExampleHitbox hitbox : schematicCommandHitboxes) {
                 if (hitbox.contains(mouseX, mouseY)) {
                     commandInput.setText(hitbox.command);
@@ -1214,14 +1305,22 @@ public class BelfegorScreen extends Screen {
         int y = 32;
         if (mouseX < listW && mouseY > y + 42) {
             int clicked = Math.max(0, scrollOffset) + (int)((mouseY - y - 42) / 16);
-            if (clicked >= 0 && clicked < macros.size()) { selectedMacroIndex = clicked; selectedMacroStepIndex = -1; updateMacroButtons(); }
+            if (clicked >= 0 && clicked < macros.size()) {
+                selectedMacroIndex = clicked;
+                selectedMacroStepIndex = -1;
+                updateMacroButtons();
+            }
             return true;
         }
         if (mouseX > listW + 5 && mouseY > y && selectedMacroIndex >= 0 && selectedMacroIndex < macros.size()) {
             var macro = macros.get(selectedMacroIndex);
             int ry = y + 118;
             for (int i = 0; i < macro.getSteps().size(); i++) {
-                if (mouseY >= ry - 1 && mouseY <= ry + 11) { selectedMacroStepIndex = i; return true; }
+                if (mouseY >= ry - 1 && mouseY <= ry + 11) {
+                    selectedMacroStepIndex = i;
+                    macroStepInput.setText(macro.getSteps().get(i).getCommand());
+                    return true;
+                }
                 ry += 13;
             }
         }
@@ -1314,6 +1413,7 @@ public class BelfegorScreen extends Screen {
                 }
             }
             case "macro:add-step" -> addMacroStepFromInput();
+            case "macro:update-step" -> updateSelectedMacroStepFromInput();
             case "macro:remove-step" -> deleteSelectedMacroStep();
             case "macro:step-up" -> moveSelectedMacroStep(-1);
             case "macro:step-down" -> moveSelectedMacroStep(1);
@@ -1331,8 +1431,8 @@ public class BelfegorScreen extends Screen {
         macroStepInput.setEditable(selectedTab == 1);
         macroDescInput.setVisible(selectedTab == 1);
         macroDescInput.setEditable(selectedTab == 1);
-        logFilterInput.setVisible(selectedTab == 6);
-        logFilterInput.setEditable(selectedTab == 6);
+        logFilterInput.setVisible(selectedTab == 7);
+        logFilterInput.setEditable(selectedTab == 7);
         settingsSearchInput.setVisible(selectedTab == 3);
         settingsSearchInput.setEditable(selectedTab == 3);
 
@@ -1365,9 +1465,9 @@ public class BelfegorScreen extends Screen {
             return true;
         }
         if (selectedTab == 3) { settingsScrollOffset = Math.max(0, settingsScrollOffset - (int)(v * 16)); return true; }
-        if (selectedTab == 4) { shulkerScrollOffset = Math.max(0, shulkerScrollOffset - (int) v); return true; }
-        if (selectedTab == 5) { schematicScrollOffset = Math.max(0, schematicScrollOffset - (int) v); return true; }
-        if (selectedTab == 6) { logScrollOffset = Math.max(0, logScrollOffset - (int) v); return true; }
+        if (selectedTab == 5) { shulkerScrollOffset = Math.max(0, shulkerScrollOffset - (int) v); return true; }
+        if (selectedTab == 6) { schematicScrollOffset = Math.max(0, schematicScrollOffset - (int) v); return true; }
+        if (selectedTab == 7) { logScrollOffset = Math.max(0, logScrollOffset - (int) v); return true; }
         return super.mouseScrolled(mouseX, mouseY, h, v);
     }
 
@@ -1426,12 +1526,16 @@ public class BelfegorScreen extends Screen {
 
         // Macro step
         if (selectedTab == 1) {
-            if (keyCode == 257 && macroStepInput.isFocused()) { addMacroStepFromInput(); return true; }
+            if (keyCode == 257 && macroStepInput.isFocused()) {
+                if (selectedMacroStepIndex >= 0) updateSelectedMacroStepFromInput();
+                else addMacroStepFromInput();
+                return true;
+            }
             if (keyCode == 259) { deleteSelectedMacroStep(); return true; }
         }
 
         // Log filter
-        if (selectedTab == 6 && logFilterInput.isFocused()) eventLog.setFilter(logFilterInput.getText());
+        if (selectedTab == 7 && logFilterInput.isFocused()) eventLog.setFilter(logFilterInput.getText());
 
         return super.keyPressed(keyCode, scanCode, modifiers);
     }
@@ -1457,6 +1561,29 @@ public class BelfegorScreen extends Screen {
         MacroStorage.save();
         eventLog.task("Added step to '" + macro.getName() + "': " + cmd);
         showStatus("Step added");
+    }
+
+    private void updateSelectedMacroStepFromInput() {
+        if (selectedMacroIndex < 0 || selectedMacroStepIndex < 0) {
+            showStatus("Select a macro step first");
+            return;
+        }
+        var macros = MacroStorage.getMacros();
+        if (selectedMacroIndex >= macros.size()) return;
+        var macro = macros.get(selectedMacroIndex);
+        if (selectedMacroStepIndex >= macro.getSteps().size()) return;
+        String cmd = macroStepInput.getText().trim();
+        if (cmd.isEmpty()) {
+            showStatus("Type a command in the step field first");
+            return;
+        }
+        if (cmd.startsWith(mod.getModSettings().getCommandPrefix())) {
+            cmd = cmd.substring(mod.getModSettings().getCommandPrefix().length());
+        }
+        macro.getSteps().get(selectedMacroStepIndex).setCommand(cmd);
+        MacroStorage.save();
+        eventLog.task("Updated step " + (selectedMacroStepIndex + 1) + " in '" + macro.getName() + "': " + cmd);
+        showStatus("Step updated");
     }
 
     private void deleteSelectedMacroStep() {

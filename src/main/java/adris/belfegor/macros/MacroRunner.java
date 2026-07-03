@@ -15,6 +15,7 @@ public class MacroRunner {
     private final Map<String, String> capturedOutputs;
     private MacroChain afterFinish;
     private long stepStartTime;
+    private boolean waitingForStepCompletion;
     private static final long STEP_TIMEOUT_MS = 60000;
 
     public MacroRunner(Belfegor mod) {
@@ -42,6 +43,7 @@ public class MacroRunner {
         capturedOutputs.clear();
         if (inputs != null) providedInputs.putAll(inputs);
         stepStartTime = System.currentTimeMillis();
+        waitingForStepCompletion = false;
     }
 
     public void startMacro(MacroChain macro) {
@@ -58,6 +60,7 @@ public class MacroRunner {
         currentMacro = null;
         currentStep = 0;
         afterFinish = null;
+        waitingForStepCompletion = false;
         if (mod.getUserTaskChain() != null) {
             mod.getUserTaskChain().cancel(mod);
         }
@@ -70,13 +73,24 @@ public class MacroRunner {
         if (!running || paused || currentMacro == null) return;
         if (mod.getUserTaskChain() == null) return;
 
-        if (mod.getUserTaskChain().isActive()) return;
-
         if (System.currentTimeMillis() - stepStartTime > STEP_TIMEOUT_MS) {
             mod.logWarning("Macro step timed out, advancing to next step.");
+            if (mod.getUserTaskChain().isActive()) {
+                mod.getUserTaskChain().cancel(mod);
+            }
+            waitingForStepCompletion = false;
             advanceStep();
             return;
         }
+
+        if (waitingForStepCompletion) {
+            if (mod.getUserTaskChain().isActive()) return;
+            waitingForStepCompletion = false;
+            advanceStep();
+            return;
+        }
+
+        if (mod.getUserTaskChain().isActive()) return;
 
         if (currentStep >= currentMacro.getSteps().size()) {
             if (currentMacro.isLoop()) {
@@ -96,7 +110,7 @@ public class MacroRunner {
         String command = currentMacro.resolveCommand(step, providedInputs);
         stepStartTime = System.currentTimeMillis();
         mod.getCommandExecutor().executeWithPrefix(command);
-        advanceStep();
+        waitingForStepCompletion = true;
     }
 
     private void advanceStep() {
@@ -111,6 +125,7 @@ public class MacroRunner {
         running = false;
         currentMacro = null;
         currentStep = 0;
+        waitingForStepCompletion = false;
         mod.log("Macro '" + finished.getName() + "' completed.");
         if (afterFinish != null) {
             startMacro(afterFinish);

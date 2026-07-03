@@ -378,7 +378,7 @@ public class Settings implements IFailableConfigFile {
      * Where "home base" is for the bot.
      * Some tasks use this value, and the bot may return here when idle.
      */
-    private BlockPos homeBasePosition = new BlockPos(0, 64, 0);
+    private BlockPos homeBasePosition = null;
 
     /**
      * If true, the bot will return to homeBasePosition when idle (if idleCommand is empty).
@@ -867,6 +867,10 @@ public class Settings implements IFailableConfigFile {
         if (pos != null) {
             homeBasePosition = pos;
         }
+    }
+
+    public void clearHomeBasePosition() {
+        homeBasePosition = null;
     }
 
     public void setReturnHomeOnIdle(boolean value) {

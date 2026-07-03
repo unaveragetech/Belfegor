@@ -40,12 +40,14 @@ public class MineAndCollectTask extends ResourceTask {
     private final TimerGame _cursorStackTimer = new TimerGame(3);
 
     private final MineOrCollectTask _subtask;
+    private final boolean _mineSurplusVein;
 
     public MineAndCollectTask(ItemTarget[] itemTargets, Block[] blocksToMine, MiningRequirement requirement) {
         super(itemTargets);
         _requirement = requirement;
         _blocksToMine = blocksToMine;
         _subtask = new MineOrCollectTask(_blocksToMine, _itemTargets);
+        _mineSurplusVein = Arrays.stream(_blocksToMine).anyMatch(MineAndCollectTask::isOreBlock);
     }
 
     public MineAndCollectTask(ItemTarget[] blocksToMine, MiningRequirement requirement) {
@@ -96,6 +98,15 @@ public class MineAndCollectTask extends ResourceTask {
             return new SatisfyMiningRequirementTask(_requirement);
         }
 
+        if (_mineSurplusVein && StorageHelper.itemTargetsMetInventoryNoCursor(mod, _itemTargets)) {
+            if (_subtask.hasNearbySurplusVeinBlock(mod)) {
+                setDebugState("Mining nearby surplus ore from current vein");
+                _subtask.enableSurplusVeinMode();
+                return _subtask;
+            }
+            _subtask.disableSurplusVeinMode();
+        }
+
         if (_subtask.isMining()) {
             makeSureToolIsEquipped(mod);
         }
@@ -106,6 +117,14 @@ public class MineAndCollectTask extends ResourceTask {
         }
 
         return _subtask;
+    }
+
+    @Override
+    public boolean isFinished(Belfegor mod) {
+        if (!StorageHelper.itemTargetsMetInventoryNoCursor(mod, _itemTargets)) {
+            return false;
+        }
+        return !_mineSurplusVein || !_subtask.hasNearbySurplusVeinBlock(mod);
     }
 
     @Override
@@ -154,6 +173,12 @@ public class MineAndCollectTask extends ResourceTask {
         }
     }
 
+    private static boolean isOreBlock(Block block) {
+        if (block == null) return false;
+        String key = net.minecraft.registry.Registries.BLOCK.getId(block).toString();
+        return key.endsWith("_ore") || key.contains("_ore");
+    }
+
     private static class MineOrCollectTask extends AbstractDoToClosestObjectTask<Object> {
 
         private static final int LOCAL_SCAN_RADIUS = 12;
@@ -173,6 +198,8 @@ public class MineAndCollectTask extends ResourceTask {
         private Vec3d _lastLocalScanOrigin;
         private long _lastLocalScanMs;
         private Optional<BlockPos> _lastLocalScanResult = Optional.empty();
+        private BlockPos _surplusAnchor;
+        private boolean _surplusVeinMode;
 
         public MineOrCollectTask(Block[] blocks, ItemTarget[] targets) {
             _blocks = blocks;
@@ -193,6 +220,10 @@ public class MineAndCollectTask extends ResourceTask {
 
         @Override
         protected Optional<Object> getClosestTo(Belfegor mod, Vec3d pos) {
+            if (_surplusVeinMode) {
+                Optional<BlockPos> surplus = findNearbySurplusVeinBlock(mod);
+                return surplus.map(Object.class::cast);
+            }
             Optional<BlockPos> closestBlock = mod.getBlockTracker().getNearestTracking(pos, check -> {
                 if (_blacklist.contains(check)) return false;
                 if (RecentPlacedBlockMemory.wasRecentlyPlaced(check)) return false;
@@ -321,6 +352,9 @@ public class MineAndCollectTask extends ResourceTask {
                 if (_miningPos == null || !_miningPos.equals(newPos)) {
                     _progressChecker.reset();
                 }
+                if (_surplusAnchor == null) {
+                    _surplusAnchor = newPos;
+                }
                 _miningPos = newPos;
                 return new DestroyBlockTask(_miningPos);
             }
@@ -353,6 +387,8 @@ public class MineAndCollectTask extends ResourceTask {
         protected void onStart(Belfegor mod) {
             _progressChecker.reset();
             _miningPos = null;
+            _surplusVeinMode = false;
+            _surplusAnchor = null;
         }
 
         @Override
@@ -366,6 +402,54 @@ public class MineAndCollectTask extends ResourceTask {
                 _cachedWanderTask = new TimeoutWanderTask(true);
             }
             return _cachedWanderTask;
+        }
+
+        public void enableSurplusVeinMode() {
+            _surplusVeinMode = true;
+            if (_surplusAnchor == null && _miningPos != null) {
+                _surplusAnchor = _miningPos;
+            }
+        }
+
+        public void disableSurplusVeinMode() {
+            _surplusVeinMode = false;
+            _surplusAnchor = null;
+        }
+
+        public boolean hasNearbySurplusVeinBlock(Belfegor mod) {
+            return findNearbySurplusVeinBlock(mod).isPresent();
+        }
+
+        private Optional<BlockPos> findNearbySurplusVeinBlock(Belfegor mod) {
+            if (_surplusAnchor == null) {
+                _surplusAnchor = _miningPos;
+            }
+            if (_surplusAnchor == null || mod.getWorld() == null) {
+                return Optional.empty();
+            }
+            BlockPos best = null;
+            double bestSq = Double.POSITIVE_INFINITY;
+            int radius = 4;
+            int vertical = 3;
+            for (int dy = -vertical; dy <= vertical; dy++) {
+                for (int dx = -radius; dx <= radius; dx++) {
+                    for (int dz = -radius; dz <= radius; dz++) {
+                        if (dx * dx + dy * dy + dz * dz > radius * radius) continue;
+                        BlockPos candidate = _surplusAnchor.add(dx, dy, dz);
+                        if (_blacklist.contains(candidate)) continue;
+                        if (RecentPlacedBlockMemory.wasRecentlyPlaced(candidate)) continue;
+                        if (!mod.getChunkTracker().isChunkLoaded(candidate)) continue;
+                        if (!mod.getBlockTracker().blockIsValid(candidate, _blocks)) continue;
+                        if (!WorldHelper.canBreak(mod, candidate)) continue;
+                        double sq = candidate.getSquaredDistance(_surplusAnchor);
+                        if (sq < bestSq) {
+                            bestSq = sq;
+                            best = candidate;
+                        }
+                    }
+                }
+            }
+            return Optional.ofNullable(best);
         }
 
         @Override
