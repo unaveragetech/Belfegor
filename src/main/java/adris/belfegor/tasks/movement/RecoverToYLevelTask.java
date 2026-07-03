@@ -2,12 +2,17 @@ package adris.belfegor.tasks.movement;
 
 import adris.belfegor.Belfegor;
 import adris.belfegor.debug.DebugLogger;
+import adris.belfegor.tasks.construction.DestroyBlockTask;
 import adris.belfegor.tasksystem.Task;
 import adris.belfegor.util.helpers.StorageHelper;
 import adris.belfegor.util.helpers.WorldHelper;
 import baritone.api.utils.input.Input;
 import net.minecraft.block.Block;
+import net.minecraft.block.BlockState;
 import net.minecraft.block.Blocks;
+import net.minecraft.block.LeavesBlock;
+import net.minecraft.block.PlantBlock;
+import net.minecraft.block.VineBlock;
 import net.minecraft.item.Item;
 import net.minecraft.item.Items;
 import net.minecraft.util.ActionResult;
@@ -44,6 +49,7 @@ public class RecoverToYLevelTask extends Task {
     private int _placeAttempts;
     private int _highestY;
     private int _noRiseTicks;
+    private Task _clearStallBlockTask;
 
     public RecoverToYLevelTask(int targetY) {
         this(targetY, 0);
@@ -60,6 +66,7 @@ public class RecoverToYLevelTask extends Task {
         _placeAttempts = 0;
         _highestY = mod.getPlayer() == null ? Integer.MIN_VALUE : mod.getPlayer().getBlockY();
         _noRiseTicks = 0;
+        _clearStallBlockTask = null;
         StorageHelper.closeScreen();
         if (mod.getClientBaritone() != null) {
             mod.getClientBaritone().getPathingBehavior().cancelEverything();
@@ -87,6 +94,30 @@ public class RecoverToYLevelTask extends Task {
         if (feet.getY() >= _targetY - _tolerance) {
             setDebugState("Recovered to build Y");
             return null;
+        }
+
+        if (_clearStallBlockTask != null
+                && !_clearStallBlockTask.stopped()
+                && !_clearStallBlockTask.isFinished(mod)) {
+            mod.getInputControls().release(Input.JUMP);
+            setDebugState("Clearing recovery headroom obstruction");
+            return _clearStallBlockTask;
+        }
+        _clearStallBlockTask = null;
+
+        if (_noRiseTicks > 40) {
+            BlockPos blocker = findStallBlocker(mod, feet);
+            if (blocker != null) {
+                mod.getInputControls().release(Input.JUMP);
+                _clearStallBlockTask = new DestroyBlockTask(blocker);
+                DebugLogger.getInstance().logImmediate("Y-RECOVERY",
+                        "clearing-stall-block blocker=" + blocker.toShortString()
+                                + " block=" + mod.getWorld().getBlockState(blocker).getBlock()
+                                + " feet=" + feet.toShortString()
+                                + " noRiseTicks=" + _noRiseTicks);
+                setDebugState("Clearing recovery blocker " + blocker.toShortString());
+                return _clearStallBlockTask;
+            }
         }
 
         if (_noRiseTicks < 10 && !mod.getPlayer().isOnGround()) {
@@ -162,12 +193,93 @@ public class RecoverToYLevelTask extends Task {
         if (WorldHelper.isSolid(mod, pos) && block != Blocks.WATER && block != Blocks.LAVA) {
             return ActionResult.PASS;
         }
-        Vec3d hit = Vec3d.ofCenter(pos).add(0, 0.5, 0);
-        BlockHitResult result = new BlockHitResult(hit, face, pos, false);
+
+        PlacementFace placement = findPlacementFace(mod, pos);
+        if (placement == null) {
+            return ActionResult.FAIL;
+        }
+
+        Vec3d hit = Vec3d.ofCenter(placement.support())
+                .add(Vec3d.of(placement.face().getVector()).multiply(0.5));
+        BlockHitResult result = new BlockHitResult(hit, placement.face(), placement.support(), false);
         ActionResult action = mod.getController().interactBlock(mod.getPlayer(), Hand.MAIN_HAND, result);
         if (action != ActionResult.FAIL) {
             mod.getPlayer().swingHand(Hand.MAIN_HAND);
         }
         return action;
     }
+
+    private PlacementFace findPlacementFace(Belfegor mod, BlockPos target) {
+        for (Direction direction : Direction.values()) {
+            BlockPos support = target.offset(direction.getOpposite());
+            if (WorldHelper.isSolid(mod, support)
+                    && mod.getWorld().getBlockState(support).getBlock() != Blocks.WATER
+                    && mod.getWorld().getBlockState(support).getBlock() != Blocks.LAVA) {
+                return new PlacementFace(support, direction);
+            }
+        }
+        return null;
+    }
+
+    private BlockPos findStallBlocker(Belfegor mod, BlockPos feet) {
+        // If we are clipped into terrain or a partially built structure, make
+        // breathing/movement space first. Recovery cannot pillar while the
+        // player's body/head cells are occupied, and refusing to clear these
+        // blocks creates an infinite no-rise loop.
+        BlockPos[] bodyColumn = {
+                feet,
+                feet.up(),
+                feet.up(2)
+        };
+        for (BlockPos candidate : bodyColumn) {
+            if (isBodyColumnObstruction(mod, candidate)) {
+                return candidate;
+            }
+        }
+
+        BlockPos[] candidates = {
+                feet.north(),
+                feet.south(),
+                feet.east(),
+                feet.west(),
+                feet.up().north(),
+                feet.up().south(),
+                feet.up().east(),
+                feet.up().west()
+        };
+        for (BlockPos candidate : candidates) {
+            if (isSafeRecoveryObstruction(mod, candidate)) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    private boolean isBodyColumnObstruction(Belfegor mod, BlockPos pos) {
+        if (mod.getWorld() == null || pos == null) return false;
+        BlockState state = mod.getWorld().getBlockState(pos);
+        if (state == null || state.isAir()) return false;
+        Block block = state.getBlock();
+        return block != Blocks.WATER
+                && block != Blocks.LAVA
+                && block != Blocks.BEDROCK
+                && block != Blocks.BARRIER;
+    }
+
+    private boolean isSafeRecoveryObstruction(Belfegor mod, BlockPos pos) {
+        if (mod.getWorld() == null || pos == null) return false;
+        BlockState state = mod.getWorld().getBlockState(pos);
+        if (state == null || state.isAir()) return false;
+        Block block = state.getBlock();
+        if (block == Blocks.WATER || block == Blocks.LAVA) return false;
+        return block instanceof LeavesBlock
+                || block instanceof PlantBlock
+                || block instanceof VineBlock
+                || block == Blocks.TALL_GRASS
+                || block == Blocks.FERN
+                || block == Blocks.LARGE_FERN
+                || block == Blocks.SNOW;
+    }
+
+    private record PlacementFace(BlockPos support, Direction face) {}
 }
