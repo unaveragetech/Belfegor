@@ -56,7 +56,7 @@ public class BuildBaseExpansionTask extends Task {
     private static final int WALL_HEIGHT = 4;
     private static final int HALL_WIDTH = 2;
     private static final int MIN_FARM_WATER_BUCKETS = 2;
-    private static final int MIN_FARM_HOES = 3;
+    private static final int MIN_FARM_HOES = 1;
 
     private enum Phase {
         PLAN,
@@ -337,7 +337,7 @@ public class BuildBaseExpansionTask extends Task {
                         || block == Blocks.FARMLAND
                         || block == Blocks.WATER;
             }
-            return block == Blocks.COBBLESTONE;
+            return block == Blocks.COBBLESTONE || block == Blocks.GRASS_BLOCK || block == Blocks.DIRT;
         }
         if (_waterTargets.contains(pos) && block == Blocks.WATER) return true;
         return false;
@@ -870,6 +870,17 @@ public class BuildBaseExpansionTask extends Task {
     private boolean targetDone(Belfegor mod, BlockPos target, boolean useThrowaways, Block[] desired) {
         if (useThrowaways) return WorldHelper.isSolid(mod, target);
         Block block = mod.getWorld().getBlockState(target).getBlock();
+        if (_floorTargets.contains(target)) {
+            if (_type == RoomType.FARMLAND) {
+                return block == Blocks.DIRT
+                        || block == Blocks.GRASS_BLOCK
+                        || block == Blocks.FARMLAND
+                        || block == Blocks.WATER;
+            }
+            if (WorldHelper.isSolid(mod, target)) {
+                return true;
+            }
+        }
         for (Block allowed : desired) {
             if (block == allowed) return true;
         }

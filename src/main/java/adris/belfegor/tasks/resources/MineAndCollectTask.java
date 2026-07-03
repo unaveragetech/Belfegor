@@ -3,6 +3,7 @@ package adris.belfegor.tasks.resources;
 import adris.belfegor.Belfegor;
 import adris.belfegor.Debug;
 import adris.belfegor.debug.DebugLogger;
+import adris.belfegor.memory.BaseMemory;
 import adris.belfegor.memory.RecentPlacedBlockMemory;
 import adris.belfegor.tasks.AbstractDoToClosestObjectTask;
 import adris.belfegor.tasks.ResourceTask;
@@ -227,6 +228,7 @@ public class MineAndCollectTask extends ResourceTask {
             Optional<BlockPos> closestBlock = mod.getBlockTracker().getNearestTracking(pos, check -> {
                 if (_blacklist.contains(check)) return false;
                 if (RecentPlacedBlockMemory.wasRecentlyPlaced(check)) return false;
+                if (isProtectedBaseMiningArea(check)) return false;
                 if (mod.getBlockTracker().unreachable(check)) return false;
                 return WorldHelper.canBreak(mod, check);
             }, _blocks);
@@ -302,6 +304,7 @@ public class MineAndCollectTask extends ResourceTask {
                         BlockPos candidate = center.add(dx, dy, dz);
                         if (_blacklist.contains(candidate)) continue;
                         if (RecentPlacedBlockMemory.wasRecentlyPlaced(candidate)) continue;
+                        if (isProtectedBaseMiningArea(candidate)) continue;
                         if (mod.getBlockTracker().unreachable(candidate)) continue;
                         if (!mod.getChunkTracker().isChunkLoaded(candidate)) continue;
                         if (!mod.getBlockTracker().blockIsValid(candidate, _blocks)) continue;
@@ -369,6 +372,7 @@ public class MineAndCollectTask extends ResourceTask {
         protected boolean isValid(Belfegor mod, Object obj) {
             if (obj instanceof BlockPos b) {
                 if (RecentPlacedBlockMemory.wasRecentlyPlaced(b)) return false;
+                if (isProtectedBaseMiningArea(b)) return false;
                 return mod.getBlockTracker().blockIsValid(b, _blocks) && WorldHelper.canBreak(mod, b);
             }
             if (obj instanceof ItemEntity drop) {
@@ -438,6 +442,7 @@ public class MineAndCollectTask extends ResourceTask {
                         BlockPos candidate = _surplusAnchor.add(dx, dy, dz);
                         if (_blacklist.contains(candidate)) continue;
                         if (RecentPlacedBlockMemory.wasRecentlyPlaced(candidate)) continue;
+                        if (isProtectedBaseMiningArea(candidate)) continue;
                         if (!mod.getChunkTracker().isChunkLoaded(candidate)) continue;
                         if (!mod.getBlockTracker().blockIsValid(candidate, _blocks)) continue;
                         if (!WorldHelper.canBreak(mod, candidate)) continue;
@@ -450,6 +455,22 @@ public class MineAndCollectTask extends ResourceTask {
                 }
             }
             return Optional.ofNullable(best);
+        }
+
+        private boolean isProtectedBaseMiningArea(BlockPos pos) {
+            if (pos == null) return false;
+            String dimension = WorldHelper.getCurrentDimension().name();
+            for (BaseMemory.BaseRecord base : BaseMemory.getInstance().getAllBases()) {
+                if (base == null) continue;
+                if (dimension != null && !dimension.isBlank() && !dimension.equals(base.dimension)) continue;
+                int protectRadius = Math.max(0, base.radius) + Math.max(0, base.exteriorClearance) + 6;
+                int dx = pos.getX() - base.x;
+                int dz = pos.getZ() - base.z;
+                if (dx * dx + dz * dz <= protectRadius * protectRadius) {
+                    return true;
+                }
+            }
+            return false;
         }
 
         @Override

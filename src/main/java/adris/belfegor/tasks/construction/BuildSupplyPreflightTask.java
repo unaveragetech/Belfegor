@@ -32,10 +32,11 @@ public class BuildSupplyPreflightTask extends Task {
     private static final int MIN_STARTER_BUILDING_BLOCKS = 512;
     private static final int MIN_BUILDING_BLOCKS = 1536;
     private static final int MIN_STAGED_BUILDING_BLOCKS = 768;
+    private static final int BUILDING_BLOCK_SHORTAGE_TOLERANCE = 64;
     private static final int MIN_DIRT = 96;
     private static final int MAX_DIRT_IN_INVENTORY_AFTER_STAGING = 128;
     private static final int MIN_WATER_BUCKETS = 2;
-    private static final int MIN_HOES = 3;
+    private static final int MIN_HOES = 1;
     private static final int MIN_SEEDS = 48;
     private static final int MIN_CHESTS = 1;
     private static final int MIN_CRAFTING_TABLES = 1;
@@ -204,11 +205,16 @@ public class BuildSupplyPreflightTask extends Task {
     private Task ensureMaterials(Belfegor mod) {
         int targetCobblestone = targetBuildingBlocks();
         int cobblestone = mod.getItemStorage().getItemCount(Items.COBBLESTONE);
-        if (cobblestone < targetCobblestone) {
+        int shortage = targetCobblestone - cobblestone;
+        if (shortage > BUILDING_BLOCK_SHORTAGE_TOLERANCE) {
             setDebugState("Preflight collecting exact cobblestone for full base "
                     + cobblestone + "/" + targetCobblestone);
             Task task = TaskCatalogue.getItemTask("cobblestone", targetCobblestone);
             if (task != null) return task;
+        } else if (shortage > 0) {
+            setDebugState("Preflight accepting near-complete cobblestone reserve "
+                    + cobblestone + "/" + targetCobblestone
+                    + " shortage=" + shortage + " within one-stack tolerance");
         }
         if (!_includeFarmMaterials) {
             return null;

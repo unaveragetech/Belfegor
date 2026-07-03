@@ -3,6 +3,7 @@ package adris.belfegor.tasks.resources;
 import adris.belfegor.Belfegor;
 import adris.belfegor.TaskCatalogue;
 import adris.belfegor.debug.DebugLogger;
+import adris.belfegor.memory.BaseMemory;
 import adris.belfegor.memory.RecentPlacedBlockMemory;
 import adris.belfegor.tasks.construction.DestroyBlockTask;
 import adris.belfegor.tasks.movement.TimeoutWanderTask;
@@ -20,7 +21,7 @@ import net.minecraft.util.math.BlockPos;
  * bot digs a 1x1 shaft to a cached underground target and starts scaffold loops.
  */
 public class SurfaceCobblestoneTask extends Task {
-    private static final int RADIUS = 12;
+    private static final int RADIUS = 36;
     private static final int MAX_DEPTH_BELOW_FEET = 5;
     private static final int MAX_COVER_ABOVE_FEET = 2;
     private static final net.minecraft.item.Item[] SHOVELS = {
@@ -29,6 +30,13 @@ public class SurfaceCobblestoneTask extends Task {
             Items.IRON_SHOVEL,
             Items.DIAMOND_SHOVEL,
             Items.NETHERITE_SHOVEL
+    };
+    private static final net.minecraft.item.Item[] PICKAXES = {
+            Items.WOODEN_PICKAXE,
+            Items.STONE_PICKAXE,
+            Items.IRON_PICKAXE,
+            Items.DIAMOND_PICKAXE,
+            Items.NETHERITE_PICKAXE
     };
     private static final Block[] CLEARABLE_COVER = {
             Blocks.GRASS_BLOCK,
@@ -59,8 +67,8 @@ public class SurfaceCobblestoneTask extends Task {
 
     @Override
     protected Task onTick(Belfegor mod) {
-        if (!mod.getItemStorage().hasItem(Items.WOODEN_PICKAXE)) {
-            setDebugState("Crafting wooden pickaxe before surface stone mining.");
+        if (!hasPickaxe(mod)) {
+            setDebugState("Crafting pickaxe before surface stone mining.");
             return TaskCatalogue.getItemTask("wooden_pickaxe", 1);
         }
         if (!hasShovel(mod)) {
@@ -122,6 +130,9 @@ public class SurfaceCobblestoneTask extends Task {
         if (mod.getWorld() == null || RecentPlacedBlockMemory.wasRecentlyPlaced(_activeTarget)) {
             return null;
         }
+        if (isProtectedBaseMiningArea(_activeTarget)) {
+            return null;
+        }
         Block block = mod.getWorld().getBlockState(_activeTarget).getBlock();
         if (block == Blocks.STONE || isClearableCover(block)) {
             return _activeTarget;
@@ -143,6 +154,7 @@ public class SurfaceCobblestoneTask extends Task {
                 for (int dy = 1; dy >= -MAX_DEPTH_BELOW_FEET; dy--) {
                     BlockPos stone = player.add(dx, dy, dz);
                     if (RecentPlacedBlockMemory.wasRecentlyPlaced(stone)) continue;
+                    if (isProtectedBaseMiningArea(stone)) continue;
                     if (mod.getWorld().getBlockState(stone).getBlock() != Blocks.STONE) continue;
                     if (!mod.getChunkTracker().isChunkLoaded(stone)) continue;
                     if (!WorldHelper.canBreak(mod, stone)) continue;
@@ -172,6 +184,9 @@ public class SurfaceCobblestoneTask extends Task {
         BlockPos best = null;
         for (int y = stone.getY() + 1; y <= topY; y++) {
             BlockPos pos = new BlockPos(stone.getX(), y, stone.getZ());
+            if (isProtectedBaseMiningArea(pos)) {
+                return null;
+            }
             Block block = mod.getWorld().getBlockState(pos).getBlock();
             if (mod.getWorld().getBlockState(pos).isAir()) {
                 continue;
@@ -190,9 +205,29 @@ public class SurfaceCobblestoneTask extends Task {
         return mod.getItemStorage().getItemCount(SHOVELS) > 0;
     }
 
+    private boolean hasPickaxe(Belfegor mod) {
+        return mod.getItemStorage().getItemCount(PICKAXES) > 0;
+    }
+
     private boolean isClearableCover(Block block) {
         for (Block clearable : CLEARABLE_COVER) {
             if (block == clearable) return true;
+        }
+        return false;
+    }
+
+    private boolean isProtectedBaseMiningArea(BlockPos pos) {
+        if (pos == null) return false;
+        String dimension = WorldHelper.getCurrentDimension().name();
+        for (BaseMemory.BaseRecord base : BaseMemory.getInstance().getAllBases()) {
+            if (base == null) continue;
+            if (dimension != null && !dimension.isBlank() && !dimension.equals(base.dimension)) continue;
+            int protectRadius = Math.max(0, base.radius) + Math.max(0, base.exteriorClearance) + 6;
+            int dx = pos.getX() - base.x;
+            int dz = pos.getZ() - base.z;
+            if (dx * dx + dz * dz <= protectRadius * protectRadius) {
+                return true;
+            }
         }
         return false;
     }
