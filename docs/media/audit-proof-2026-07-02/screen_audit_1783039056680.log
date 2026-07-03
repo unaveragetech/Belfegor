@@ -1,0 +1,68 @@
+START screen audit at=2026-07-03T00:37:36.681976400Z
+PASS screen=player_inventory reason=player inventory recognized without external-container false positive
+SETUP /setblock 1451 15 2311 minecraft:air
+SETUP /setblock 1451 16 2311 minecraft:air
+SETUP /fill 1448 14 2309 1453 17 2313 minecraft:air
+SETUP /fill 1448 13 2309 1453 13 2313 minecraft:cobblestone
+SETUP /tp @s 1449 14 2311
+SETUP dry fixture pad stand=1449 14 2311 fixture=1451 14 2311
+SETUP /setblock 1451 14 2311 minecraft:crafting_table
+PASS screen=crafting_table reason=opened expected handler class_1714
+SETUP /setblock 1451 15 2311 minecraft:air
+SETUP /setblock 1451 16 2311 minecraft:air
+SETUP /fill 1448 14 2309 1453 17 2313 minecraft:air
+SETUP /fill 1448 13 2309 1453 13 2313 minecraft:cobblestone
+SETUP /tp @s 1449 14 2311
+SETUP dry fixture pad stand=1449 14 2311 fixture=1451 14 2311
+SETUP /setblock 1451 14 2311 minecraft:chest
+PASS screen=chest reason=opened expected handler class_1707
+SETUP /setblock 1451 15 2311 minecraft:air
+SETUP /setblock 1451 16 2311 minecraft:air
+SETUP /fill 1448 14 2309 1453 17 2313 minecraft:air
+SETUP /fill 1448 13 2309 1453 13 2313 minecraft:cobblestone
+SETUP /tp @s 1449 14 2311
+SETUP dry fixture pad stand=1449 14 2311 fixture=1451 14 2311
+SETUP /setblock 1451 14 2311 minecraft:barrel
+PASS screen=barrel reason=opened expected handler class_1707
+SETUP /setblock 1451 15 2311 minecraft:air
+SETUP /setblock 1451 16 2311 minecraft:air
+SETUP /fill 1448 14 2309 1453 17 2313 minecraft:air
+SETUP /fill 1448 13 2309 1453 13 2313 minecraft:cobblestone
+SETUP /tp @s 1449 14 2311
+SETUP dry fixture pad stand=1449 14 2311 fixture=1451 14 2311
+SETUP /setblock 1451 14 2311 minecraft:shulker_box
+PASS screen=shulker_box reason=opened expected handler class_1733
+SETUP /setblock 1451 15 2311 minecraft:air
+SETUP /setblock 1451 16 2311 minecraft:air
+SETUP /fill 1448 14 2309 1453 17 2313 minecraft:air
+SETUP /fill 1448 13 2309 1453 13 2313 minecraft:cobblestone
+SETUP /tp @s 1449 14 2311
+SETUP dry fixture pad stand=1449 14 2311 fixture=1451 14 2311
+SETUP /setblock 1451 14 2311 minecraft:furnace
+PASS screen=furnace reason=opened expected handler class_3858
+SETUP /setblock 1451 15 2311 minecraft:air
+SETUP /setblock 1451 16 2311 minecraft:air
+SETUP /fill 1448 14 2309 1453 17 2313 minecraft:air
+SETUP /fill 1448 13 2309 1453 13 2313 minecraft:cobblestone
+SETUP /tp @s 1449 14 2311
+SETUP dry fixture pad stand=1449 14 2311 fixture=1451 14 2311
+SETUP /setblock 1451 14 2311 minecraft:smoker
+PASS screen=smoker reason=opened expected handler class_3706
+SETUP /setblock 1451 15 2311 minecraft:air
+SETUP /setblock 1451 16 2311 minecraft:air
+SETUP /fill 1448 14 2309 1453 17 2313 minecraft:air
+SETUP /fill 1448 13 2309 1453 13 2313 minecraft:cobblestone
+SETUP /tp @s 1449 14 2311
+SETUP dry fixture pad stand=1449 14 2311 fixture=1451 14 2311
+SETUP /setblock 1451 14 2311 minecraft:blast_furnace
+PASS screen=blast_furnace reason=opened expected handler class_3705
+SETUP /setblock 1451 15 2311 minecraft:air
+SETUP /setblock 1451 16 2311 minecraft:air
+SETUP /fill 1448 14 2309 1453 17 2313 minecraft:air
+SETUP /fill 1448 13 2309 1453 13 2313 minecraft:cobblestone
+SETUP /tp @s 1449 14 2311
+SETUP dry fixture pad stand=1449 14 2311 fixture=1451 14 2311
+SETUP /setblock 1451 14 2311 minecraft:brewing_stand
+PASS screen=brewing_stand reason=opened expected handler class_1708
+DONE passed=9 failed=0 checks=9
+STOP interrupt=null passed=9 failed=0

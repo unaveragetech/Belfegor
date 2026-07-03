@@ -3,6 +3,7 @@ package adris.belfegor.tasks.resources;
 import adris.belfegor.Belfegor;
 import adris.belfegor.Debug;
 import adris.belfegor.debug.DebugLogger;
+import adris.belfegor.memory.RecentPlacedBlockMemory;
 import adris.belfegor.tasks.AbstractDoToClosestObjectTask;
 import adris.belfegor.tasks.ResourceTask;
 import adris.belfegor.tasks.construction.DestroyBlockTask;
@@ -194,6 +195,7 @@ public class MineAndCollectTask extends ResourceTask {
         protected Optional<Object> getClosestTo(Belfegor mod, Vec3d pos) {
             Optional<BlockPos> closestBlock = mod.getBlockTracker().getNearestTracking(pos, check -> {
                 if (_blacklist.contains(check)) return false;
+                if (RecentPlacedBlockMemory.wasRecentlyPlaced(check)) return false;
                 if (mod.getBlockTracker().unreachable(check)) return false;
                 return WorldHelper.canBreak(mod, check);
             }, _blocks);
@@ -268,6 +270,7 @@ public class MineAndCollectTask extends ResourceTask {
                         if (dx * dx + dz * dz > radius * radius) continue;
                         BlockPos candidate = center.add(dx, dy, dz);
                         if (_blacklist.contains(candidate)) continue;
+                        if (RecentPlacedBlockMemory.wasRecentlyPlaced(candidate)) continue;
                         if (mod.getBlockTracker().unreachable(candidate)) continue;
                         if (!mod.getChunkTracker().isChunkLoaded(candidate)) continue;
                         if (!mod.getBlockTracker().blockIsValid(candidate, _blocks)) continue;
@@ -331,6 +334,7 @@ public class MineAndCollectTask extends ResourceTask {
         @Override
         protected boolean isValid(Belfegor mod, Object obj) {
             if (obj instanceof BlockPos b) {
+                if (RecentPlacedBlockMemory.wasRecentlyPlaced(b)) return false;
                 return mod.getBlockTracker().blockIsValid(b, _blocks) && WorldHelper.canBreak(mod, b);
             }
             if (obj instanceof ItemEntity drop) {

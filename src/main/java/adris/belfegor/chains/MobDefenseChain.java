@@ -9,6 +9,7 @@ import adris.belfegor.tasks.movement.DodgeProjectilesTask;
 import adris.belfegor.tasks.movement.RunAwayFromCreepersTask;
 import adris.belfegor.tasks.movement.RunAwayFromHostilesTask;
 import adris.belfegor.tasks.speedrun.DragonBreathTracker;
+import adris.belfegor.tasksystem.ITaskSuppressesMobDefense;
 import adris.belfegor.tasksystem.TaskRunner;
 import adris.belfegor.util.baritone.CachedProjectile;
 import adris.belfegor.util.helpers.*;
@@ -139,6 +140,14 @@ public class MobDefenseChain extends SingleTaskChain {
         }
 
         if (!mod.getModSettings().isMobDefense()) {
+            return Float.NEGATIVE_INFINITY;
+        }
+
+        var userTask = mod.getUserTaskChain().getCurrentTask();
+        if (userTask != null
+                && userTask.thisOrChildSatisfies(task -> task instanceof ITaskSuppressesMobDefense)) {
+            stopShielding(mod);
+            _killAura.stopShielding(mod);
             return Float.NEGATIVE_INFINITY;
         }
 

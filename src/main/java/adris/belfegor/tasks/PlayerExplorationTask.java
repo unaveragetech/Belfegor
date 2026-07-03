@@ -10,6 +10,7 @@ import adris.belfegor.memory.SpatialAwareness;
 import adris.belfegor.llm.LlmAdvisor;
 import adris.belfegor.tasks.construction.BuildBaseExpansionTask;
 import adris.belfegor.tasks.construction.BuildCampsiteTask;
+import adris.belfegor.tasks.container.StoreInAnyContainerTask;
 import adris.belfegor.tasks.container.ShulkerInteractionTask;
 import adris.belfegor.tasks.movement.GetToBlockTask;
 import adris.belfegor.tasks.movement.PickupDroppedItemTask;
@@ -65,6 +66,7 @@ public class PlayerExplorationTask extends Task {
     private final TimerGame _craftTestTimer = new TimerGame(20);
     private final TimerGame _homeCheckTimer = new TimerGame(90);
     private final TimerGame _shulkerSortTimer = new TimerGame(20);
+    private final TimerGame _stockpileTimer = new TimerGame(45);
 
     private enum Phase {
         EXPLORE,
@@ -79,8 +81,8 @@ public class PlayerExplorationTask extends Task {
     protected void onStart(Belfegor mod) {
         _phase = Phase.EXPLORE;
         _explorationCounter = 0;
-        _campBuildCount = 0;
-        _homeBase = mod.getPlayer() == null ? mod.getModSettings().getHomeBasePosition() : mod.getPlayer().getBlockPos();
+        _homeBase = resolvePersistentHome(mod);
+        _campBuildCount = estimateCompletedBaseCycles();
         mod.getModSettings().setHomeBasePosition(_homeBase);
         mod.getModSettings().setReturnHomeOnIdle(true);
         mod.getModSettings().setDefendHomeBase(true);
@@ -93,6 +95,42 @@ public class PlayerExplorationTask extends Task {
         LocationMemory.getInstance().save();
         BaseMemory.getInstance().save();
         Debug.logInternal("PlayerExplorationTask: Starting autonomous exploration");
+    }
+
+    private BlockPos resolvePersistentHome(Belfegor mod) {
+        String dim = WorldHelper.getCurrentDimension().name();
+        BlockPos configured = mod.getModSettings().getHomeBasePosition();
+        if (configured != null) {
+            BaseMemory.getInstance().rememberBase(configured, dim, 8, 4, 5, "active_player_home");
+            return configured;
+        }
+        if (mod.getPlayer() != null) {
+            var nearest = BaseMemory.getInstance().nearestBase(mod.getPlayer().getBlockPos(), dim);
+            if (nearest.isPresent()) {
+                return nearest.get().center();
+            }
+            return mod.getPlayer().getBlockPos();
+        }
+        return new BlockPos(0, 64, 0);
+    }
+
+    private int estimateCompletedBaseCycles() {
+        String dim = WorldHelper.getCurrentDimension().name();
+        var base = BaseMemory.getInstance().nearestBase(_homeBase, dim);
+        if (base.isEmpty()) return 0;
+        boolean coreComplete = base.get().modules.stream()
+                .anyMatch(module -> "core".equalsIgnoreCase(module.name)
+                        && BaseMemory.getInstance().moduleComplete(module));
+        int expansions = 0;
+        for (BaseMemory.BaseModule module : base.get().modules) {
+            if (BaseMemory.getInstance().moduleComplete(module)
+                    && ("farm".equalsIgnoreCase(module.type)
+                    || "utility".equalsIgnoreCase(module.type)
+                    || "mob_farm".equalsIgnoreCase(module.type))) {
+                expansions++;
+            }
+        }
+        return coreComplete ? Math.max(1, expansions + 1) : 0;
     }
 
     @Override
@@ -118,6 +156,13 @@ public class PlayerExplorationTask extends Task {
             setDebugState("Managing carried shulker inventory");
             LlmAdvisor.getInstance().recordAction("player_mode:shulker_sort", "inventory pressure triggered shulker management");
             return shulkerTask;
+        }
+
+        Task stockpileTask = maybeMaintainCampStockpile(mod);
+        if (stockpileTask != null) {
+            setDebugState("Maintaining home stockpile");
+            LlmAdvisor.getInstance().recordAction("player_mode:stockpile", "camp persistence requires stored surplus resources");
+            return stockpileTask;
         }
 
         if (maybeUseAdvisor(mod)) {
@@ -265,6 +310,60 @@ public class PlayerExplorationTask extends Task {
         }
 
         return new TimeoutWanderTask(true);
+    }
+
+    private Task maybeMaintainCampStockpile(Belfegor mod) {
+        if (!_stockpileTimer.elapsed() || _phase == Phase.SURVIVE) return null;
+        _stockpileTimer.reset();
+        if (_homeBase == null || mod.getPlayer() == null) return null;
+        if (_homeBase.getSquaredDistance(mod.getPlayer().getBlockPos()) > 48 * 48) return null;
+
+        ItemTarget[] surplus = surplusTargetsInInventory(mod);
+        if (surplus.length > 0) {
+            return cacheTask("stockpile-store:" + Arrays.toString(surplus),
+                    new StoreInAnyContainerTask(false, false, surplus));
+        }
+
+        ItemTarget missing = firstMissingStockpileTarget(mod);
+        if (missing != null) {
+            return cacheTask("stockpile-get:" + missing, TaskCatalogue.getItemTask(missing));
+        }
+        return null;
+    }
+
+    private ItemTarget firstMissingStockpileTarget(Belfegor mod) {
+        ItemTarget[] desired = {
+                new ItemTarget(Items.COBBLESTONE, 128),
+                new ItemTarget(Items.OAK_LOG, 48),
+                new ItemTarget(Items.COAL, 32),
+                new ItemTarget(Items.RAW_IRON, 18),
+                new ItemTarget(Items.WHEAT_SEEDS, 24)
+        };
+        for (ItemTarget target : desired) {
+            int have = mod.getItemStorage().getItemCount(target.getMatches());
+            if (have < target.getTargetCount()) {
+                int batch = Math.min(target.getTargetCount() - have, target.getMatches()[0].getMaxCount());
+                return new ItemTarget(target.getMatches(), batch);
+            }
+        }
+        return null;
+    }
+
+    private ItemTarget[] surplusTargetsInInventory(Belfegor mod) {
+        java.util.ArrayList<ItemTarget> targets = new java.util.ArrayList<>();
+        addSurplusIfCarried(mod, targets, Items.COBBLESTONE, 32);
+        addSurplusIfCarried(mod, targets, Items.OAK_LOG, 16);
+        addSurplusIfCarried(mod, targets, Items.COAL, 16);
+        addSurplusIfCarried(mod, targets, Items.RAW_IRON, 8);
+        addSurplusIfCarried(mod, targets, Items.WHEAT_SEEDS, 8);
+        return targets.toArray(ItemTarget[]::new);
+    }
+
+    private void addSurplusIfCarried(Belfegor mod, java.util.List<ItemTarget> targets, Item item, int keepCarried) {
+        int carried = mod.getItemStorage().getItemCountInventoryOnly(item);
+        if (carried > keepCarried) {
+            targets.add(new ItemTarget(item, carried - keepCarried));
+        }
     }
 
     private Task doCraft(Belfegor mod) {
@@ -436,6 +535,7 @@ public class PlayerExplorationTask extends Task {
         boolean taskInProgress = _activeTask != null && !_activeTask.stopped();
         boolean inventoryOpen = StorageHelper.isPlayerInventoryOpen();
         boolean bigCraftOpen = StorageHelper.isBigCraftingOpen();
+        boolean handledContainerOpen = StorageHelper.isHandledContainerOpen();
 
         var decision = LlmAdvisor.getInstance().pollDecision();
         if (decision.isPresent()) {
@@ -447,10 +547,12 @@ public class PlayerExplorationTask extends Task {
                 mod.log("AI: " + result.chat());
             }
             if (result.valid() && !result.command().isBlank()) {
-                if (taskInProgress || inventoryOpen || bigCraftOpen) {
+                if (taskInProgress || inventoryOpen || bigCraftOpen || handledContainerOpen) {
                     LlmAdvisor.getInstance().recordAction("llm_skipped_busy",
                             "skipped command " + result.command() + " — task active: " + taskInProgress
-                                    + " inventoryOpen=" + inventoryOpen + " bigCraftOpen=" + bigCraftOpen);
+                                    + " inventoryOpen=" + inventoryOpen
+                                    + " bigCraftOpen=" + bigCraftOpen
+                                    + " handledContainerOpen=" + handledContainerOpen);
                     return false;
                 }
                 mod.log("AI selected next command: " + result.command());
@@ -465,7 +567,7 @@ public class PlayerExplorationTask extends Task {
         }
 
         // Don't request new LLM decisions while a task is actively running
-        if (taskInProgress || inventoryOpen || bigCraftOpen) {
+        if (taskInProgress || inventoryOpen || bigCraftOpen || handledContainerOpen) {
             return false;
         }
 

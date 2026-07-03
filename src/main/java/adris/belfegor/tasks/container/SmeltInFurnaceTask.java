@@ -101,9 +101,8 @@ public class SmeltInFurnaceTask extends ResourceTask {
             // Try throwing away cursor slot if it's garbage
             garbage.ifPresent(slot -> mod.getSlotHandler().clickSlot(slot, 0, SlotActionType.PICKUP));
             mod.getSlotHandler().clickSlot(Slot.UNDEFINED, 0, SlotActionType.PICKUP);
-        } else {
-            StorageHelper.closeScreen();
         }
+        StorageHelper.closeScreen();
     }
 
     @Override

@@ -99,15 +99,16 @@ See [Shulker management](SHULKER_MANAGEMENT.md) for exact behavior and exclusion
 | `give` | `@give <username> [item] <count=1>` | Gets an item and gives it to a player. | `@give Steve diamond 3` |
 | `ai` | `@ai <prompt>` | Queues or polls the Packaged llama.cpp advisor. It reads the command catalogue, context snapshot, inventory, shulker memory, goal, and action log, then returns chat text and/or a safe command suggestion. Defaults to `belfegor/models/Qwen3-1.7B-Q4_K_M.gguf`. | `@ai "what should I do next?"`, `@ai "why am I stuck?"` |
 | `test` | `@test <extra>` | Runs experimental test tasks. | `@test stacked` |
-| `craftaudit` | `@craftaudit <target=all> <limit=0>` | Developer-only recipe audit. Starts each item from a clean inventory, gives bundled-recipe leaf resources, crafts through Belfegor, stores outputs in ordinary containers, and logs pass/skip/fail results. Requires cheats/op in a test world. | `@craftaudit anvil`, `@craftaudit all 25` |
+| `craftaudit` | `@craftaudit <target=all/screens> <limit=0>` | Developer-only audit harness. `screens` creates and opens every supported handled-screen fixture in order. Item/all mode starts each item from a clean inventory, gives bundled-recipe leaf resources, crafts through Belfegor, stores outputs in ordinary containers, and logs pass/skip/fail results. Requires cheats/op in a test world. | `@craftaudit screens`, `@craftaudit anvil`, `@craftaudit all 25`, `@craftaudit all` |
 
 `@craftaudit` writes logs to:
 
 ```text
 .minecraft/belfegor/craft_audit_*.log
+.minecraft/belfegor/screen_audit_*.log
 ```
 
-Use `@craftaudit all 25` for a small batch before running the full catalogue. The command intentionally exercises Belfegor's real crafting logic after resources are given, so failures are useful for fixing recipe, inventory, and storage bugs. Targets without a craftable recipe/task are skipped instead of being counted as recipe failures.
+Use `@craftaudit screens` first to validate inventory, crafting table, chest/barrel, shulker, furnace, smoker, blast furnace, and brewing stand screen handling. Then use `@craftaudit all 25` for a small batch before running the full catalogue with `@craftaudit all`. The item audit intentionally exercises Belfegor's real crafting logic after resources are given, so failures are useful for fixing recipe, inventory, and storage bugs. Craftable recipe outputs without a task are counted as failures because the goal is to expose every item the bot cannot yet craft.
 
 `@ai` uses local llama.cpp. Enable it in `belfegor_settings.json` with `llmAdvisorEnabled=true`. See [Local llama.cpp LLM advisor](LLM_ADVISOR.md).
 

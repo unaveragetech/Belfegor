@@ -178,6 +178,13 @@ public abstract class CustomBaritoneGoalTask extends Task implements ITaskRequir
 
     @Override
     protected void onStop(Belfegor mod, Task interruptTask) {
+        // Direct movement->movement handoffs happen often in @player/@camp.
+        // If the outgoing task force-cancels after the incoming task has begun
+        // setting a goal, Baritone can bounce between two goals without making
+        // progress. Let the incoming movement task own cancellation/repathing.
+        if (interruptTask instanceof CustomBaritoneGoalTask) {
+            return;
+        }
         mod.getClientBaritone().getPathingBehavior().forceCancel();
     }
 

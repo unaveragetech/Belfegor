@@ -5,6 +5,7 @@ import adris.belfegor.debug.DebugLogger;
 import adris.belfegor.tasks.InteractWithBlockTask;
 import adris.belfegor.tasks.construction.DestroyBlockTask;
 import adris.belfegor.tasks.movement.TimeoutWanderTask;
+import adris.belfegor.tasksystem.ITaskUsesContainer;
 import adris.belfegor.tasksystem.Task;
 import adris.belfegor.trackers.storage.ContainerCache;
 import adris.belfegor.trackers.storage.ContainerType;
@@ -17,7 +18,7 @@ import java.util.Optional;
 /**
  * Opens a STORAGE container and does whatever you want inside of it
  */
-public abstract class AbstractDoToStorageContainerTask extends Task {
+public abstract class AbstractDoToStorageContainerTask extends Task implements ITaskUsesContainer {
 
     private ContainerType _currentContainerType = null;
 

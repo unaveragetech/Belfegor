@@ -49,6 +49,16 @@ If `.minecraft/schematics/test/camp.litematic` exists, `@build validate` imports
 
 Non-air palette entries are converted into world-space expected blocks at the remembered base origin. The converted blueprint is also saved into Belfegor's readable JSON schematic format for debugging.
 
+Repo-side schematic samples and fixtures are organized under:
+
+```text
+docs/schematics/camp.litematic
+docs/schematics/zephiowl_large_survival_house.litematic
+docs/fixtures/test_import_schematic.belfegor_schematic.json
+```
+
+These files are documentation/test assets. Runtime imports should still copy user-selected schematics into the Minecraft/Belfegor working folders before build or validation starts.
+
 When `@build camp`, `@build full`, or `@build validate` touches the core campsite, Belfegor writes/loads:
 
 ```text

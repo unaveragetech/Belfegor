@@ -19,6 +19,7 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.ChatScreen;
 import net.minecraft.client.gui.screen.GameMenuScreen;
 import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.gui.screen.ingame.HandledScreen;
 import net.minecraft.client.gui.screen.ingame.InventoryScreen;
 import net.minecraft.client.gui.screen.option.GameOptionsScreen;
 import net.minecraft.client.network.ClientPlayerEntity;
@@ -159,7 +160,11 @@ public class StorageHelper {
                 ItemStack stack = getItemStackInSlot(slot);
                 if (ToolIdentifier.isTool(Registries.ITEM.getId(stack.getItem()).getPath())) {
                     if (stack.isSuitableFor(state)) {
+                        if (ToolDurabilityMapping.isNearlyBroken(stack, 2)) {
+                            continue;
+                        }
                         double speed = BaritoneCompat.calculateSpeedVsBlock(stack, state);
+                        speed *= Math.max(0.25, ToolDurabilityMapping.getRemainingDurabilityRatio(stack));
                         if (speed > highestSpeed) {
                             highestSpeed = speed;
                             bestToolSlot = slot;
@@ -288,8 +293,9 @@ public class StorageHelper {
                         if (ToolDurabilityMapping.getDurability(leftToolId) != ToolDurabilityMapping.getDurability(rightToolId) ) {
                             return (int) (ToolDurabilityMapping.getDurability(leftToolId) - ToolDurabilityMapping.getDurability(rightToolId));
                         }
-                        // We want less damage.
-                        return left.getDamage() - right.getDamage();
+                        // Throw away the more damaged/less useful duplicate first.
+                        return ToolDurabilityMapping.getRemainingDurability(left)
+                                - ToolDurabilityMapping.getRemainingDurability(right);
                     }
 
                     // Prioritize food over other things if we lack food.
@@ -390,6 +396,17 @@ public class StorageHelper {
         //      causing a false-negative that triggers the open/close storm.
         //   3. vanilla Minecraft itself only checks currentScreen instanceof InventoryScreen.
         return MinecraftClient.getInstance().currentScreen instanceof InventoryScreen;
+    }
+
+    public static boolean isHandledContainerOpen() {
+        MinecraftClient client = MinecraftClient.getInstance();
+        ClientPlayerEntity player = client.player;
+        if (client.currentScreen instanceof HandledScreen<?> && !(client.currentScreen instanceof InventoryScreen)) {
+            return true;
+        }
+        return player != null
+                && player.currentScreenHandler != null
+                && !(player.currentScreenHandler instanceof PlayerScreenHandler);
     }
 
     public static boolean isFurnaceOpen() {

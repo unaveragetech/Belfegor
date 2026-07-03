@@ -104,6 +104,7 @@ The runtime loader is `RecipeRegistry`. It normalizes item ids, indexes recipes 
 
 ```text
 @craftaudit <target=all> <limit=0>
+@craftaudit screens
 ```
 
 Recommended test-world workflow:
@@ -115,23 +116,39 @@ Recommended test-world workflow:
 ```text
 @craftaudit anvil
 @craftaudit diamond_shovel
+@craftaudit screens
 ```
 
 4. Then run a bounded catalogue pass:
 
 ```text
 @craftaudit all 25
+@craftaudit all
 ```
 
 5. Read the generated log:
 
 ```text
 .minecraft/belfegor/craft_audit_*.log
+.minecraft/belfegor/screen_audit_*.log
 ```
 
-The audit should fail loudly rather than loop forever. A failure usually points at one of four areas: bad recipe data, missing ingredient-group normalization, missing source/acquisition support, or an unsafe inventory transaction during the real craft.
+The audit should fail loudly rather than loop forever. `@craftaudit screens` verifies that every supported handled screen can be opened, recognized, and closed in order. Item audit failures usually point at one of four areas: bad recipe data, missing ingredient-group normalization, missing source/acquisition support, or an unsafe inventory transaction during the real craft.
 
 Each audited item now starts from a clean inventory, receives only the normalized leaf resources required for that item plus required utilities such as a crafting table/chest, crafts through the normal task system, and stores the result in ordinary container storage. Shulkers are intentionally excluded from audit storage so recipe/crafting failures are not confused with shulker-management failures.
+
+Current proof artifacts live in:
+
+```text
+docs/media/audit-proof-2026-07-02/
+```
+
+That folder contains full in-game recordings and matching generated logs for:
+
+- `@craftaudit all` -> `DONE passed=799 failed=0`
+- `@craftaudit screens` -> `DONE passed=9 failed=0 checks=9`
+
+When a future change touches recipes, screen handlers, crafting, storage containers, shulker transactions, or inventory cursor recovery, rerun both audits and either replace or add a new dated proof folder.
 
 For Baritone command research and base-building recovery commands, see [Baritone Command Reference](BARITONE_COMMAND_REFERENCE.md).
 

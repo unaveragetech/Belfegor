@@ -52,7 +52,8 @@ public final class CommandDocumentation {
             Map.entry("shulker", List.of("@shulker list", "@shulker store diamond 3",
                     "@shulker retrieve stick 8", "@shulker auto on")),
             Map.entry("ai", List.of("@ai \"what should I do next?\"", "@ai \"why am I stuck?\"")),
-            Map.entry("craftaudit", List.of("@craftaudit anvil", "@craftaudit all 25"))
+            Map.entry("craftaudit", List.of("@craftaudit screens", "@craftaudit anvil",
+                    "@craftaudit all 25", "@craftaudit all"))
     );
 
     private static final Map<String, String> CATEGORIES = Map.ofEntries(
@@ -146,7 +147,7 @@ public final class CommandDocumentation {
             case "gamer" -> "Runs the legacy beat-the-game route.";
             case "marvion" -> "Runs the Marvion beat-the-game route variant.";
             case "ai" -> "Asks the local llama.cpp advisor for a chat response or high-level command suggestion using current context, command docs, inventory, shulker memory, goal, and action log. Defaults to llmLlamaModelPath=belfegor/models/Qwen3-1.7B-Q4_K_M.gguf when llmAdvisorEnabled is true.";
-            case "craftaudit" -> "Developer-only offline recipe audit. Uses bundled recipe data, /give @s leaf resources, crafts each target through Belfegor, stores outputs, and writes belfegor/craft_audit_*.log. Requires cheats/op.";
+            case "craftaudit" -> "Developer-only audit harness. Use @craftaudit screens to create and open every supported handled-screen fixture in order, verifying inventory, crafting table, chest/barrel, shulker, furnace, smoker, blast furnace, and brewing stand handlers. Use @craftaudit <item>, @craftaudit all <limit>, or @craftaudit all to expand bundled recipe data, /give @s leaf resources, craft each target through Belfegor's real task system, store outputs, and write belfegor/craft_audit_*.log or belfegor/screen_audit_*.log. Requires cheats/op.";
             case "test" -> "Developer/testing command for targeted task harnesses. Use only in test worlds.";
             case "reload_settings" -> "Reloads settings, butler lists, and related runtime configuration from disk without restarting the client.";
             default -> fallback;

@@ -131,7 +131,11 @@ public class RecipeRegistry {
         if (outputItem == null) return null;
 
         CraftingRecipe recipe;
-        if ("shaped".equals(type) && obj.has("pattern")) {
+        CraftingRecipe correctedColorRecipe = getCorrectedColorRecipe(outputItem, outputCount);
+        if (correctedColorRecipe != null) {
+            recipe = correctedColorRecipe;
+            type = "shapeless";
+        } else if ("shaped".equals(type) && obj.has("pattern")) {
             recipe = parseShapedRecipe(obj.getAsJsonArray("pattern"), outputCount, outputItem);
         } else if ("shapeless".equals(type) && obj.has("ingredients")) {
             recipe = parseShapelessRecipe(obj.getAsJsonArray("ingredients"), outputCount, outputItem);
@@ -142,6 +146,139 @@ public class RecipeRegistry {
         if (recipe == null) return null;
 
         return new RecipeEntry(outputItem, outputCount, recipe, type);
+    }
+
+    private CraftingRecipe getCorrectedColorRecipe(Item outputItem, int outputCount) {
+        CraftingRecipe darkPrismarine = getCorrectedDarkPrismarineRecipe(outputItem, outputCount);
+        if (darkPrismarine != null) return darkPrismarine;
+        CraftingRecipe dyedWool = getCorrectedDyedWoolRecipe(outputItem, outputCount);
+        if (dyedWool != null) return dyedWool;
+        CraftingRecipe dyedCandle = getCorrectedDyedCandleRecipe(outputItem, outputCount);
+        if (dyedCandle != null) return dyedCandle;
+        CraftingRecipe concretePowder = getCorrectedConcretePowderRecipe(outputItem, outputCount);
+        if (concretePowder != null) return concretePowder;
+        CraftingRecipe stainedGlass = getCorrectedDyedBaseRecipe(outputItem, outputCount,
+                "_stained_glass", net.minecraft.item.Items.GLASS, 8);
+        if (stainedGlass != null) return stainedGlass;
+        CraftingRecipe terracotta = getCorrectedDyedBaseRecipe(outputItem, outputCount,
+                "_terracotta", net.minecraft.item.Items.TERRACOTTA, 8);
+        if (terracotta != null) return terracotta;
+        CraftingRecipe shulkerBox = getCorrectedDyedBaseRecipe(outputItem, outputCount,
+                "_shulker_box", net.minecraft.item.Items.SHULKER_BOX, 1);
+        if (shulkerBox != null) return shulkerBox;
+        return null;
+    }
+
+    private CraftingRecipe getCorrectedDarkPrismarineRecipe(Item outputItem, int outputCount) {
+        String outputId = itemId(outputItem);
+        if (!"minecraft:dark_prismarine".equals(outputId)) {
+            return null;
+        }
+        ItemTarget[] slots = new ItemTarget[9];
+        Arrays.fill(slots, new ItemTarget(net.minecraft.item.Items.PRISMARINE_SHARD, 1));
+        slots[4] = new ItemTarget(net.minecraft.item.Items.BLACK_DYE, 1);
+        return CraftingRecipe.newShapedRecipe("corrected_dark_prismarine", slots, outputCount);
+    }
+
+    private CraftingRecipe getCorrectedDyedWoolRecipe(Item outputItem, int outputCount) {
+        String outputId = itemId(outputItem);
+        if (outputId == null || !outputId.startsWith("minecraft:") || !outputId.endsWith("_wool")) {
+            return null;
+        }
+        String path = outputId.substring("minecraft:".length());
+        if ("white_wool".equals(path)) {
+            return null;
+        }
+        String color = path.substring(0, path.length() - "_wool".length());
+        Item dye = getItemByName("minecraft:" + color + "_dye");
+        if (dye == null) {
+            return null;
+        }
+        ItemTarget[] slots = new ItemTarget[]{
+                new ItemTarget(net.minecraft.item.Items.WHITE_WOOL, 1),
+                new ItemTarget(dye, 1),
+                ItemTarget.EMPTY,
+                ItemTarget.EMPTY
+        };
+        return CraftingRecipe.newShapedRecipe("corrected_" + color + "_wool", slots, outputCount);
+    }
+
+    private CraftingRecipe getCorrectedDyedCandleRecipe(Item outputItem, int outputCount) {
+        String outputId = itemId(outputItem);
+        if (outputId == null || !outputId.startsWith("minecraft:") || !outputId.endsWith("_candle")) {
+            return null;
+        }
+        String path = outputId.substring("minecraft:".length());
+        if ("candle".equals(path)) {
+            return null;
+        }
+        String color = path.substring(0, path.length() - "_candle".length());
+        Item dye = getItemByName("minecraft:" + color + "_dye");
+        if (dye == null) {
+            return null;
+        }
+        ItemTarget[] slots = new ItemTarget[]{
+                new ItemTarget(net.minecraft.item.Items.CANDLE, 1),
+                new ItemTarget(dye, 1),
+                ItemTarget.EMPTY,
+                ItemTarget.EMPTY
+        };
+        return CraftingRecipe.newShapedRecipe("corrected_" + color + "_candle", slots, outputCount);
+    }
+
+    private CraftingRecipe getCorrectedConcretePowderRecipe(Item outputItem, int outputCount) {
+        String outputId = itemId(outputItem);
+        if (outputId == null || !outputId.startsWith("minecraft:") || !outputId.endsWith("_concrete_powder")) {
+            return null;
+        }
+        String path = outputId.substring("minecraft:".length());
+        String color = path.substring(0, path.length() - "_concrete_powder".length());
+        Item dye = getItemByName("minecraft:" + color + "_dye");
+        if (dye == null) {
+            return null;
+        }
+        ItemTarget[] slots = new ItemTarget[]{
+                new ItemTarget(net.minecraft.item.Items.SAND, 1),
+                new ItemTarget(net.minecraft.item.Items.SAND, 1),
+                new ItemTarget(net.minecraft.item.Items.SAND, 1),
+                new ItemTarget(net.minecraft.item.Items.SAND, 1),
+                new ItemTarget(net.minecraft.item.Items.GRAVEL, 1),
+                new ItemTarget(net.minecraft.item.Items.GRAVEL, 1),
+                new ItemTarget(net.minecraft.item.Items.GRAVEL, 1),
+                new ItemTarget(net.minecraft.item.Items.GRAVEL, 1),
+                new ItemTarget(dye, 1)
+        };
+        return CraftingRecipe.newShapedRecipe("corrected_" + color + "_concrete_powder", slots, outputCount);
+    }
+
+    private CraftingRecipe getCorrectedDyedBaseRecipe(Item outputItem, int outputCount, String suffix, Item base, int baseCount) {
+        String outputId = itemId(outputItem);
+        if (outputId == null || !outputId.startsWith("minecraft:") || !outputId.endsWith(suffix)) {
+            return null;
+        }
+        String path = outputId.substring("minecraft:".length());
+        String color = path.substring(0, path.length() - suffix.length());
+        if (color.isBlank()) {
+            return null;
+        }
+        Item dye = getItemByName("minecraft:" + color + "_dye");
+        if (dye == null) {
+            return null;
+        }
+        if (baseCount == 8) {
+            ItemTarget[] slots = new ItemTarget[9];
+            Arrays.fill(slots, new ItemTarget(base, 1));
+            slots[4] = new ItemTarget(dye, 1);
+            return CraftingRecipe.newShapedRecipe("corrected_" + color + suffix, slots, outputCount);
+        }
+        int slotCount = baseCount + 1 <= 4 ? 4 : 9;
+        ItemTarget[] slots = new ItemTarget[slotCount];
+        Arrays.fill(slots, ItemTarget.EMPTY);
+        for (int i = 0; i < Math.min(baseCount, slotCount - 1); i++) {
+            slots[i] = new ItemTarget(base, 1);
+        }
+        slots[Math.min(baseCount, slotCount - 1)] = new ItemTarget(dye, 1);
+        return CraftingRecipe.newShapedRecipe("corrected_" + color + suffix, slots, outputCount);
     }
 
     private CraftingRecipe parseShapedRecipe(JsonArray pattern, int outputCount, Item outputItem) {
@@ -382,6 +519,8 @@ public class RecipeRegistry {
     private ItemTarget getIngredientTargetByName(String name, Item outputItem) {
         String normalized = name == null ? "" : name.trim();
         if (normalized.isEmpty()) return null;
+        ItemTarget colorSpecific = getColorSpecificIngredient(normalized, outputItem);
+        if (colorSpecific != null) return colorSpecific;
         ItemTarget woodSpecific = getWoodSpecificIngredient(normalized, outputItem);
         if (woodSpecific != null) return woodSpecific;
         return switch (normalized) {
@@ -393,26 +532,44 @@ public class RecipeRegistry {
             case "carpet", "#minecraft:wool_carpets", "minecraft:wool_carpets" -> new ItemTarget(ItemHelper.CARPET);
             default -> {
                 Item ingredient = getItemByName(normalized);
-                yield ingredient == null ? null : new ItemTarget(expandSimilarIngredient(ingredient));
+                if (ingredient == null) {
+                    yield null;
+                }
+                ItemTarget familySpecific = getWoodFamilySpecificIngredient(ingredient, outputItem);
+                yield familySpecific != null ? familySpecific : new ItemTarget(expandSimilarIngredient(ingredient));
             }
         };
     }
 
-    private ItemTarget getWoodSpecificIngredient(String normalized, Item outputItem) {
+    private ItemTarget getColorSpecificIngredient(String normalized, Item outputItem) {
         if (outputItem == null) return null;
-        ItemHelper.WoodItems wood = null;
+        boolean woolIngredient = switch (normalized) {
+            case "wool", "#minecraft:wool", "minecraft:wool" -> true;
+            default -> false;
+        };
+        if (!woolIngredient) return null;
         String outputId = itemId(outputItem);
-        for (ItemHelper.WoodItems candidate : ItemHelper.getWoodItems()) {
-            if (candidate == null || candidate.prefix == null) continue;
-            if (outputId.contains(":" + candidate.prefix + "_")) {
-                wood = candidate;
+        if (outputId == null || !outputId.startsWith("minecraft:")) return null;
+        String path = outputId.substring("minecraft:".length());
+        String color = null;
+        for (String suffix : new String[]{"_bed", "_carpet", "_banner"}) {
+            if (path.endsWith(suffix) && path.length() > suffix.length()) {
+                color = path.substring(0, path.length() - suffix.length());
                 break;
             }
         }
+        if (color == null || color.isBlank()) return null;
+        Item wool = getItemByName("minecraft:" + color + "_wool");
+        return wool == null ? null : new ItemTarget(wool, 1);
+    }
+
+    private ItemTarget getWoodSpecificIngredient(String normalized, Item outputItem) {
+        if (outputItem == null) return null;
+        ItemHelper.WoodItems wood = getWoodFamilyForOutput(outputItem);
         if (wood == null) return null;
         return switch (normalized) {
             case "planks", "#minecraft:planks", "minecraft:planks" ->
-                    wood.planks == null ? null : new ItemTarget(wood.planks, 1);
+                    getFamilyPlanks(wood) == null ? null : new ItemTarget(getFamilyPlanks(wood), 1);
             case "log", "logs", "#minecraft:logs", "minecraft:logs" ->
                     wood.log == null ? null : new ItemTarget(wood.log, 1);
             case "stripped_logs", "#minecraft:stripped_logs", "minecraft:stripped_logs" ->
@@ -421,6 +578,63 @@ public class RecipeRegistry {
                     wood.slab == null ? null : new ItemTarget(wood.slab, 1);
             default -> null;
         };
+    }
+
+    private ItemTarget getWoodFamilySpecificIngredient(Item ingredient, Item outputItem) {
+        ItemHelper.WoodItems outputWood = getWoodFamilyForOutput(outputItem);
+        if (outputWood == null || ingredient == null) return null;
+        for (ItemHelper.WoodItems candidate : ItemHelper.getWoodItems()) {
+            if (candidate == null) continue;
+            Item outputPlanks = getFamilyPlanks(outputWood);
+            if (contains(ItemHelper.PLANKS, ingredient) && outputPlanks != null) return new ItemTarget(outputPlanks, 1);
+            if (candidate.planks == ingredient && outputPlanks != null) return new ItemTarget(outputPlanks, 1);
+            if (candidate.log == ingredient && outputWood.log != null) return new ItemTarget(outputWood.log, 1);
+            if (candidate.strippedLog == ingredient && outputWood.strippedLog != null) return new ItemTarget(outputWood.strippedLog, 1);
+            if (candidate.strippedWood == ingredient && outputWood.strippedWood != null) return new ItemTarget(outputWood.strippedWood, 1);
+            if (candidate.wood == ingredient && outputWood.wood != null) return new ItemTarget(outputWood.wood, 1);
+            if (candidate.slab == ingredient && outputWood.slab != null) return new ItemTarget(outputWood.slab, 1);
+            if (candidate.stairs == ingredient && outputWood.stairs != null) return new ItemTarget(outputWood.stairs, 1);
+            if (candidate.fence == ingredient && outputWood.fence != null) return new ItemTarget(outputWood.fence, 1);
+            if (candidate.fenceGate == ingredient && outputWood.fenceGate != null) return new ItemTarget(outputWood.fenceGate, 1);
+            if (candidate.sign == ingredient && outputWood.sign != null) return new ItemTarget(outputWood.sign, 1);
+            if (candidate.hangingSign == ingredient && outputWood.hangingSign != null) return new ItemTarget(outputWood.hangingSign, 1);
+            if (candidate.door == ingredient && outputWood.door != null) return new ItemTarget(outputWood.door, 1);
+            if (candidate.trapdoor == ingredient && outputWood.trapdoor != null) return new ItemTarget(outputWood.trapdoor, 1);
+            if (candidate.button == ingredient && outputWood.button != null) return new ItemTarget(outputWood.button, 1);
+            if (candidate.pressurePlate == ingredient && outputWood.pressurePlate != null) return new ItemTarget(outputWood.pressurePlate, 1);
+        }
+        return null;
+    }
+
+    private Item getFamilyPlanks(ItemHelper.WoodItems wood) {
+        if (wood == null) return null;
+        if ("bamboo".equals(wood.prefix)) {
+            return net.minecraft.item.Items.BAMBOO_PLANKS;
+        }
+        return wood.planks;
+    }
+
+    private ItemHelper.WoodItems getWoodFamilyForOutput(Item outputItem) {
+        if (outputItem == null) return null;
+        String outputId = itemId(outputItem);
+        ItemHelper.WoodItems best = null;
+        for (ItemHelper.WoodItems candidate : ItemHelper.getWoodItems()) {
+            if (candidate == null || candidate.prefix == null) continue;
+            if (isOutputInWoodFamily(outputId, candidate.prefix)) {
+                if (best == null || candidate.prefix.length() > best.prefix.length()) {
+                    best = candidate;
+                }
+            }
+        }
+        return best;
+    }
+
+    private boolean isOutputInWoodFamily(String outputId, String prefix) {
+        if (outputId == null || prefix == null || prefix.isBlank()) return false;
+        int namespaceSplit = outputId.indexOf(':');
+        String path = namespaceSplit >= 0 ? outputId.substring(namespaceSplit + 1) : outputId;
+        return path.startsWith(prefix + "_")
+                || path.startsWith("stripped_" + prefix + "_");
     }
 
     private boolean isValidCraftingRecipe(CraftingRecipe recipe) {

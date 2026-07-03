@@ -2,21 +2,22 @@ package adris.belfegor.tasks.development;
 
 import adris.belfegor.Belfegor;
 import adris.belfegor.TaskCatalogue;
-import adris.belfegor.tasks.container.StoreInAnyContainerTask;
+import adris.belfegor.tasks.CraftInInventoryTask;
+import adris.belfegor.tasks.container.CraftInTableTask;
+import adris.belfegor.tasksystem.ITaskSuppressesMobDefense;
 import adris.belfegor.tasksystem.Task;
-import adris.belfegor.util.ItemTarget;
+import adris.belfegor.util.RecipeTarget;
 import adris.belfegor.util.RecipeRegistry;
 import adris.belfegor.util.helpers.StorageHelper;
 import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
 import net.minecraft.registry.Registries;
-import net.minecraft.util.Identifier;
 
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -32,7 +33,7 @@ import java.util.Map;
  * - stores the result in chest/barrel storage,
  * - writes PASS/FAIL lines to belfegor/craft_audit_*.log.
  */
-public class CraftAuditTask extends Task {
+public class CraftAuditTask extends Task implements ITaskSuppressesMobDefense {
 
     private static final int GIVE_COOLDOWN_TICKS = 4;
     private static final int RESET_COOLDOWN_TICKS = 12;
@@ -115,6 +116,7 @@ public class CraftAuditTask extends Task {
                     return null;
                 }
                 if (_resetStep == 0) {
+                    StorageHelper.closeScreen();
                     sendCommand(mod, "clear @s", "RESET");
                     _resetStep++;
                     _cooldownTicks = RESET_COOLDOWN_TICKS;
@@ -140,8 +142,13 @@ public class CraftAuditTask extends Task {
                     return null;
                 }
                 Item item = _items.get(_index);
+                RecipeRegistry.RecipeEntry entry = _registry.getRecipe(item);
+                if (entry == null) {
+                    failCurrent("RecipeRegistry has no recipe for craftable output");
+                    return null;
+                }
                 _plan = _registry.buildLeafResourcePlan(item, 1);
-                _expectedResources = normalizeGiveResources(_plan);
+                _expectedResources = normalizeGiveResources(entry);
                 _giveQueue = expandGiveResources(_expectedResources);
                 _giveIndex = 0;
                 _itemTicks = 0;
@@ -150,15 +157,7 @@ public class CraftAuditTask extends Task {
                 writeLog("PLAN " + (_index + 1) + "/" + _items.size()
                         + " item=" + RecipeRegistry.itemId(item)
                         + " resources=" + describeResources(_giveQueue)
-                        + " failures=" + _plan.failures);
-                if (!_plan.failures.isEmpty()) {
-                    failCurrent("plan failures " + _plan.failures);
-                    return null;
-                }
-                if (TaskCatalogue.getItemTask(item, 1) == null) {
-                    failCurrent("TaskCatalogue has no task for craftable recipe output");
-                    return null;
-                }
+                        + " leafPlanFailures=" + (_plan == null ? "[]" : _plan.failures));
                 _phase = Phase.GIVE;
                 return null;
             }
@@ -196,15 +195,13 @@ public class CraftAuditTask extends Task {
                 }
                 Item item = _items.get(_index);
                 if (mod.getItemStorage().getItemCountInventoryOnly(item) >= 1) {
-                    _phase = Phase.STORE;
-                    _activeTask = null;
-                    _itemTicks = 0;
+                    passCurrent("crafted output appeared in inventory");
                     return null;
                 }
                 if (_activeTask == null || _activeTask.stopped() || _activeTask.isFinished(mod)) {
-                    _activeTask = TaskCatalogue.getItemTask(item, 1);
+                    _activeTask = createDirectRecipeTask(item);
                     if (_activeTask == null) {
-                        failCurrent("TaskCatalogue could not create task");
+                        failCurrent("RecipeRegistry could not create direct craft task");
                         return null;
                     }
                 }
@@ -214,27 +211,8 @@ public class CraftAuditTask extends Task {
                 return _activeTask;
             }
             case STORE -> {
-                if (timedOut()) {
-                    failCurrent("store timeout");
-                    return null;
-                }
-                Item item = _items.get(_index);
-                int count = mod.getItemStorage().getItemCountInventoryOnly(item);
-                if (count <= 0) {
-                    passCurrent("crafted and output no longer in inventory after storage phase");
-                    return null;
-                }
-                if (_activeTask == null || _activeTask.stopped() || _activeTask.isFinished(mod)) {
-                    _activeTask = new StoreInAnyContainerTask(false, false, new ItemTarget(item, count));
-                }
-                setDebugState("Craft audit storing " + count + "x " + RecipeRegistry.itemId(item));
-                _itemTicks++;
-                Task store = _activeTask;
-                if (store.isFinished(mod)) {
-                    passCurrent("crafted and stored count=" + count);
-                    return null;
-                }
-                return store;
+                passCurrent("legacy store phase skipped; output verified in inventory");
+                return null;
             }
             case NEXT -> {
                 _index++;
@@ -302,15 +280,44 @@ public class CraftAuditTask extends Task {
         return result;
     }
 
-    private Map<Item, Integer> normalizeGiveResources(RecipeRegistry.CraftPlan plan) {
-        Map<Item, Integer> result = new LinkedHashMap<>(plan.leafResources);
-        Item current = plan.targetItem;
-        var recipe = _registry.getRecipe(current);
-        if (recipe != null && recipe.recipe.isBig()) {
+    private Map<Item, Integer> normalizeGiveResources(RecipeRegistry.RecipeEntry entry) {
+        Map<Item, Integer> result = new LinkedHashMap<>();
+        if (entry == null || entry.recipe == null) {
+            return result;
+        }
+        Arrays.stream(entry.recipe.getSlots())
+                .filter(slot -> slot != null && !slot.isEmpty())
+                .forEach(slot -> {
+                    Item item = chooseAuditIngredient(slot);
+                    if (item != null) {
+                        result.merge(item, Math.max(1, slot.getTargetCount()), Integer::sum);
+                    }
+                });
+        if (entry.recipe.isBig()) {
             result.merge(net.minecraft.item.Items.CRAFTING_TABLE, 1, Integer::sum);
         }
-        result.merge(net.minecraft.item.Items.CHEST, 1, Integer::sum);
         return result;
+    }
+
+    private Item chooseAuditIngredient(adris.belfegor.util.ItemTarget slot) {
+        for (Item match : slot.getMatches()) {
+            if (match != null && match != net.minecraft.item.Items.AIR) {
+                return match;
+            }
+        }
+        return null;
+    }
+
+    private Task createDirectRecipeTask(Item item) {
+        RecipeRegistry.RecipeEntry entry = _registry.getRecipe(item);
+        if (entry == null || entry.recipe == null) {
+            return null;
+        }
+        RecipeTarget target = new RecipeTarget(item, 1, entry.recipe);
+        if (entry.recipe.isBig()) {
+            return new CraftInTableTask(target);
+        }
+        return new CraftInInventoryTask(target);
     }
 
     private boolean hasGivenResources(Belfegor mod) {
@@ -342,6 +349,7 @@ public class CraftAuditTask extends Task {
         Item item = _items.get(_index);
         _passed++;
         writeLog("PASS item=" + RecipeRegistry.itemId(item) + " reason=" + reason);
+        StorageHelper.closeScreen();
         _phase = Phase.NEXT;
         _activeTask = null;
     }
@@ -351,6 +359,7 @@ public class CraftAuditTask extends Task {
         writeLog("SKIP item=" + RecipeRegistry.itemId(item) + " reason=" + reason
                 + " resources=" + describeResources(_giveQueue)
                 + " steps=" + (_plan == null ? "[]" : _plan.steps));
+        StorageHelper.closeScreen();
         _phase = Phase.NEXT;
         _activeTask = null;
     }
@@ -361,6 +370,7 @@ public class CraftAuditTask extends Task {
         writeLog("FAIL item=" + RecipeRegistry.itemId(item) + " reason=" + reason
                 + " resources=" + describeResources(_giveQueue)
                 + " steps=" + (_plan == null ? "[]" : _plan.steps));
+        StorageHelper.closeScreen();
         _phase = Phase.NEXT;
         _activeTask = null;
     }

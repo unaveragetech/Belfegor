@@ -4,6 +4,7 @@ import adris.belfegor.Belfegor;
 import adris.belfegor.Debug;
 import adris.belfegor.TaskCatalogue;
 import adris.belfegor.debug.DebugLogger;
+import adris.belfegor.memory.RecentPlacedBlockMemory;
 import adris.belfegor.tasks.InteractWithBlockTask;
 import adris.belfegor.tasks.movement.GetToBlockTask;
 import adris.belfegor.tasks.movement.TimeoutWanderTask;
@@ -260,10 +261,18 @@ public class PlaceBlockTask extends Task implements ITaskRequiresGrounded {
     public boolean isFinished(Belfegor mod) {
         assert MinecraftClient.getInstance().world != null;
         if (_useThrowaways) {
-            return WorldHelper.isSolid(mod, _target);
+            boolean finished = WorldHelper.isSolid(mod, _target);
+            if (finished) {
+                RecentPlacedBlockMemory.markPlaced(_target);
+            }
+            return finished;
         }
         BlockState state = mod.getWorld().getBlockState(_target);
-        return ArrayUtils.contains(_toPlace, state.getBlock());
+        boolean finished = ArrayUtils.contains(_toPlace, state.getBlock());
+        if (finished) {
+            RecentPlacedBlockMemory.markPlaced(_target);
+        }
+        return finished;
     }
 
     @Override

@@ -6,6 +6,7 @@ import adris.belfegor.tasks.DoToClosestBlockTask;
 import adris.belfegor.tasks.InteractWithBlockTask;
 import adris.belfegor.tasks.construction.PlaceBlockNearbyTask;
 import adris.belfegor.tasks.slot.EnsureFreeInventorySlotTask;
+import adris.belfegor.tasksystem.ITaskUsesContainer;
 import adris.belfegor.tasksystem.Task;
 import adris.belfegor.util.ItemTarget;
 import adris.belfegor.util.helpers.BaritoneHelper;
@@ -26,7 +27,7 @@ import java.util.Optional;
 /**
  * Interacts with a container, obtaining and placing one if none were found nearby.
  */
-public abstract class DoStuffInContainerTask extends Task {
+public abstract class DoStuffInContainerTask extends Task implements ITaskUsesContainer {
 
     private final ItemTarget _containerTarget;
     private final Block[] _containerBlocks;

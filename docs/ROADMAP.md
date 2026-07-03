@@ -15,8 +15,8 @@ This roadmap is intentionally practical. Belfegor’s main challenge is not “a
 
 ## Crafting and resources
 
-- Broaden recipe coverage for Minecraft `1.21.4`.
-- Continue improving mixed-material recipe handling. Wood-family aliases now resolve contextually for tested recipes, but stone variants, dyes, and more complex tags still need broader validation.
+- Maintain full `@craftaudit all` coverage for Minecraft `1.21.4`. The 2026-07-02 proof run passed 799/799 current craftable targets and is archived under `docs/media/audit-proof-2026-07-02/`.
+- Continue improving mixed-material recipe handling. Wood-family aliases, pale-oak/bamboo families, dyed wool/candles/concrete/stained glass/terracotta, and dark prismarine are now covered by audit-tested corrections; stone variants and broader tag combinations still need survival-path validation.
 - Add safer fallback behavior when a recipe is known but one ingredient source fails.
 - Record successful crafting routes into persistent memory and prefer faster routes later.
 - Separate “item visible in a container” from “item available in inventory right now.”
@@ -136,6 +136,7 @@ The eventual goal is not decorative building. It is a functional operating base 
 
 - Add automated CI builds for Minecraft/Fabric version matrix.
 - Publish GitHub Releases with jar checksums.
+- Keep dated media/log proof bundles for major regression passes. Current proof exists for full craft audit and full screen audit in `docs/media/audit-proof-2026-07-02/`.
 - Add smoke-test worlds for `@get`, `@stacked`, and shulker workflows.
 - Add issue templates with required `belfegor_debug.log` snippets.
 - Add docs screenshots/GIFs once the UI stabilizes.

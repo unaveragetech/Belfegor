@@ -59,6 +59,9 @@ Expected behavior:
 
 The latest local test pass verified:
 
+- `@craftaudit all` completed in-game and on video with `DONE passed=799 failed=0`. The proof assets are archived in [media/audit-proof-2026-07-02](media/audit-proof-2026-07-02/README.md), including the full MP4 and matching `craft_audit_1783036904527.log`.
+- `@craftaudit screens` completed in-game and on video with `DONE passed=9 failed=0 checks=9`. The proof assets are archived in [media/audit-proof-2026-07-02](media/audit-proof-2026-07-02/README.md), including the full MP4 and matching `screen_audit_1783039056680.log`.
+- the full craft audit found and fixed several bundled recipe/normalization issues before the final green run: missing dark-prismarine dye, missing pale-oak wood family metadata, overly broad oak-family matching, dyed candle/concrete/stained-glass/terracotta corrections, and bamboo plank handling.
 - `@help ui`, `@status`, `@coords`, `@inventory`, and `@list` executed without command errors in the `1.21.4` test instance.
 - `@status` is intercepted at chat-screen submit time and no longer falls through to Baritone as an unknown `@status` command in the heavily modded profile.
 - `@baritone proc`, `@baritone help sel`, `@baritone sel clear`, and `@help baritone` were run in-game after rebuild/restart. The chat showed Belfegor responses and `belfegor_debug.log` recorded `BARITONE-CMD`/`BARITONE-PROC`.
@@ -67,7 +70,7 @@ The latest local test pass verified:
 - The Tasks tab now renders an Interrupt History panel backed by the same in-session history as `@status history`. The heavily modded local profile still may not visually display the panel in captured output, but `@ui` was submitted live and `belfegor_debug.log` confirmed `UI-OPEN after-set currentScreen=adris.belfegor.ui.BelfegorScreen` and `visible=true`.
 - `@ui` is registered and now calls the same shared screen-opening method used by the `C` keybind. Regression check: press `C`, close the menu, then run `@ui`; both should open the same Belfegor control panel without the generic screen-recovery chain closing it.
 - the Macros tab code now provides create/save/reload/run/pause/stop/duplicate/delete/loop/add/remove/reorder controls and compiles cleanly.
-- `@craftaudit all 5` passed after recipe-registry cleanup. The audit gave matching wood-family resources: acacia wood used acacia logs, birch wood used birch logs, dark oak wood used dark oak logs, oak wood used oak logs, and jungle wood used jungle logs.
+- `@craftaudit all 5` passed after recipe-registry cleanup. The later full `@craftaudit all` run supersedes this smoke result and proves the entire current registry.
 - `@get cake` no longer produced a local scan storm in the sampled run. The bot advanced through normal dependencies and the recent log tail contained one `RESOURCE-LOCALITY` line while the Java process remained responsive.
 - `@shulker store [diamond 1, stick 2]` no longer produced the old repeated `SLOT-STUCK slot=28` loop.
 - `@get diamond_shovel` retrieved from a catalogued carried shulker and crafted successfully.
@@ -87,6 +90,7 @@ The latest local test pass verified:
 
 ## Known edge cases to keep testing
 
+- The audit proof videos intentionally show the heavily modded local HUD and occasional stale container overlay from the test world. The audit result is verified by the paired logs and in-game completion messages; future recordings should start from a cleaner visual world when the goal is public showcase polish rather than regression proof.
 - UI conflicts remain possible in heavily modded profiles if another mod consumes `C` or replaces screens. `@ui` should now behave like pressing `C`; if either path fails, inspect screen conflicts rather than command registration.
 - Shulker placement can still choose awkward geometry where the block above is air but the bot cannot open the shulker reliably. Current behavior recovers by breaking and picking up the shulker; placement scoring should improve.
 - Auto shulker mode can interrupt long base-building work when inventory pressure is high. The transaction is safe, but scheduling should become less jumpy.

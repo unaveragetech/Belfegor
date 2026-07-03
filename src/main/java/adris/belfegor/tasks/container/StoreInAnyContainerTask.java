@@ -7,6 +7,7 @@ import adris.belfegor.tasks.DoToClosestBlockTask;
 import adris.belfegor.tasks.construction.PlaceBlockNearbyTask;
 import adris.belfegor.tasks.construction.PlaceBlockTask;
 import adris.belfegor.tasks.slot.EnsureFreeInventorySlotTask;
+import adris.belfegor.tasksystem.ITaskUsesContainer;
 import adris.belfegor.tasksystem.Task;
 import adris.belfegor.trackers.storage.ContainerCache;
 import adris.belfegor.util.ItemTarget;
@@ -28,7 +29,7 @@ import java.util.stream.Stream;
 /**
  * Dumps items in any container, placing a chest if we can't find any.
  */
-public class StoreInAnyContainerTask extends Task {
+public class StoreInAnyContainerTask extends Task implements ITaskUsesContainer {
 
     private static final Block[] OVERFLOW_SCAN = new Block[]{Blocks.CHEST, Blocks.TRAPPED_CHEST, Blocks.BARREL};
     private static final Block[] TO_SCAN = Stream.concat(Arrays.stream(OVERFLOW_SCAN), Arrays.stream(ItemHelper.itemsToBlocks(ItemHelper.SHULKER_BOXES))).toArray(Block[]::new);

@@ -5,6 +5,7 @@ import adris.belfegor.Debug;
 import adris.belfegor.tasksystem.TaskChain;
 import adris.belfegor.tasksystem.TaskRunner;
 import adris.belfegor.tasksystem.ITaskUsesCraftingGrid;
+import adris.belfegor.tasksystem.ITaskUsesContainer;
 import adris.belfegor.ui.BelfegorScreen;
 import adris.belfegor.util.helpers.ItemHelper;
 import adris.belfegor.util.helpers.LookHelper;
@@ -99,7 +100,9 @@ public class PlayerInteractionFixChain extends TaskChain {
         var userTask = mod.getUserTaskChain().getCurrentTask();
         boolean craftingActive = userTask != null
                 && userTask.thisOrChildSatisfies(task -> task instanceof ITaskUsesCraftingGrid);
-        if (craftingActive || StorageHelper.isPlayerInventoryOpen() || StorageHelper.isBigCraftingOpen()) {
+        boolean containerActive = userTask != null
+                && userTask.thisOrChildSatisfies(task -> task instanceof ITaskUsesContainer);
+        if (craftingActive || containerActive || StorageHelper.isPlayerInventoryOpen() || StorageHelper.isBigCraftingOpen()) {
             _stackHeldTimeout.reset();
             _lastHandStack = null;
             _generalDuctTapeSwapTimeout.reset();
@@ -194,6 +197,11 @@ public class PlayerInteractionFixChain extends TaskChain {
         if (openScreen == null || openScreen instanceof ChatScreen || openScreen instanceof GameMenuScreen
                 || openScreen instanceof DeathScreen || openScreen instanceof InventoryScreen
                 || openScreen instanceof BelfegorScreen) {
+            _mouseMovingButScreenOpenTimeout.reset();
+            return false;
+        }
+        var userTask = mod.getUserTaskChain().getCurrentTask();
+        if (userTask != null && userTask.thisOrChildSatisfies(task -> task instanceof ITaskUsesContainer)) {
             _mouseMovingButScreenOpenTimeout.reset();
             return false;
         }

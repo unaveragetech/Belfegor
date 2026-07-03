@@ -8,6 +8,12 @@ Observed runtime:
 - Baritone: `1.11.1-2-ga0f100f4`
 - Prefix: `#`, for example `#help`, `#proc`, `#sel cleararea`
 
+The raw captured help text used while building this reference is archived at:
+
+```text
+docs/reference/baritone_help_extract.txt
+```
+
 Belfegor should prefer Baritone Java APIs for repeatable automation, but these chat commands are useful for live research, manual recovery, and mapping future base-builder features onto native Baritone capabilities. Belfegor exposes a controlled bridge as `@baritone ...`, which runs a safe subset through Baritone's command manager without requiring the user to type raw `#` commands.
 
 ## Full command catalogue

@@ -43,6 +43,7 @@ public class LlmAdvisor {
     private static final LlmAdvisor INSTANCE = new LlmAdvisor();
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final String FOLDER = "belfegor";
+    private static final long REPEATED_ACTION_LOG_COOLDOWN_MS = 5_000L;
 
     private File _dir = new File(FOLDER);
     private File _commandsFile;
@@ -53,6 +54,8 @@ public class LlmAdvisor {
     private long _lastAutomaticRequestMs = 0;
     private CompletableFuture<AdvisorDecision> _pending;
     private String _lastAction = "none";
+    private String _lastRecordedActionLine = "";
+    private long _lastRecordedActionLineMs = 0;
     private String _plannedAction = "normal player-mode fallback";
     private String _goal = "survive, learn, gather, craft, improve tools, manage shulkers, and build home base";
     private AdvisorDecision _lastDecision;
@@ -94,7 +97,15 @@ public class LlmAdvisor {
 
     public synchronized void recordAction(String action, String reaction) {
         _lastAction = action == null || action.isBlank() ? _lastAction : action;
-        record("ACTION", _lastAction + " reaction=" + (reaction == null ? "" : reaction));
+        String line = _lastAction + " reaction=" + (reaction == null ? "" : reaction);
+        long now = System.currentTimeMillis();
+        if (line.equals(_lastRecordedActionLine)
+                && now - _lastRecordedActionLineMs < REPEATED_ACTION_LOG_COOLDOWN_MS) {
+            return;
+        }
+        _lastRecordedActionLine = line;
+        _lastRecordedActionLineMs = now;
+        record("ACTION", line);
     }
 
     public synchronized void setPlannedAction(String plannedAction) {

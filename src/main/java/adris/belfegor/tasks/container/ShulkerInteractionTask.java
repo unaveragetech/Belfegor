@@ -10,6 +10,7 @@ import adris.belfegor.tasks.construction.PlaceBlockNearbyTask;
 import adris.belfegor.tasks.construction.PlaceShulkerUnderPlayerTask;
 import adris.belfegor.tasks.movement.PickupDroppedItemTask;
 import adris.belfegor.tasksystem.ITaskCanForce;
+import adris.belfegor.tasksystem.ITaskUsesContainer;
 import adris.belfegor.tasksystem.Task;
 import adris.belfegor.util.ItemTarget;
 import adris.belfegor.util.helpers.InventoryManager;
@@ -40,7 +41,7 @@ import java.util.UUID;
  * Treats a carried shulker as a reusable sub-inventory:
  * select, place, open, transfer, catalog twice, close, break, and pick up.
  */
-public class ShulkerInteractionTask extends Task implements ITaskCanForce {
+public class ShulkerInteractionTask extends Task implements ITaskCanForce, ITaskUsesContainer {
 
     private static UUID ACTIVE_TRANSACTION = null;
     private static long ACTIVE_TRANSACTION_STARTED_MS = 0;

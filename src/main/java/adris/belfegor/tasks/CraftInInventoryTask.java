@@ -115,7 +115,9 @@ public class CraftInInventoryTask extends ResourceTask implements adris.belfegor
         if (_collect && !StorageHelper.hasRecipeMaterialsOrTarget(mod, _target)) {
             logGateState("collecting-materials");
             // Need materials — make sure inventory is CLOSED while gathering
-            if (StorageHelper.isPlayerInventoryOpen()) {
+            if (StorageHelper.isPlayerInventoryOpen()
+                    && _cachedCollectTask != null
+                    && !(_cachedCollectTask instanceof adris.belfegor.tasksystem.ITaskUsesCraftingGrid)) {
                 StorageHelper.closeScreen();
             }
             // Collect recipe materials

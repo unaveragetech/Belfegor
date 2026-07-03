@@ -60,7 +60,7 @@ It is currently beta software, with the most active engineering effort focused o
 | Managed shulkers | Carried shulkers are treated as sub-inventories that can be placed, opened, scanned, used, mined, and picked back up. |
 | Auto shulker sorting | Eligible non-tool items can be deposited into shulkers by timer or inventory-fill detection. |
 | Offline recipe catalogue | Bundled `1.21.4` recipe data lets Belfegor plan craftable-item dependencies without internet access. |
-| Craft audit harness | `@craftaudit` gives normalized leaf resources in a cheat-enabled test world, crafts through the real task system, stores outputs, and logs pass/fail results. |
+| Craft/screen audit harness | `@craftaudit all` proves the craftable registry end-to-end; `@craftaudit screens` proves supported Minecraft handled screens open/close without inventory hangs. |
 | PvP prep | `@stacked`, `@toolset`, and `@pvp` automate gear and combat preparation. |
 | Player mode | `@player` starts an autonomous explore/gather/craft/home-base loop and grows a remembered modular base. |
 | Base expansion | `@build full` builds, repairs, and route-validates the complete modular base; `@build validate`/`@build repair` checks remembered rooms and fixes incomplete modules; single-room builds avoid overlapping remembered footprints. The core campsite is now exported to `.minecraft/belfegor/schematics/base_core_*.belfegor_schematic.json` and validation checks world blocks against that saved blueprint. |
@@ -81,7 +81,10 @@ The current jar has been tested in the `1.21.4` MultiMC instance against the inv
 - Task oscillation diagnostics now remember recent chain interruptions. `@status` reports the active task chain and last switch; `@status history` and `@status history 10` show a newest-first session timeline of recent `from -> to` chain switches. The Tasks tab also has an Interrupt History panel with the latest switch and repeated pair counts, while debug logs write structured `TASK-INTERRUPT` and `UI-OPEN` entries for screen/debug verification.
 - the Macros UI now has functional controls for creating, saving, reloading, running, pausing, stopping, duplicating, deleting, looping, adding, removing, and reordering macro steps.
 - the offline recipe registry rejects invalid empty recipes and resolves wood-family aliases contextually; for example `birch_wood` now plans with birch logs instead of generic/acacia logs.
-- `@craftaudit all 5` passed locally after the recipe-registry fix, with all tested wood-family recipes receiving the correct matching log family.
+- `@craftaudit all` passed a full in-game recorded run: `DONE passed=799 failed=0`.
+- `@craftaudit screens` passed a full in-game recorded run: `DONE passed=9 failed=0 checks=9`.
+- proof videos and exact output logs are archived in [`docs/media/audit-proof-2026-07-02`](docs/media/audit-proof-2026-07-02/README.md).
+- the recipe registry now has targeted corrections for real 1.21.4 edge cases found during full audit work, including dyed wool/candles/concrete powder/stained glass/terracotta, dark prismarine, bamboo planks, and pale-oak wood-family recipes.
 - `@get cake` no longer creates the previous local-scan storm in the tested sample; loaded-block locality scanning is throttled/cached and the client stayed responsive while the task advanced into sugar cane and wheat dependencies.
 - `@shulker store [diamond 1, stick 2]` no longer loops on one inventory slot when the slot guard blocks a repeated click.
 - `@get diamond_shovel` retrieves a diamond from a catalogued carried shulker, returns leftover cursor items, picks the shulker back up, and then crafts the shovel.
@@ -98,8 +101,11 @@ See [`docs/TESTING.md`](docs/TESTING.md) for the current manual test matrix and 
 ## Showcase media
 
 - [Showcase video: clean staged in-game demo](docs/media/belfegor-showcase-20260628-v2.mp4)
+- [Audit proof recordings: full craft audit and full screen audit](docs/media/audit-proof-2026-07-02/README.md)
 
 The current showcase starts from an in-world view, uses visible chat narration, clears inventory/drops, displays Baritone selection help, runs a focused `@craftaudit diamond_shovel`, and shows the resulting safe chest storage.
+
+The audit proof folder contains the complete `@craftaudit all` video, the complete `@craftaudit screens` video, matching generated audit logs, durations, and SHA-256 checksums. These files are intentionally kept under `docs/media` because they are release/documentation proof assets rather than runtime logs.
 
 ## What can it do today?
 
@@ -288,9 +294,10 @@ For developers and cheat-enabled test worlds, `@craftaudit` is the â€œmake t
 @craftaudit anvil
 @craftaudit diamond_shovel
 @craftaudit all 25
+@craftaudit screens
 ```
 
-It uses the offline recipe catalogue, computes the leaf resources needed for each target, clears the test inventory between targets, gives only the needed resources/utilities, crafts through the normal Belfegor task engine, stores the result in ordinary containers, and writes a pass/skip/fail log under `.minecraft/belfegor/`. This is intentionally not a normal survival command; it is a regression harness for finding recipe, inventory, shulker, and crafting bugs.
+It uses the offline recipe catalogue, computes the leaf resources needed for each target, clears the test inventory between targets, gives only the needed resources/utilities, crafts through the normal Belfegor task engine, stores the result in ordinary containers, and writes a pass/skip/fail log under `.minecraft/belfegor/`. `@craftaudit screens` separately creates handled-screen fixtures and verifies inventory, crafting table, chest/barrel, shulker, furnace, smoker, blast furnace, and brewing stand handlers. This is intentionally not a normal survival command; it is a regression harness for finding recipe, inventory, shulker, screen, and crafting bugs.
 
 For low-level pathing and construction research, the repo includes a local [Baritone command reference](docs/BARITONE_COMMAND_REFERENCE.md) based on the bundled Baritone jar. Belfegor's campsite system uses Baritone APIs directly for region clearing and generated schematic builds, while `#build`, `#litematica`, `#help`, `#proc`, `#sel`, `#surface`, and related chat commands remain useful for in-game debugging. The current internal schematic file is Belfegor's validation source of truth; future `.litematic` import should adapt external schematics into that same blueprint model.
 

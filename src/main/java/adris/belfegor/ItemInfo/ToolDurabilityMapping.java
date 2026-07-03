@@ -1,5 +1,7 @@
 package adris.belfegor.ItemInfo;
 
+import net.minecraft.item.ItemStack;
+
 import java.util.HashMap;
 import java.util.Map;
 
@@ -42,5 +44,32 @@ public class ToolDurabilityMapping {
 
     public static int getDurability(String itemName) {
         return TOOL_DURABILITY_MAP.getOrDefault(itemName, 0);  // Default to 0 if item is not found
+    }
+
+    public static int getMaxDurability(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) return 0;
+        if (stack.isDamageable()) {
+            return stack.getMaxDamage();
+        }
+        return getDurability(net.minecraft.registry.Registries.ITEM.getId(stack.getItem()).getPath());
+    }
+
+    public static int getRemainingDurability(ItemStack stack) {
+        if (stack == null || stack.isEmpty()) return 0;
+        if (stack.isDamageable()) {
+            return Math.max(0, stack.getMaxDamage() - stack.getDamage());
+        }
+        return getMaxDurability(stack);
+    }
+
+    public static double getRemainingDurabilityRatio(ItemStack stack) {
+        int max = getMaxDurability(stack);
+        if (max <= 0) return 1.0;
+        return Math.max(0.0, Math.min(1.0, (double) getRemainingDurability(stack) / (double) max));
+    }
+
+    public static boolean isNearlyBroken(ItemStack stack, int expectedUses) {
+        if (stack == null || stack.isEmpty() || !stack.isDamageable()) return false;
+        return getRemainingDurability(stack) <= Math.max(1, expectedUses);
     }
 }

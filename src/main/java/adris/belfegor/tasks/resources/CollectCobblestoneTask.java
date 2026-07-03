@@ -4,8 +4,6 @@ import adris.belfegor.Belfegor;
 import adris.belfegor.tasks.ResourceTask;
 import adris.belfegor.tasksystem.Task;
 import adris.belfegor.util.MiningRequirement;
-import net.minecraft.block.Block;
-import net.minecraft.block.Blocks;
 import net.minecraft.item.Items;
 
 public class CollectCobblestoneTask extends ResourceTask {
@@ -29,7 +27,7 @@ public class CollectCobblestoneTask extends ResourceTask {
 
     @Override
     protected Task onResourceTick(Belfegor mod) {
-        return new MineAndCollectTask(Items.COBBLESTONE, 1, new Block[]{Blocks.STONE, Blocks.COBBLESTONE}, MiningRequirement.WOOD);
+        return new SurfaceCobblestoneTask(mod);
     }
 
     @Override

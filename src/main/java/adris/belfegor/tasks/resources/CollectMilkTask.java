@@ -33,9 +33,17 @@ public class CollectMilkTask extends ResourceTask {
 
     @Override
     protected Task onResourceTick(Belfegor mod) {
-        // Make sure we have a bucket.
-        if (!mod.getItemStorage().hasItem(Items.BUCKET)) {
-            return TaskCatalogue.getItemTask(Items.BUCKET, 1);
+        // Make sure we have every empty bucket needed before cow interaction.
+        // Recipes like cake need three milk buckets. The old loop crafted one
+        // bucket, found a cow, milked once, then repeated iron/coal/furnace
+        // acquisition for the next bucket. Batch the bucket requirement first
+        // so iron/fuel gathering and smelting can be planned in one pass.
+        int milkHave = mod.getItemStorage().getItemCount(Items.MILK_BUCKET);
+        int emptyBucketsHave = mod.getItemStorage().getItemCount(Items.BUCKET);
+        int bucketsNeeded = Math.max(0, _count - milkHave - emptyBucketsHave);
+        if (bucketsNeeded > 0) {
+            setDebugState("Preparing " + bucketsNeeded + " buckets before milking");
+            return TaskCatalogue.getItemTask(Items.BUCKET, bucketsNeeded);
         }
         // Dimension
         if (!mod.getEntityTracker().entityFound(CowEntity.class) && isInWrongDimension(mod)) {
