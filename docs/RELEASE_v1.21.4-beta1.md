@@ -4,6 +4,26 @@ This is the first public Belfegor beta release for Minecraft `1.21.4`.
 
 This release bundle has been refreshed with the current craft-audit and packaged llama.cpp-advisor build. The jar now includes the offline recipe catalogue improvements, the developer command `@craftaudit`, and the optional local AI advisor for `belfegor/models/Qwen3-1.7B-Q4_K_M.gguf`.
 
+## Jar tracking and comparison
+
+The repo now keeps immutable jar copies under `releases/jars/` so the current beta jar can be compared against the previous public jar without checking out old commits.
+
+| Jar | Commit | SHA256 | Notes |
+|---|---:|---|---|
+| `releases/jars/belfegor-1.21.4-beta1-341eae3.jar` | `341eae3` | `961e6b5994976312a84f0fbf9e588c5d55272072470e3a4e9ceb43c456c1f2ec` | Previous public beta jar. |
+| `releases/jars/belfegor-1.21.4-beta1-718e0b7.jar` | `718e0b7` | `27f4eaf257b0a3e67688ad9f984b137510e4b2912903bc17e929a8e137bcc2d4` | Current beta jar with base expansion floor/placement hardening. |
+
+The moving install jar remains `releases/belfegor-1.21.4-beta1.jar` and currently matches the `718e0b7` archive copy.
+
+### What changed from `341eae3` to `718e0b7`
+
+- Natural grass/dirt/cobblestone floors are accepted for storage/workshop-style expansions instead of being replaced unnecessarily.
+- Farmland rooms no longer schedule support blocks below already-valid grass/dirt/farmland floor cells.
+- Farm water placement can use side support faces when the block below the hole cannot be clicked.
+- Expansion placement rejects unsupported footprints before scheduling Baritone.
+- If every expansion candidate is unsupported or overlapping, the task logs `placement-blocked` and stops cleanly instead of falling back to a floating room.
+- The release jar and runtime bundle checksums were refreshed after rebuilding and installing the tested jar.
+
 ## Download
 
 Use the runtime bundle:

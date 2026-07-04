@@ -6,6 +6,22 @@ This runtime package has been refreshed with the full Belfegor namespace deploym
 
 It includes the offline recipe catalogue and the developer command `@craftaudit`.
 
+The current jar in this runtime folder matches:
+
+```text
+releases/jars/belfegor-1.21.4-beta1-718e0b7.jar
+SHA256: 27f4eaf257b0a3e67688ad9f984b137510e4b2912903bc17e929a8e137bcc2d4
+```
+
+The previous public jar is preserved at:
+
+```text
+releases/jars/belfegor-1.21.4-beta1-341eae3.jar
+SHA256: 961e6b5994976312a84f0fbf9e588c5d55272072470e3a4e9ceb43c456c1f2ec
+```
+
+See `releases/JAR_HISTORY.md` for the full jar comparison.
+
 It also includes the packaged llama.cpp advisor code. To use it, place `llama-cli.exe` under `.minecraft/belfegor/llama.cpp/`, place the GGUF model at `.minecraft/belfegor/models/lfm2.5-thinking.gguf`, enable `llmAdvisorEnabled` in `belfegor_settings.json`, and run `@ai "what should I do next?"`.
 
 ## Included jars

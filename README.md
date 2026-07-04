@@ -30,6 +30,7 @@ Behind that small command surface is a task engine that can gather resources, mi
 | Built jar | [`releases/belfegor-1.21.4-beta1.jar`](releases/belfegor-1.21.4-beta1.jar) |
 | Runtime bundle | [`releases/belfegor-1.21.4-beta1-runtime.zip`](releases/belfegor-1.21.4-beta1-runtime.zip) |
 | Release notes | [`docs/RELEASE_v1.21.4-beta1.md`](docs/RELEASE_v1.21.4-beta1.md) |
+| Jar history | [`releases/JAR_HISTORY.md`](releases/JAR_HISTORY.md) |
 | Jar SHA256 | `27f4eaf257b0a3e67688ad9f984b137510e4b2912903bc17e929a8e137bcc2d4` |
 | Runtime bundle SHA256 | `49708a06cda6295c18b966527abf272e2c203a79df1da3f4da3611c146eadcb9` |
 | Mod id | `belfegor` |
@@ -38,6 +39,8 @@ Behind that small command surface is a task engine that can gather resources, mi
 | Global abort key | `+` while a task is running |
 
 The runtime bundle includes the current Belfegor jar, the Fabric API jar from the working `1.21.4` instance, the Baritone API jar from the working instance, release notes, checksums, and documentation.
+
+The repo also keeps immutable jar copies under [`releases/jars/`](releases/jars/) so the previous public jar can be compared with the current one. The current jar is `belfegor-1.21.4-beta1-718e0b7.jar`; the previous public jar is `belfegor-1.21.4-beta1-341eae3.jar`.
 
 ## What Belfegor is trying to be
 
