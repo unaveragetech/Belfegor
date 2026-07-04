@@ -30,8 +30,8 @@ Behind that small command surface is a task engine that can gather resources, mi
 | Built jar | [`releases/belfegor-1.21.4-beta1.jar`](releases/belfegor-1.21.4-beta1.jar) |
 | Runtime bundle | [`releases/belfegor-1.21.4-beta1-runtime.zip`](releases/belfegor-1.21.4-beta1-runtime.zip) |
 | Release notes | [`docs/RELEASE_v1.21.4-beta1.md`](docs/RELEASE_v1.21.4-beta1.md) |
-| Jar SHA256 | `961e6b5994976312a84f0fbf9e588c5d55272072470e3a4e9ceb43c456c1f2ec` |
-| Runtime bundle SHA256 | `620cfccc69e8854c8da7c898cf23375a35579fd08494daea7b5cdeb0a7635c50` |
+| Jar SHA256 | `27f4eaf257b0a3e67688ad9f984b137510e4b2912903bc17e929a8e137bcc2d4` |
+| Runtime bundle SHA256 | `49708a06cda6295c18b966527abf272e2c203a79df1da3f4da3611c146eadcb9` |
 | Mod id | `belfegor` |
 | Command prefix | `@` |
 | In-game UI | `C` or `@ui` |

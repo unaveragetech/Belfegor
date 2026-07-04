@@ -3,6 +3,7 @@ package adris.belfegor.tasks.construction;
 import adris.belfegor.Belfegor;
 import adris.belfegor.Settings;
 import adris.belfegor.TaskCatalogue;
+import adris.belfegor.debug.DebugLogger;
 import adris.belfegor.memory.BaseMemory;
 import adris.belfegor.memory.LocationMemory;
 import adris.belfegor.tasks.InteractWithBlockTask;
@@ -95,6 +96,8 @@ public class BuildBaseExpansionTask extends Task {
     private List<BlockPos> _waterTargets = List.of();
     private List<BlockPos> _farmTargets = List.of();
     private List<BlockRegion> _clearRegions = List.of();
+    private int _lastLoggedFloorPatchCount = Integer.MIN_VALUE;
+    private boolean _placementBlocked;
 
     public BuildBaseExpansionTask(RoomType type, String requestedName) {
         _type = type == null ? RoomType.EMPTY : type;
@@ -118,6 +121,11 @@ public class BuildBaseExpansionTask extends Task {
         switch (_phase) {
             case PLAN -> {
                 plan(mod);
+                if (_placementBlocked) {
+                    remember("blocked_no_supported_footprint");
+                    next(Phase.DONE);
+                    return null;
+                }
                 protectExistingBaseModules(mod);
                 remember("planned");
                 next(Phase.GO_HOME);
@@ -140,9 +148,12 @@ public class BuildBaseExpansionTask extends Task {
                 return null;
             }
             case FLOOR -> {
+                List<BlockPos> floorTargets = _type == RoomType.FARMLAND
+                        ? farmFloorPatchTargets(mod)
+                        : nonFarmFloorPatchTargets(mod);
                 Task floor = _type == RoomType.FARMLAND
-                        ? runBuildRegion(mod, _floorTargets, "dirt farm floor", false, Blocks.DIRT)
-                        : runBuildRegion(mod, _floorTargets, "floor", false, STRUCTURE_BLOCKS);
+                        ? runBuildRegion(mod, floorTargets, "dirt farm floor", false, Blocks.DIRT)
+                        : runBuildRegion(mod, floorTargets, "floor patches", false, STRUCTURE_BLOCKS);
                 if (floor != null) return floor;
                 remember("floor_complete");
                 next(Phase.WALLS);
@@ -224,7 +235,7 @@ public class BuildBaseExpansionTask extends Task {
             case STORAGE, WORKSHOP -> 7;
             case EMPTY -> 7;
         };
-        choosePlacement();
+        choosePlacement(mod);
 
         _clearTargets = buildClearTargets();
         _floorTargets = buildFloorTargets();
@@ -461,11 +472,6 @@ public class BuildBaseExpansionTask extends Task {
     private Task runFarmWater(Belfegor mod) {
         for (BlockPos water : _waterTargets) {
             if (mod.getWorld().getBlockState(water).getBlock() == Blocks.WATER) continue;
-            if (!WorldHelper.isSolid(mod, water.down())) {
-                setDebugState("Building solid basin floor under farm water source "
-                        + (_waterTargets.indexOf(water) + 1) + "/" + _waterTargets.size());
-                return cache(mod, new PlaceBlockTask(water.down(), new Block[]{Blocks.COBBLESTONE}, false, true));
-            }
             if (mod.getWorld().getBlockState(water).getBlock() != Blocks.AIR) {
                 setDebugState("Digging farm water/infinite-source hole " + water.toShortString());
                 return cache(mod, new DestroyBlockTask(water));
@@ -476,13 +482,35 @@ public class BuildBaseExpansionTask extends Task {
                         + bucketCount + "/" + MIN_FARM_WATER_BUCKETS);
                 return new CollectBucketLiquidTask.CollectWaterBucketTask(MIN_FARM_WATER_BUCKETS);
             }
+            WaterPlacementSupport support = waterPlacementSupport(mod, water);
+            if (support == null) {
+                setDebugState("Building solid basin floor under farm water source "
+                        + (_waterTargets.indexOf(water) + 1) + "/" + _waterTargets.size());
+                return cache(mod, new PlaceBlockTask(water.down(), new Block[]{Blocks.COBBLESTONE}, false, true));
+            }
             setDebugState("Filling farm water/infinite-source hole "
                     + (_waterTargets.indexOf(water) + 1) + "/" + _waterTargets.size());
             return new InteractWithBlockTask(new ItemTarget(Items.WATER_BUCKET, 1),
-                    Direction.UP, water.down(), true);
+                    support.face(), support.block(), true);
         }
         return null;
     }
+
+    private WaterPlacementSupport waterPlacementSupport(Belfegor mod, BlockPos water) {
+        if (WorldHelper.isSolid(mod, water.down())) {
+            return new WaterPlacementSupport(water.down(), Direction.UP);
+        }
+        Direction[] sides = {Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST};
+        for (Direction side : sides) {
+            BlockPos support = water.offset(side);
+            if (WorldHelper.isSolid(mod, support)) {
+                return new WaterPlacementSupport(support, side.getOpposite());
+            }
+        }
+        return null;
+    }
+
+    private record WaterPlacementSupport(BlockPos block, Direction face) {}
 
     private Task runFarmTill(Belfegor mod) {
         int hoeCount = mod.getItemStorage().getItemCount(HOES);
@@ -607,6 +635,74 @@ public class BuildBaseExpansionTask extends Task {
         }
         addHallFloor(result);
         return result;
+    }
+
+    private List<BlockPos> nonFarmFloorPatchTargets(Belfegor mod) {
+        ArrayList<BlockPos> result = new ArrayList<>();
+        for (BlockPos floor : _floorTargets) {
+            if (!isAcceptableNonFarmFloor(mod, floor)) {
+                result.add(floor);
+            }
+        }
+        logFloorPatchCount("non-farm", result.size());
+        return result;
+    }
+
+    private List<BlockPos> farmFloorPatchTargets(Belfegor mod) {
+        ArrayList<BlockPos> result = new ArrayList<>();
+        int surfaceY = _roomAnchor.getY() - 1;
+        for (BlockPos floor : _floorTargets) {
+            if (floor.getY() == surfaceY) {
+                if (!isAcceptableFarmSurface(mod, floor)) {
+                    result.add(floor);
+                }
+            } else if (!isAcceptableFarmSurface(mod, floor.up()) && !isAcceptableFarmSupport(mod, floor)) {
+                result.add(floor);
+            }
+        }
+        logFloorPatchCount("farm", result.size());
+        return result;
+    }
+
+    private void logFloorPatchCount(String kind, int count) {
+        if (count > 0 && count != _lastLoggedFloorPatchCount) {
+            _lastLoggedFloorPatchCount = count;
+            DebugLogger.getInstance().log("BASE-BUILD",
+                    kind + "-floor-patches room=" + _roomName
+                            + " patches=" + count
+                            + "/" + _floorTargets.size());
+        }
+    }
+
+    private boolean isAcceptableNonFarmFloor(Belfegor mod, BlockPos pos) {
+        Block block = mod.getWorld().getBlockState(pos).getBlock();
+        if (block == Blocks.AIR || block == Blocks.WATER || block == Blocks.LAVA) return false;
+        if (block == Blocks.GRASS_BLOCK
+                || block == Blocks.DIRT
+                || block == Blocks.COARSE_DIRT
+                || block == Blocks.PODZOL
+                || block == Blocks.ROOTED_DIRT
+                || block == Blocks.FARMLAND
+                || block == Blocks.COBBLESTONE) {
+            return true;
+        }
+        return WorldHelper.isSolid(mod, pos);
+    }
+
+    private boolean isAcceptableFarmSurface(Belfegor mod, BlockPos pos) {
+        Block block = mod.getWorld().getBlockState(pos).getBlock();
+        return block == Blocks.DIRT
+                || block == Blocks.GRASS_BLOCK
+                || block == Blocks.FARMLAND
+                || block == Blocks.WATER;
+    }
+
+    private boolean isAcceptableFarmSupport(Belfegor mod, BlockPos pos) {
+        Block block = mod.getWorld().getBlockState(pos).getBlock();
+        return block != Blocks.AIR
+                && block != Blocks.WATER
+                && block != Blocks.LAVA
+                && WorldHelper.isSolid(mod, pos);
     }
 
     private List<BlockPos> buildWallTargets() {
@@ -739,7 +835,7 @@ public class BuildBaseExpansionTask extends Task {
         };
     }
 
-    private void choosePlacement() {
+    private void choosePlacement(Belfegor mod) {
         Direction[] order = {Direction.EAST, Direction.NORTH, Direction.SOUTH, Direction.WEST};
         int baseRadius = Math.max(8, _base.radius);
         int bestScore = Integer.MAX_VALUE;
@@ -759,6 +855,7 @@ public class BuildBaseExpansionTask extends Task {
                     BlockPos anchor = center.add(-_roomSize / 2, 0, -_roomSize / 2);
                     boolean overlaps = BaseMemory.getInstance().footprintOverlaps(_base, _roomName,
                             anchor, _roomSize, _roomSize, 3);
+                    if (!isSupportedExpansionFootprint(mod, anchor, direction, hall)) continue;
                     int score = sideUse * 1000 + step * 100 + hall;
                     if (!overlaps && score < bestScore) {
                         bestScore = score;
@@ -772,20 +869,79 @@ public class BuildBaseExpansionTask extends Task {
             }
         }
         if (bestCenter == null) {
-            // Fall back to a farther east slot rather than overlapping an
-            // existing module. This keeps the bot productive and records the
-            // oversized step for later inspection.
+            _placementBlocked = true;
             bestDirection = Direction.EAST;
-            bestHallLength = 7;
-            bestStep = 9 + BaseMemory.getInstance().countModulesOfType(_base, _type.name().toLowerCase(Locale.ROOT));
+            bestHallLength = 3;
+            bestStep = 0;
             bestCenter = roomCenterFor(bestDirection, baseRadius, bestHallLength, bestStep);
             bestAnchor = bestCenter.add(-_roomSize / 2, 0, -_roomSize / 2);
+            DebugLogger.getInstance().log("BASE-BUILD",
+                    "placement-blocked room=" + _roomName
+                            + " type=" + _type
+                            + " reason=no-supported-non-overlapping-footprint");
+        } else {
+            _placementBlocked = false;
         }
         _direction = bestDirection;
         _hallLength = bestHallLength;
         _outwardStep = bestStep;
         _roomCenter = bestCenter;
         _roomAnchor = bestAnchor;
+    }
+
+    private boolean isSupportedExpansionFootprint(Belfegor mod, BlockPos roomAnchor, Direction direction, int hallLength) {
+        if (mod == null || mod.getWorld() == null) return true;
+        int unsupported = 0;
+        int total = 0;
+        for (int dx = 0; dx < _roomSize; dx++) {
+            for (int dz = 0; dz < _roomSize; dz++) {
+                total++;
+                if (!isSupportedFloorCell(mod, roomAnchor.add(dx, -1, dz))) {
+                    unsupported++;
+                }
+            }
+        }
+        int allowedUnsupported = _type == RoomType.FARMLAND ? Math.max(2, total / 20) : Math.max(4, total / 12);
+        if (unsupported > allowedUnsupported) {
+            DebugLogger.getInstance().log("BASE-BUILD",
+                    "reject-placement room=" + _roomName
+                            + " type=" + _type
+                            + " direction=" + direction.asString()
+                            + " anchor=" + roomAnchor.toShortString()
+                            + " unsupported=" + unsupported + "/" + total);
+            return false;
+        }
+
+        int hallUnsupported = 0;
+        int hallTotal = 0;
+        for (BlockPos floor : prospectiveHallFloorPositions(direction, hallLength)) {
+            hallTotal++;
+            if (!isSupportedFloorCell(mod, floor)) hallUnsupported++;
+        }
+        return hallUnsupported <= Math.max(2, hallTotal / 4);
+    }
+
+    private boolean isSupportedFloorCell(Belfegor mod, BlockPos floor) {
+        Block block = mod.getWorld().getBlockState(floor).getBlock();
+        return block != Blocks.AIR
+                && block != Blocks.WATER
+                && block != Blocks.LAVA
+                && WorldHelper.isSolid(mod, floor);
+    }
+
+    private List<BlockPos> prospectiveHallFloorPositions(Direction direction, int hallLength) {
+        ArrayList<BlockPos> result = new ArrayList<>();
+        int baseRadius = Math.max(8, _base == null ? 8 : _base.radius);
+        BlockPos start = switch (direction) {
+            case NORTH -> _baseCenter.add(0, -1, -baseRadius - 1);
+            case SOUTH -> _baseCenter.add(0, -1, baseRadius + 1);
+            case WEST -> _baseCenter.add(-baseRadius - 1, -1, 0);
+            default -> _baseCenter.add(baseRadius + 1, -1, 0);
+        };
+        for (int i = 0; i < hallLength + 2; i++) {
+            result.add(start.offset(direction, i));
+        }
+        return result;
     }
 
     private BlockPos roomCenterFor(Direction direction, int baseRadius, int hallLength, int outwardStep) {
@@ -865,6 +1021,7 @@ public class BuildBaseExpansionTask extends Task {
         _phase = next;
         _index = 0;
         _activeTask = null;
+        _lastLoggedFloorPatchCount = Integer.MIN_VALUE;
     }
 
     private boolean targetDone(Belfegor mod, BlockPos target, boolean useThrowaways, Block[] desired) {
@@ -877,9 +1034,7 @@ public class BuildBaseExpansionTask extends Task {
                         || block == Blocks.FARMLAND
                         || block == Blocks.WATER;
             }
-            if (WorldHelper.isSolid(mod, target)) {
-                return true;
-            }
+            return isAcceptableNonFarmFloor(mod, target);
         }
         for (Block allowed : desired) {
             if (block == allowed) return true;

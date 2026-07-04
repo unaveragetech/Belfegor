@@ -379,10 +379,32 @@ public class BuildRegionSchematicTask extends Task implements ITaskRequiresGroun
             return true;
         }
         Block block = mod.getWorld().getBlockState(pos).getBlock();
+        if (isNonFarmFloorRegion() && isAcceptableNaturalFloor(mod, pos, block)) {
+            return true;
+        }
         if (_allowAnyThrowaway) {
             return WorldHelper.isSolid(mod, pos);
         }
         return Arrays.asList(desired).contains(block);
+    }
+
+    private boolean isNonFarmFloorRegion() {
+        String normalized = _name.toLowerCase(java.util.Locale.ROOT);
+        return normalized.contains("floor") && !normalized.contains("farm");
+    }
+
+    private boolean isAcceptableNaturalFloor(Belfegor mod, BlockPos pos, Block block) {
+        if (block == Blocks.AIR || block == Blocks.WATER || block == Blocks.LAVA) return false;
+        if (block == Blocks.GRASS_BLOCK
+                || block == Blocks.DIRT
+                || block == Blocks.COARSE_DIRT
+                || block == Blocks.PODZOL
+                || block == Blocks.ROOTED_DIRT
+                || block == Blocks.FARMLAND
+                || block == Blocks.COBBLESTONE) {
+            return true;
+        }
+        return WorldHelper.isSolid(mod, pos);
     }
 
     private Map.Entry<BlockPos, Block[]> closestMissing(Belfegor mod) {
@@ -451,6 +473,11 @@ public class BuildRegionSchematicTask extends Task implements ITaskRequiresGroun
                 return blockState;
             }
             if (BaseMemory.getInstance().isProtectedFixturePosition(worldPos, WorldHelper.getCurrentDimension().name())) {
+                return blockState;
+            }
+            if (isNonFarmFloorRegion()
+                    && blockState != null
+                    && isAcceptableNaturalFloor(_mod, worldPos, blockState.getBlock())) {
                 return blockState;
             }
             if (_allowAnyThrowaway && blockState != null && blockState.getBlock() != Blocks.AIR
