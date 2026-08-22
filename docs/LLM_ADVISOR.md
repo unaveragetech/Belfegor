@@ -18,10 +18,11 @@ It writes/reads these files under `.minecraft/belfegor/`:
 
 | File | Purpose |
 |---|---|
-| `llm_commands.md` | Full command catalogue exported from the live command registry. |
-| `llm_context.json` | Current goal, player state, inventory, remembered shulkers, last action, and planned action. |
+| `llm_commands.md` | Human-readable command catalogue exported from the live command registry. |
+| `llm_commands.json` | MCP-style JSON command catalogue (name, category, description, arguments, examples) that the model reads at runtime. |
+| `llm_context.json` | Current goal, task status, player state, inventory, stored-at-base counts, errands, game plan, remembered shulkers, last action, and planned action. |
 | `llm_prompt.txt` | Prompt sent to llama.cpp. |
-| `llm_response.json` | Parsed model response. |
+| `llm_response.json` | Model response repaired into valid JSON (command/chat/goal/reason), even when the model wraps it in prose or fences. |
 | `llm_actions.log` | Running log of actions and reactions. |
 
 ## Setup
@@ -47,10 +48,10 @@ It writes/reads these files under `.minecraft/belfegor/`:
   "llmAdvisorCanChat": true,
   "llmLlamaCppExecutable": "",
   "llmLlamaModelPath": "belfegor/models/Qwen3-1.7B-Q4_K_M.gguf",
-  "llmAdvisorCooldownSeconds": 90,
-  "llmAdvisorTimeoutSeconds": 45,
+  "llmAdvisorCooldownSeconds": 60,
+  "llmAdvisorTimeoutSeconds": 30,
   "llmContextSize": 8192,
-  "llmMaxTokens": 384
+  "llmMaxTokens": 320
 }
 ```
 
@@ -71,7 +72,13 @@ Ask the advisor directly:
 @ai "why am I stuck?"
 ```
 
-The first call queues the model request. A later `@ai` call prints any completed response and queues another prompt.
+`@ai` prints `AI advisor is thinking...` immediately. When llama.cpp finishes, the answer is printed to game chat automatically (`AI: ...`, `AI command: ...`, `AI reason: ...`) - there is no panel and no need to run `@ai` again. If a previous answer is still pending, the next `@ai` call prints it right away.
+
+## Runtime details
+
+The advisor runs llama.cpp as a single-turn process (`-st`) with reasoning disabled (`--reasoning off`) and stdin closed, so it exits after answering instead of hanging in the REPL. The default timeout is 30 seconds and the default token budget is 320. Responses are repaired into JSON (balanced-object scan, then key:value rebuild) and the command is validated against the live registry before it is ever executed.
+
+Chat-mode decisions (`@ai`) are consumed only by the chat delivery path, and player-mode decisions only by `@player`, so one cannot steal the other's answer. Every exchange is also recorded in the AI tab of the `C` control panel.
 
 ## Player mode
 
@@ -100,8 +107,6 @@ Denied automatic commands currently include:
 @test
 @ai
 @player
-@build
-@home
 ```
 
 If llama.cpp is unavailable, busy, times out, returns an invalid command, or the task/inventory lane is busy, player mode continues with its deterministic fallback behavior. Valid advisor commands are deferred instead of injected into the middle of active tasks.

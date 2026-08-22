@@ -67,6 +67,9 @@ Expected behavior:
 - Base memory records a larger expandable base plan: four-high perimeter wall, five-block exterior clearance, interior room dividers, core room, crafting workshop, smelting workshop, storage wing, crop farm, roofed mob-farm chamber, a clicked bed/spawn anchor, and a two-wide remembered entrance.
 - If the bot falls below the active camp/build plane, construction tasks should recover to the remembered home Y level before continuing. This prevents the old failure where a water fall left the bot trying to build a camp from the ocean floor or a lower cave layer.
 - Spatial awareness records nearby block counts, liquids, headroom, flat floor columns, entities, dropped items, and notable blocks.
+- `@player` tool progression completes full sets wood -> stone -> iron -> diamond and keeps a backup set of tools at base.
+- `@player` triages inventory at home: surplus goes into the base storage network, the field kit stays in hand.
+- `@player` auto-resumes the persistent `@goal` game plan when the base is complete; `@goal next` prints what the active stage needs.
 
 ## Current tested results
 
@@ -108,6 +111,11 @@ The latest local test pass verified:
 - `#help sel` was verified in-game against the bundled Baritone command set and documented in [Baritone Command Reference](BARITONE_COMMAND_REFERENCE.md).
 - `@craftaudit diamond_shovel` now starts from a clean inventory, gives `1 diamond`, `2 stick`, `1 crafting_table`, and `1 chest`, crafts through the real crafting-table flow, stores into a nearby overflow chest, and logs `DONE passed=1 failed=0`.
 - Overflow chest storage ignores far stale cached containers during chest-only overflow, preventing the old path to distant cached chests such as underground structure loot.
+- `@pillar 20` climbs all 20 blocks without quitting early and logs `PILLAR Pillared up 20 blocks from Y=... to Y=... (verified 20 cobblestone in the column)`.
+- `@drop home` clears the settings lock plus nearby base records, storage networks, home/door/room locations, and stash errands; a subsequent `@player` builds a new home near the player instead of pathing to the old base.
+- `@ai` prints the response to game chat (`AI: ...`, `AI command: ...`, `AI reason: ...`) with no panel; the exchange also appears in the AI tab of the `C` menu.
+- Errand stash flow: stockpile/triage stores supplies at a remembered chest and a later resource task withdraws from the stash instead of re-gathering.
+- Doors: the bot opens its own entrance doors while navigating and `@build validate` repairs doors missing from the world.
 - A clean staged showcase video was recorded at [docs/media/belfegor-showcase-20260628-v2.mp4](media/belfegor-showcase-20260628-v2.mp4).
 
 ## Known edge cases to keep testing

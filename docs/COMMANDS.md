@@ -1,4 +1,4 @@
-﻿# Belfegor command reference
+# Belfegor command reference
 
 All commands use the prefix from `belfegor_settings.json`; by default this is `@`.
 
@@ -40,7 +40,7 @@ nether
 | Command | Usage | What it does | Examples |
 |---|---|---|---|
 | `get` | `@get [items]` | Gets requested items using inventory, dropped items, containers, shulkers, gathering, crafting, mining, and smelting. | `@get diamond 3`, `@get diamond_shovel`, `@get [crafting_table, stick 8]` |
-| `toolset` | `@toolset [tier]` | Crafts a full tool set for `wood`, `stone`, `iron`, or `diamond`. | `@toolset iron`, `@toolset diamond` |
+| `toolset` | `@toolset [tier]` | Crafts a full tool set (pickaxe, axe, shovel, sword, hoe) for `wood`, `stone`, `iron`, or `diamond`. | `@toolset iron`, `@toolset diamond` |
 | `stockpile` | `@stockpile [tier=stone] [starter/build]` or `@stockpile <item> [count] [tier]` | Returns to the locked remembered camp, prepares a toolset, gathers practical base supplies or one targeted resource, deposits them into the camp storage-room chest, and updates the base storage ledger. Run `@camp` or `@build full here` first. | `@stockpile`, `@stockpile stone starter`, `@stockpile cobblestone 512`, `@stockpile iron_ingot 32 iron`, `@stockpile stone build` |
 | `stacked` | `@stacked` | Gets a PvP loadout: diamond armor, diamond sword, shield, cooked beef, golden apples, planks, and ender pearls. | `@stacked` |
 | `equip` | `@equip [armors]` | Gets and equips armor items. | `@equip diamond_helmet`, `@equip [diamond_helmet, diamond_chestplate]` |
@@ -78,6 +78,37 @@ See [Shulker management](SHULKER_MANAGEMENT.md) for exact behavior and exclusion
 | `coverwithsand` | `@coverwithsand` | Covers nether lava with sand. | `@coverwithsand` |
 | `coverwithblocks` | `@coverwithblocks` | Covers nether lava with blocks. | `@coverwithblocks` |
 
+## Base control and goal commands
+
+| Command | Usage | What it does | Examples |
+|---|---|---|---|
+| orward | @forward <blocks> | Walks N blocks (1-64) in the direction the bot is facing. | @forward 5, @forward 10 |
+| ack | @back <blocks> | Walks N blocks backwards relative to facing. | @back 3, @back 8 |
+| left | @left <blocks> | Walks N blocks to the left of facing. | @left 2, @left 6 |
+| 
+ight | @right <blocks> | Walks N blocks to the right of facing. | @right 2, @right 10 |
+| ace | @face <north/south/east/west/up/down/yaw> [pitch] | Points the bot at a cardinal direction, straight up/down, or an exact yaw/pitch. | @face north, @face up, @face 45 -30 |
+| 	urn | @turn <left/right/around/degrees> | Rotates the bot by 90, 180, or an exact number of degrees. | @turn left, @turn around, @turn 45 |
+| pillar | @pillar <height> | Jumps and places a cobblestone column under the bot (1-128 blocks), self-correcting and validating the reached height before completing. | @pillar 5, @pillar 20 |
+| hunt | @hunt <mob> [count] | Hunts the nearest mob of a type for food/drops (cow, pig, chicken, sheep, rabbit, zombie, skeleton, spider, creeper, or hostile). | @hunt cow 4, @hunt hostile |
+| mine | @mine <resource> [count] | Mines/collects the nearest tracked ore or resource through the normal planner. | @mine iron 8, @mine diamond 3 |
+| goal | @goal [start/stop/next/<stage>] | Shows or drives the persistent long-term game plan (wood/stone/iron/diamond tools, food, base, nether, stronghold, dragon). @goal next prints what the active stage still needs. | @goal, @goal next, @goal start, @goal iron_tools |
+
+## Base control and goal commands
+
+| Command | Usage | What it does | Examples |
+|---|---|---|---|
+| `forward` | `@forward <blocks>` | Walks N blocks (1-64) in the direction the bot is facing. | `@forward 5`, `@forward 10` |
+| `back` | `@back <blocks>` | Walks N blocks backwards relative to facing. | `@back 3`, `@back 8` |
+| `left` | `@left <blocks>` | Walks N blocks to the left of facing. | `@left 2`, `@left 6` |
+| `right` | `@right <blocks>` | Walks N blocks to the right of facing. | `@right 2`, `@right 10` |
+| `face` | `@face <north/south/east/west/up/down/yaw> [pitch]` | Points the bot at a cardinal direction, straight up/down, or an exact yaw/pitch. | `@face north`, `@face up`, `@face 45 -30` |
+| `turn` | `@turn <left/right/around/degrees>` | Rotates the bot by 90, 180, or an exact number of degrees. | `@turn left`, `@turn around`, `@turn 45` |
+| `pillar` | `@pillar <height>` | Jumps and places a cobblestone column under the bot (1-128 blocks), self-correcting and validating the reached height before completing. | `@pillar 5`, `@pillar 20` |
+| `hunt` | `@hunt <mob> [count]` | Hunts the nearest mob of a type for food/drops (cow, pig, chicken, sheep, rabbit, zombie, skeleton, spider, creeper, or hostile). | `@hunt cow 4`, `@hunt hostile` |
+| `mine` | `@mine <resource> [count]` | Mines/collects the nearest tracked ore or resource through the normal planner. | `@mine iron 8`, `@mine diamond 3` |
+| `goal` | `@goal [start/stop/next/<stage>]` | Shows or drives the persistent long-term game plan (wood/stone/iron/diamond tools, food, base, nether, stronghold, dragon). `@goal next` prints what the active stage still needs. | `@goal`, `@goal next`, `@goal start`, `@goal iron_tools` |
+
 ## Combat and autonomous modes
 
 | Command | Usage | What it does | Examples |
@@ -89,7 +120,7 @@ See [Shulker management](SHULKER_MANAGEMENT.md) for exact behavior and exclusion
 | `player` | `@player` | Starts autonomous exploration/learning/home-base mode. | `@player` |
 | `build` | `@build full [radius] [here]`, `@build validate`, `@build repair`, or `@build <roomType> [name]` | Builds the complete modular base, validates/repairs remembered rooms, or expands the locked remembered base with one connected room. Room placement avoids overlapping remembered footprints. Full mode builds/validates core camp, storage, workshop, hydrated crop farm, and roofed mob-farm room. Existing home is not moved; run `@drop home` first to start elsewhere. | `@build full 12 here`, `@build repair`, `@build farmland wheat_wing` |
 | `home` | `@home [room]` | Navigates to the locked remembered camp doorway/center or named room/module center. | `@home`, `@home farmland` |
-| `drop` | `@drop home` | Clears the locked home/base memory so the next `@camp` or `@build full here` can establish a new camp deliberately. | `@drop home` |
+| `drop` | `@drop home` | Clears the locked home plus every home-related memory (base records, storage networks, home/door/room locations, stash errands) so the next `@camp`, `@build full here`, or `@player` establishes a new home near the player. | `@drop home` |
 | `baritone` | `@baritone <safe native command>` | Runs a controlled subset of native Baritone diagnostics/selection/build commands through Baritone's command manager. Useful for `#proc`, `#help sel`, `#sel clear`, `#surface`, `#forcecancel`, `#build`, and `#litematica` testing. | `@baritone proc`, `@baritone help sel`, `@baritone sel clear` |
 | `gamer` | `@gamer` | Runs the classic beat-the-game task. | `@gamer` |
 | `marvion` | `@marvion` | Runs the Marvion beat-the-game route. | `@marvion` |
@@ -99,7 +130,7 @@ See [Shulker management](SHULKER_MANAGEMENT.md) for exact behavior and exclusion
 | Command | Usage | What it does | Examples |
 |---|---|---|---|
 | `give` | `@give <username> [item] <count=1>` | Gets an item and gives it to a player. | `@give Steve diamond 3` |
-| `ai` | `@ai <prompt>` | Queues or polls the Packaged llama.cpp advisor. It reads the command catalogue, context snapshot, inventory, shulker memory, goal, and action log, then returns chat text and/or a safe command suggestion. Defaults to `belfegor/models/Qwen3-1.7B-Q4_K_M.gguf`. | `@ai "what should I do next?"`, `@ai "why am I stuck?"` |
+| `ai` | `@ai <prompt>` | Asks the Packaged llama.cpp advisor. It reads the JSON command catalogue, context snapshot, inventory, shulker memory, goal, and action log, then prints the response to game chat: the chat text plus the parsed command and reason (AI: ..., AI command: ..., AI reason: ...). Defaults to `belfegor/models/Qwen3-1.7B-Q4_K_M.gguf`. | `@ai "what should I do next?"`, `@ai "why am I stuck?"` |
 | `test` | `@test <extra>` | Runs experimental test tasks. | `@test stacked` |
 | `craftaudit` | `@craftaudit <target=all/screens> <limit=0>` | Developer-only audit harness. `screens` creates and opens every supported handled-screen fixture in order. Item/all mode starts each item from a clean inventory, gives bundled-recipe leaf resources, crafts through Belfegor, stores outputs in ordinary containers, and logs pass/skip/fail results. Requires cheats/op in a test world. | `@craftaudit screens`, `@craftaudit anvil`, `@craftaudit all 25`, `@craftaudit all` |
 

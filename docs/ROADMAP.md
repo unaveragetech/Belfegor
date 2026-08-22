@@ -106,11 +106,23 @@ See [SCHEMATIC_ENGINE.md](SCHEMATIC_ENGINE.md) for the planned architecture.
 - Improve exploration scoring so the bot can choose between mining, hunting, crafting, and returning home.
 - Persist more observations about useful biomes, structures, and resource zones.
 - Let `@player` run catalogue practice: craft useful items, store them, and remember what was possible.
-- Make home expansion resumable after interruption or crash.
+- Make home expansion resumable after interruption or crash. (implemented: per-base build phases are persisted and resumed)
+- @player maintains a full carried tool set plus a backup set stored at base. (implemented)
+- @player triages inventory at home: surplus is stored in the base storage network, the field kit stays in hand. (implemented)
+- @player auto-resumes the persistent @goal game plan once the base is complete. (implemented)
+- Add @harvest to reap and replant the farm module. (next)
+- Build a semantic map of explored regions so exploration can prioritize unvisited areas. (next)
 
 ## Base building
 
-Current base behavior builds a persisted radius-based core with four-high cobblestone perimeter walls, a two-wide remembered doorway, interior room dividers, crafting/smelting/storage fixtures, a bed/spawn anchor, natural-flat-floor preservation, five-block exterior clearance, and separate connected expansion modules. Validation now returns to the locked home and checks that home's exported internal blueprint rather than applying one global schematic at an arbitrary origin.
+Current base behavior builds a persisted radius-based core with four-high cobblestone perimeter walls, a two-wide remembered doorway, interior room dividers, crafting/smelting/storage fixtures, a bed/spawn anchor, natural-flat-floor preservation, five-block exterior clearance, and separate connected expansion modules. Validation returns to the locked home and checks that home's exported internal blueprint rather than applying one global schematic at an arbitrary origin.
+
+Implemented since the last roadmap pass:
+
+- The bot opens its own doors while navigating, repairs entrance doors missing from the world, and routes through the remembered room graph without breaking finished walls.
+- Construction phases are persisted per base, so @camp/@build <room>/@build full resume after interruption instead of starting over.
+- Base storage is a real economy: chests are remembered in a network, stockpile/triage flows update known counts, and stash errands let the bot gather -> stash -> retrieve.
+- @player keeps a full carried tool set plus a backup set at base, triages inventory at home, and auto-resumes the persistent @goal game plan once the base is complete.
 
 The next quality step is to make the existing modules more schematic-driven and less procedural while preserving the working lifecycle rules: one Baritone owner at a time, staged working batches, protected completed blocks, exact fixture positions, bounded scans, and repair-before-expansion.
 
@@ -125,7 +137,11 @@ Next module upgrades:
 - portal pad;
 - animal pen;
 - watch/defense lighting;
-- pathable gate.
+- pathable gates and doors (doors are implemented: the bot opens and repairs them; gates remain);
+- `@harvest` to reap and replant the farm module;
+- procedural, terrain-aware base design instead of the fixed modular template;
+- smarter site selection and pre-build staging from remembered storage;
+- AI-driven build/expand goals through the advisor.
 
 The eventual goal is not decorative building. It is a functional operating base where the bot can deposit, retrieve, craft, smelt, sleep, sort shulkers, and resume long-term collection goals.
 

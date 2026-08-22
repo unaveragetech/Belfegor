@@ -231,8 +231,8 @@ This is the beginning of the future â€œpractice every craftable itemâ€ 
 
 Tool upgrades are simple and direct:
 
-- if the bot has a wooden pickaxe but not a stone pickaxe, get a stone pickaxe;
-- if the bot has a stone pickaxe but not an iron pickaxe, get an iron pickaxe;
+- tool progression follows complete sets: finish the full wood set (pickaxe, axe, shovel, sword, hoe), then stone, then iron, then diamond - a complete diamond set is the end goal;
+- if the bot already holds higher-tier tools it jumps straight to completing that tier;
 - then return to `EXPLORE`.
 
 ### SURVIVE phase
@@ -254,7 +254,8 @@ The home phase is where base-building happens. It:
 5. ensures a chest;
 6. builds, validates, or expands the remembered modular base with the campsite/full-base construction tasks;
 7. increments `_campBuildCount`;
-8. returns to `EXPLORE`.
+8. if the persistent game plan is active, resumes it (nether resources -> stronghold -> Ender Dragon) automatically;
+9. returns to `EXPLORE`.
 
 ## Exact base-building behavior
 
@@ -334,6 +335,27 @@ The current base is the first durable scaffold. Planned upgrades:
 - pathable gates instead of a simple open doorway;
 - imported schematic placement/repair using the same validation model.
 
+### Persistent game plan (`@goal`)
+
+Belfegor now has a persistent long-term game plan modeled on the classic beat-the-game route. It is stored in `belfegor_gameplan.json` and tracked stage by stage:
+
+```text
+wood_tools -> stone_tools -> iron_tools -> diamond_tools -> food_supply
+-> base_camp -> base_expansion -> nether_resources -> stronghold -> end_dragon
+```
+
+Useful commands:
+
+```text
+@goal          - show every stage and its status
+@goal next     - show the active stage and exactly what it still needs
+@goal start    - resume the plan at the first unfinished stage
+@goal <stage>  - start from a specific stage (e.g. @goal iron_tools)
+@goal stop     - halt the plan
+```
+
+Each stage delegates to the normal task engine (tool sets, cooking, campsite/room builders, blaze rods, ender pearls, ender eyes, and the Ender Dragon task), and each stage's completion is re-checked against world state, so finished stages are never redone. Once the base is complete, `@player` auto-resumes the plan instead of wandering with no direction.
+
 ## Learning and memory
 
 Belfegor has early support for remembering:
@@ -342,7 +364,10 @@ Belfegor has early support for remembering:
 - failed crafting attempts;
 - route timing hints;
 - useful locations;
-- shulker contents.
+- shulker contents;
+- stash errands (gather -> stash -> retrieve);
+- the persistent game plan and its stage statuses;
+- per-base construction phases so interrupted builds resume.
 
 This is not yet a full reinforcement-learning system. It is practical memory: â€œthis route worked,â€ â€œthis item is in that shulker,â€ â€œhome base is here,â€ and â€œthis craft path has succeeded before.â€
 
@@ -352,7 +377,8 @@ This is not yet a full reinforcement-learning system. It is practical memory: â
 - Nether fortress and End behavior are complex and may need iteration.
 - `@player` is intentionally experimental and can make odd choices.
 - Exploration does not yet build a semantic map of the world.
-- Base construction is now modular and validation-backed, but still needs more terrain/interruption tests before it should be considered a fully general builder.
+- Base construction is modular and validation-backed with door opening/repair, base-aware navigation, and resumable phases, but still needs more terrain/interruption tests before it should be considered a fully general builder.
+- `@pillar` and `@ai` are recent; pillar jump/click rhythm and advisor latency may still need tuning in live worlds.
 - Inventory bugs remain the highest priority because one stuck cursor can poison any route.
 
 ## Recommended test flow

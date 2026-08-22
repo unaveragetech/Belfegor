@@ -17,6 +17,9 @@ At its simplest, Belfegor lets you type commands like:
 @home farmland
 @ai "what should I do next?"
 @craftaudit anvil
+@goal next
+@pillar 5
+@hunt cow 4
 ```
 
 Behind that small command surface is a task engine that can gather resources, mine, craft, smelt, loot containers, use carried shulkers as storage, path with Baritone, survive hazards, and chain smaller behaviors into larger goals.

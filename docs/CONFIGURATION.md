@@ -13,6 +13,10 @@ Belfegor creates a config directory in the active Minecraft instance:
 | `belfegor_settings.json` | Main user settings. |
 | `belfegor_debug.log` | Detailed debug log. |
 | `belfegor_shulker_memory.json` | Remembered shulker-box contents. |
+| `belfegor_locations.json` | Remembered useful locations (home, doors, rooms, chests). |
+| `belfegor_base_storage.json` | Home storage network ledger: chests, roles, and known item counts. |
+| `belfegor_errands.json` | Stash errands: supplies gathered, stashed at a chest, and available to retrieve. |
+| `belfegor_gameplan.json` | Persistent long-term game plan stages and their status. |
 | `belfegor_butler_whitelist.txt` | Players allowed to command the bot by whisper when whitelist mode is enabled. |
 | `belfegor_butler_blacklist.txt` | Players blocked from Butler commands. |
 
@@ -43,8 +47,12 @@ For multiplayer, read [Butler and multiplayer guide](BUTLER_AND_SERVERS.md). The
 | `llmAdvisorCanChat` | Allows `@ai` chat-style advisor prompts. |
 | `llmLlamaCppExecutable` | Optional `llama-cli` path. Blank uses `.minecraft/belfegor/llama.cpp/llama-cli(.exe)`. |
 | `llmLlamaModelPath` | GGUF model path, default `belfegor/models/Qwen3-1.7B-Q4_K_M.gguf`. |
-| `llmAdvisorCooldownSeconds` | Minimum seconds between automatic player-mode advisor calls. |
-| `llmAdvisorTimeoutSeconds` | Maximum seconds to wait before falling back to deterministic logic. |
+| `llmAdvisorCooldownSeconds` | Minimum seconds between automatic player-mode advisor calls. Default 60. |
+| `llmAdvisorTimeoutSeconds` | Maximum seconds to wait before falling back to deterministic logic. Default 30. |
+| `llmContextSize` | Prompt context token count. |
+| `llmMaxTokens` | Maximum generated tokens. Default 320. |
+| `llmMaxThreads` | llama.cpp worker threads (1-4). |
+| `llmBatchSize` | llama.cpp batch size. |
 
 After editing settings, run:
 
@@ -61,7 +69,9 @@ Press `C` to open the Belfegor UI. Tabs include:
 - interactive command reference;
 - settings;
 - shulker memory;
-- log view.
+- storage;
+- log;
+- AI (recent advisor exchanges).
 
 The command page includes real examples that can be run by double-clicking.
 

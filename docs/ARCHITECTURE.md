@@ -22,7 +22,7 @@ flowchart TD
     Movement --> Baritone["Baritone processes"]
     Storage --> Memory["Memory files"]
     Runner --> Advisor["Optional llama.cpp advisor"]
-    Advisor --> CommandDocs["llm_commands.md"]
+    Advisor --> CommandDocs["llm_commands.md + llm_commands.json"]
     Advisor --> Context["llm_context.json"]
     Advisor --> ActionLog["llm_actions.log"]
 ```
@@ -143,6 +143,8 @@ flowchart TD
     Memory --> Location["LocationMemory"]
     Memory --> Base["BaseMemory"]
     Memory --> Spatial["SpatialAwareness"]
+    Memory --> Errand["ErrandMemory"]
+    Memory --> Plan["GamePlanMemory"]
     Shulker --> A["inventory slot -> 27 internal slots"]
     Shulker --> B["placed position -> verified open-screen slots"]
     Shulker --> C["contents fingerprint + free slots"]
@@ -153,6 +155,8 @@ flowchart TD
     Base --> H["base center, radius, wall height, clearance"]
     Base --> I["modules: rooms, walls, farms, mob chamber"]
     Spatial --> J["nearby solids/air/liquids/entities/notable blocks"]
+    Errand --> K["gather -> stash -> retrieve"]
+    Plan --> L["stage-by-stage long-term goals"]
 ```
 
 Memory files live in `.minecraft/belfegor/` and are intentionally human-readable JSON where practical.
@@ -169,6 +173,10 @@ Memory files live in `.minecraft/belfegor/` and are intentionally human-readable
 - modules for the core room, perimeter wall, crafting anchor, smelting anchor, storage anchor, hydrated starter farm, roofed mob-farm chamber, and entrance/exit.
 - module centers, dimensions, progress counters, status, and notes;
 - inspection records that track checked, blocked, missing, and complete target counts.
+
+Base records also persist a per-task build phase map (`buildPhases`), so interrupted `@camp`/`@build` runs resume from the remembered phase instead of re-deriving everything from a fresh scan. A connectivity layer derived from the modules (rooms connected through halls and parent/child links) supports base-aware navigation: inside a remembered base the bot routes through the room graph without breaking walls, and `@home`/route validation use those waypoints.
+
+Entrance doors are remembered fixtures (`entrance_door_a`/`entrance_door_b` and `home_door`). Movement tasks right-click closed doors to open them (the bundled Baritone fork has no door handling), and validation repairs doors missing from the world.
 
 Farm rooms are treated as infrastructure, not decoration. Belfegor builds water first: a centered 2x2 infinite water source provides bucket refills and keeps the surrounding 9x9-style farm hydrated. Only blocks inside the planned hydration range are tilled and planted.
 
@@ -188,6 +196,14 @@ The current large-base plan uses:
 - a roofed cobblestone mob-farm chamber with four-block-tall walls and a two-wide entrance/exit;
 - remembered room centers for pathing and future expansion;
 - larger farm footprints as the base radius grows.
+
+### Errand memory
+
+`ErrandMemory` writes .minecraft/belfegor/belfegor_errands.json. It is the memory half of the gather -> stash -> retrieve loop: stockpile, triage, and tool-backup flows record which supplies were stashed at which chest, and resource tasks check the ledger before mining/crafting, walking back to withdraw from the stash instead of re-gathering.
+
+### Game plan memory
+
+`GamePlanMemory` writes .minecraft/belfegor/belfegor_gameplan.json. It tracks the long-term beat-the-game-style plan (tools -> food -> base -> nether -> stronghold -> dragon) as stage records. `@goal` shows and drives it, `@player` auto-resumes it once the base is complete, and the LLM advisor context includes it.
 
 ### Spatial awareness
 
@@ -209,11 +225,11 @@ The local LLM advisor is packaged as Java code inside the mod and calls llama.cp
 ```mermaid
 flowchart TD
     PlayerMode["@player decision point or @ai prompt"] --> Snapshot["Build context snapshot"]
-    Commands["Live command registry"] --> Export["llm_commands.md"]
+    Commands["Live command registry"] --> Export["llm_commands.md + llm_commands.json"]
     Snapshot --> Prompt["llm_prompt.txt"]
     ActionLog["llm_actions.log"] --> Prompt
     Export --> Prompt
-    Prompt --> LlamaCli["llama-cli -m belfegor/models/Qwen3-1.7B-Q4_K_M.gguf -f llm_prompt.txt"]
+    Prompt --> LlamaCli["llama-cli -m belfegor/models/Qwen3-1.7B-Q4_K_M.gguf -f llm_prompt.txt -st --reasoning off"]
     llama.cpp --> Response["llm_response.json"]
     Response --> Validate["Validate command against registry/denylist"]
     Validate -- valid --> Execute["Execute selected Belfegor command"]
@@ -221,6 +237,8 @@ flowchart TD
 ```
 
 The model can suggest high-level commands or chat text, but it cannot directly move the cursor, click slots, or bypass command validation.
+
+Since the last architecture pass the advisor runs llama.cpp single-turn (`-st`) with reasoning disabled (`--reasoning off`) and stdin closed, exports the command catalogue as JSON (`llm_commands.json`) in addition to markdown, repairs model output into valid JSON, and delivers `@ai` answers directly to game chat. Mode-gated polling keeps `@player` from consuming chat decisions.
 
 ## Recipe registry and craft audit loop
 
