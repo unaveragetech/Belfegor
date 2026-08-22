@@ -107,10 +107,87 @@ The current jar has been tested in the `1.21.4` MultiMC instance against the inv
 - shulker memory now stores slot-level catalogues: player inventory slot, shulker type, exact 27-slot internal contents, free slots, total count, and a contents fingerprint.
 - `@player` writes base memory and spatial awareness snapshots, starts larger modular base construction, records room/module centers and inspections, builds four-high walls, and can grow the camp through connected halls into farmland, storage, workshop, and mob-farm rooms. `@build full` now performs that full base build deliberately, then validates navigation to remembered room centers.
 - `@player` now calls a targeted camp stockpile helper after the core camp exists. The helper runs the same tool-prep path as `@toolset`, gathers wood/stone/coal/iron/dirt/seeds/fixtures or a user-requested resource such as `@stockpile cobblestone 512`, returns to the remembered storage room, and stores supplies in the camp chest instead of arbitrary cached containers.
-- Base validation is now schematic-backed for the core campsite: the expected cobblestone floor, walls, and room dividers are saved as a persisted blueprint and `@build validate` compares actual world blocks against it before declaring the base repaired.
-- LLM advisor defaults are intentionally conservative for gameplay: automatic player-mode calls are disabled unless enabled in settings, cooldown defaults to five minutes, context/token limits are reduced, and llama.cpp is capped to a small thread/batch count so it does not dominate the PC while Minecraft is running.
+- Base validation is now schematic-backed and home-specific: `@build validate` first walks to the locked home, loads that camp's persisted core blueprint, scans once per phase, and repairs modules serially. It no longer treats an unrelated global `camp.litematic` as every home's blueprint, which previously shifted the repair footprint beside the real camp and caused large render/scan spikes.
+- Region building now caches its mismatch/material scan, refreshes it on a bounded tick interval, pauses Baritone while a supply subtask owns control, withdraws at most 128 staged blocks at a time, and gathers at most a 64-block working batch when staging is empty. Missing-material diagnostics are state/throttle based instead of being written every tick.
+- Campsite preflight now clears raised dirt/grass from the room build plane while preserving the natural floor below it. Crafting tables, furnaces, chests, and beds use the position-aware block placer, including safe-stand recovery, instead of an unbounded support-face interaction loop.
+- Container actions now verify that the open handled screen belongs to their exact target, adopt an already-open owned screen without clicking it again, keep cursor-held transfers non-interruptible, and close their owned screen when the task stops. A live `@stockpile` regression transferred a 64-cobblestone delta, returned an empty cursor, closed the chest, and completed normally.
+- Resource collection now honors `maxResourceTravelDistance`, keeps a search-origin budget, re-evaluates distant targets until the bot is close enough to mine, and prefers a newly discovered nearer block. A controlled live test selected a birch log four blocks away and completed in 0.7 seconds.
+- Persisted camp storage is range-checked: stale or emergency chests far from the locked home are pruned instead of contaminating home counts or sending later overflow/stockpile jobs across the world.
+- LLM advisor defaults are intentionally conservative for gameplay: automatic player-mode calls are disabled unless enabled in settings, context/token limits are reduced, and llama.cpp is capped to a small thread/batch count so it does not dominate the PC while Minecraft is running.
+- The advisor now watches the live task status, asks again shortly after each
+  task finishes (so it can chain goal commands), retries failures on a short
+  backoff instead of eating the full cooldown, and sees stored-at-base and
+  errand context. New goal commands give it concrete verbs: `@pillar <height>`,
+  `@hunt <mob> [count]`, and `@mine <resource> [count]`. The automatic
+  cooldown now defaults to one minute (still configurable).
 
 See [`docs/TESTING.md`](docs/TESTING.md) for the current manual test matrix and known edge cases.
+
+## Base, door, and inventory improvements
+
+This iteration focuses on making the bot build and live in a base the way a
+player does:
+
+- **Portable crafting tables.** The bot now prefers placing a crafting table it
+  is already carrying over walking to a tracked table up to 40 blocks away, and
+  it only breaks/picks up tables it placed itself. Village tables and the
+  base's own workshop fixtures are left in place.
+- **Real door usage.** Movement tasks now right-click closed doors to open them
+  (with cooldown and reach guards) instead of shimmying against them or letting
+  Baritone mine them. `@build validate` detects doors that are missing from the
+  world and repairs them in place without rebuilding the whole core.
+- **Base-aware navigation.** When the player or the target is inside a
+  remembered base, navigation routes without breaking blocks, and `@home` plus
+  full-base route validation walk through the remembered room graph (room
+  centers connected by halls) instead of mining straight through walls.
+- **Resumable construction.** `@camp`, `@build <room>`, and `@build full`
+  persist their current phase per base and resume from it after interruption,
+  falling back to the earliest phase whose world prerequisites are missing.
+- **Inventory triage at home.** `@player` periodically stores surplus bulk
+  items (cobblestone, stone, dirt, logs, coal, mob drops...) into the base
+  storage network while keeping a compact field kit (tools, armor, food,
+  torches, crafting table, water bucket...), instead of wandering with a full
+  inventory of unused blocks.
+- **Smaller material hoarding.** The build preflight no longer demands more
+  than a few stacks of cobblestone up front; the region builder fetches working
+  batches lazily, matching an incremental "shelter first, expand later" loop.
+- **Task errand memory.** A persistent errand ledger (`belfegor_errands.json`)
+  records supplies the bot gathers and stashes at a remembered chest
+  (stockpile, triage, and tool-backup flows). Later resource tasks check the
+  ledger first and walk back to withdraw from the stash instead of re-gathering
+  from the world.
+- **Tool reserves.** The bot now treats a full tool set as pickaxe + axe +
+  shovel + sword + hoe, upgrades whole sets instead of just the pickaxe, and
+  keeps a backup set of every tool stored in the base storage network so a
+  broken tool never strands it in the field.
+- **Inventory-space recovery.** Crafting frees space in stages: shulker ->
+  chest overflow -> dropping junk (flowers, leaves, throwaway blocks) that does
+  not contribute to the active recipe, so the bot can always make room instead
+  of getting stuck on a full inventory.
+- **Persistent long-term game plan.** `@goal` drives a stage-by-stage plan
+  modeled on the classic `@gamer` route, tracked in `belfegor_gameplan.json`:
+  wood/stone/iron/diamond tool sets -> food supply -> home base -> base
+  expansion -> nether resources (blaze rods + ender pearls) -> stronghold ->
+  defeat the Ender Dragon. Progress survives restarts, `@goal` shows status,
+  and the AI advisor sees the plan so its suggestions advance the active stage.
+- **Base control commands for the AI and operators.** `@forward/@back/@left/
+  @right <blocks>` walk the bot in precise block amounts relative to its
+  facing, `@face <north|south|east|west|up|down|yaw> [pitch]` aims it, and
+  `@turn <left|right|around|degrees>` rotates it. Together with `@pillar`,
+  `@hunt`, and `@mine`, the advisor now has concrete verbs to steer the bot.
+- **AI answers in game chat.** Running `@ai "question"` prints "AI advisor is
+  thinking..." immediately, and when llama.cpp finishes, the response is
+  printed to game chat like any other bot message: the chat text plus the
+  parsed command and reason (`AI: ...`, `AI command: ...`, `AI reason: ...`).
+  Every exchange is also recorded in the AI tab of the `C` control panel.
+- **Reliable advisor runtime.** The llama.cpp invocation now runs single-turn
+  (`-st`) with reasoning disabled (`--reasoning off`) and stdin closed, so the
+  process actually exits after answering instead of hanging in the REPL and
+  timing out. The model is instructed to return exactly one JSON object, the
+  command catalogue is also exported as JSON (`llm_commands.json`, MCP-style
+  tools with arguments/descriptions/examples), and the response is rebuilt
+  into JSON even when the model wraps it in prose, fences, or reasoning tags.
+  Advisor work runs on a dedicated background thread with visible status.
 
 ## Showcase media
 

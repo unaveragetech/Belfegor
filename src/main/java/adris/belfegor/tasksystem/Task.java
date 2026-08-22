@@ -20,6 +20,11 @@ public abstract class Task {
 
     private boolean _active = false;
 
+    // A parent may finish its phase while a cursor/container transaction in
+    // its child tree still owns the screen. Keep ticking that child until it
+    // releases ITaskCanForce instead of orphaning the transaction.
+    private boolean _drainingForcedSub = false;
+
     public void tick(Belfegor mod, TaskChain parentChain) {
         parentChain.addTaskToChain(this);
         if (parentChain.isOverDepthLimit()) {
@@ -56,6 +61,7 @@ public abstract class Task {
         }
         // We have a sub task
         if (newSub != null) {
+            _drainingForcedSub = false;
             if (!newSub.isEqual(_sub)) {
                 if (canBeInterrupted(mod, _sub, newSub)) {
                     // Our sub task is new
@@ -72,16 +78,21 @@ public abstract class Task {
             _sub.tick(mod, parentChain);
         } else {
             // We are null
-            if (_sub != null && canBeInterrupted(mod, _sub, null)) {
+            if (_sub != null) {
                 // Don't clear a forced subtask that returns null but is still active.
                 // ShulkerInteractionTask returns null during transfer/catalog phases
                 // while it manipulates the open screen — clearing it would lose phase
                 // progress and cause the parent to spawn a fresh restart on the next tick.
-                boolean subStillActive = _sub.isActive()
-                        && !_sub.isFinished(mod)
-                        && !_sub.stopped()
-                        && _sub.thisOrChildSatisfies(t -> t instanceof ITaskCanForce f && f.shouldForce(mod, null));
-                if (!subStillActive) {
+                if (!canBeInterrupted(mod, _sub, null)) {
+                    if (!_drainingForcedSub) {
+                        DebugLogger.getInstance().logImmediate("TASK-FORCED-DRAIN",
+                                "parent=" + toDebugString()
+                                        + " child=" + _sub.toDebugString());
+                        _drainingForcedSub = true;
+                    }
+                    _sub.tick(mod, parentChain);
+                } else {
+                    _drainingForcedSub = false;
                     _sub.stop(mod);
                     _sub = null;
                 }
@@ -93,6 +104,7 @@ public abstract class Task {
         _first = true;
         _active = false;
         _stopped = false;
+        _drainingForcedSub = false;
     }
 
     public void stop(Belfegor mod) {
@@ -117,6 +129,7 @@ public abstract class Task {
         _first = true;
         _active = false;
         _stopped = true;
+        _drainingForcedSub = false;
     }
 
     /**

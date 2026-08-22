@@ -5,7 +5,9 @@ import adris.belfegor.util.helpers.WorldHelper;
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import net.minecraft.block.Block;
+import net.minecraft.block.BedBlock;
 import net.minecraft.block.Blocks;
+import net.minecraft.block.DoorBlock;
 import net.minecraft.entity.Entity;
 import net.minecraft.entity.mob.HostileEntity;
 import net.minecraft.util.math.BlockPos;
@@ -171,6 +173,8 @@ public class SpatialAwareness {
                 || block == Blocks.IRON_ORE
                 || block == Blocks.DIAMOND_ORE
                 || block == Blocks.DEEPSLATE_DIAMOND_ORE
-                || block == Blocks.DEEPSLATE_IRON_ORE;
+                || block == Blocks.DEEPSLATE_IRON_ORE
+                || block instanceof DoorBlock
+                || block instanceof BedBlock;
     }
 }

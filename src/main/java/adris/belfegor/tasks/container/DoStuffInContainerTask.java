@@ -69,9 +69,13 @@ public abstract class DoStuffInContainerTask extends Task implements ITaskUsesCo
     @Override
     protected Task onTick(Belfegor mod) {
 
-        // If we're placing, keep on placing.
-        if (mod.getItemStorage().hasItem(ItemHelper.blocksToItems(_containerBlocks)) && _placeTask.isActive() && !_placeTask.isFinished(mod)) {
-            setDebugState("Placing container");
+        // Once placement starts it owns this phase until the world confirms the
+        // block. Baritone may move/consume the item one tick before the block
+        // tracker observes the placement. Rechecking inventory during that gap
+        // used to interrupt placement with a fresh container craft, producing a
+        // rapid 2x2/3x3 screen storm and never allowing the block update to land.
+        if (_placeTask.isActive() && !_placeTask.isFinished(mod)) {
+            setDebugState("Finishing active container placement");
             return _placeTask;
         }
 
@@ -92,7 +96,10 @@ public abstract class DoStuffInContainerTask extends Task implements ITaskUsesCo
             nearest = Optional.of(override);
         } else {
             // Track nearest container
-            nearest = mod.getBlockTracker().getNearestTracking(currentPos, blockPos -> WorldHelper.canReach(mod, blockPos), _containerBlocks);
+            nearest = mod.getBlockTracker().getNearestTracking(currentPos,
+                    blockPos -> WorldHelper.canReach(mod, blockPos)
+                            && isContainerBlockAt(mod, blockPos),
+                    _containerBlocks);
         }
         if (nearest.isEmpty()) {
             // If all else fails, trust our placed task directly.
@@ -156,6 +163,18 @@ public abstract class DoStuffInContainerTask extends Task implements ITaskUsesCo
         }
         return _openTableTask;
         //return new GetToBlockTask(nearest, true);
+    }
+
+    /** True when the world still has one of our target container blocks at the
+     *  given position. Guards against walking to a stale tracker entry whose
+     *  block was broken or moved since the last scan. */
+    private boolean isContainerBlockAt(Belfegor mod, BlockPos pos) {
+        if (pos == null || mod.getWorld() == null) return false;
+        net.minecraft.block.Block block = mod.getWorld().getBlockState(pos).getBlock();
+        for (net.minecraft.block.Block container : _containerBlocks) {
+            if (block == container) return true;
+        }
+        return false;
     }
 
     public ItemTarget getContainerTarget() {

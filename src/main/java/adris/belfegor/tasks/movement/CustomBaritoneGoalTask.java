@@ -5,6 +5,7 @@ import adris.belfegor.Debug;
 import adris.belfegor.tasksystem.ITaskRequiresGrounded;
 import adris.belfegor.tasksystem.Task;
 import adris.belfegor.util.helpers.BaritoneCompat;
+import adris.belfegor.util.helpers.DoorHelper;
 import adris.belfegor.util.helpers.WorldHelper;
 import adris.belfegor.util.progresscheck.MovementProgressChecker;
 import baritone.api.pathing.goals.Goal;
@@ -63,14 +64,15 @@ public abstract class CustomBaritoneGoalTask extends Task implements ITaskRequir
     }
 
     private boolean isAnnoying(Belfegor mod, BlockPos pos) {
-        for (Block AnnoyingBlocks : annoyingBlocks) {
-            return mod.getWorld().getBlockState(pos).getBlock() == AnnoyingBlocks ||
-                    mod.getWorld().getBlockState(pos).getBlock() instanceof DoorBlock ||
-                    mod.getWorld().getBlockState(pos).getBlock() instanceof FenceBlock ||
-                    mod.getWorld().getBlockState(pos).getBlock() instanceof FenceGateBlock ||
-                    mod.getWorld().getBlockState(pos).getBlock() instanceof FlowerBlock;
+        if (mod == null || mod.getWorld() == null) return false;
+        Block block = mod.getWorld().getBlockState(pos).getBlock();
+        for (Block annoyingBlock : annoyingBlocks) {
+            if (block == annoyingBlock) return true;
         }
-        return false;
+        return block instanceof DoorBlock
+                || block instanceof FenceBlock
+                || block instanceof FenceGateBlock
+                || block instanceof FlowerBlock;
     }
 
     private BlockPos stuckInBlock(Belfegor mod) {
@@ -134,6 +136,13 @@ public abstract class CustomBaritoneGoalTask extends Task implements ITaskRequir
         if (!_checker.check(mod) || !stuckCheck.check(mod)) {
             BlockPos blockStuck = stuckInBlock(mod);
             if (blockStuck != null) {
+                // A player opens doors rather than shimmying against them.
+                if (DoorHelper.tryOpenBlockedDoor(mod, blockStuck)) {
+                    setDebugState("Opening blocked door");
+                    _checker.reset();
+                    stuckCheck.reset();
+                    return null;
+                }
                 _unstuckTask = getFenceUnstuckTask();
                 return _unstuckTask;
             }
@@ -186,6 +195,15 @@ public abstract class CustomBaritoneGoalTask extends Task implements ITaskRequir
             return;
         }
         mod.getClientBaritone().getPathingBehavior().forceCancel();
+        // forceCancel stops the process but does not reliably clear the
+        // interaction manager's current mining target.  A completed movement
+        // could therefore keep CLICK_LEFT pressed while the next placement
+        // task looked down, mining the support it had just repaired.
+        mod.getClientBaritone().getInputOverrideHandler()
+                .setInputForceState(Input.CLICK_LEFT, false);
+        if (mod.getController() != null) {
+            mod.getController().cancelBlockBreaking();
+        }
     }
 
     protected abstract Goal newGoal(Belfegor mod);

@@ -32,6 +32,13 @@ import java.util.Set;
  */
 public class OverflowInventoryTask extends Task implements ITaskCanForce {
 
+    // Direct container tasks do not own a movement watchdog. Restrict them to
+    // genuinely local camp storage; a remote construction site can otherwise
+    // spend minutes trying to return to a chest behind unfinished walls. The
+    // fallback StoreInAnyContainerTask has bounded local scanning, progress
+    // recovery, and deterministic emergency-chest placement.
+    private static final int MAX_READY_STORAGE_DISTANCE = 12;
+
     private final int _desiredFreeSlots;
     private final ItemTarget[] _protect;
     private Task _delegate;
@@ -82,7 +89,15 @@ public class OverflowInventoryTask extends Task implements ITaskCanForce {
 
     @Override
     public boolean isFinished(Belfegor mod) {
+        // A transfer can make the requested number of inventory slots free on
+        // the same tick that its container screen is still owned by the store
+        // delegate.  Do not report completion until that delegate has been
+        // stopped cleanly: its onStop closes the owned screen and releases the
+        // transaction.  Without this hand-off, the caller can open/close its
+        // own screen while the store task is still clicking the chest.
+        boolean delegateReleased = _delegate == null || _delegate.stopped();
         return StorageHelper.getItemStackInCursorSlot().isEmpty()
+                && delegateReleased
                 && (freeSlots(mod) >= _desiredFreeSlots || findSurplus(mod).length == 0);
     }
 
@@ -165,21 +180,23 @@ public class OverflowInventoryTask extends Task implements ITaskCanForce {
         BlockPos home = resolveHome(mod);
         Optional<BlockPos> baseStorage = BaseStorageMemory.getInstance()
                 .bestChest(mod, home, dimension)
+                .filter(pos -> pos.isWithinDistance(mod.getPlayer().getPos(), MAX_READY_STORAGE_DISTANCE))
                 .filter(pos -> mod.getWorld().getBlockState(pos).getBlock() == Blocks.CHEST);
         if (baseStorage.isPresent()) return baseStorage;
 
         Optional<BlockPos> remembered = BaseMemory.getInstance()
-                .findNearestModule(mod.getPlayer().getBlockPos(), dimension, "construction_staging_chest")
+                .findNearestModule(home, dimension, "construction_staging_chest")
                 .or(() -> BaseMemory.getInstance()
-                        .findNearestModule(mod.getPlayer().getBlockPos(), dimension, "construction_staging"))
+                        .findNearestModule(home, dimension, "construction_staging"))
                 .map(module -> new BlockPos(module.x, module.y, module.z))
+                .filter(pos -> pos.isWithinDistance(mod.getPlayer().getPos(), MAX_READY_STORAGE_DISTANCE))
                 .filter(pos -> mod.getWorld().getBlockState(pos).getBlock() == Blocks.CHEST);
         if (remembered.isPresent()) return remembered;
 
         return BaseMemory.getInstance()
                 .baseAt(home, dimension)
-                .or(() -> BaseMemory.getInstance().nearestBase(mod.getPlayer().getBlockPos(), dimension))
                 .map(base -> base.center().add(2, 0, -2))
+                .filter(pos -> pos.isWithinDistance(mod.getPlayer().getPos(), MAX_READY_STORAGE_DISTANCE))
                 .filter(pos -> mod.getWorld().getBlockState(pos).getBlock() == Blocks.CHEST);
     }
 

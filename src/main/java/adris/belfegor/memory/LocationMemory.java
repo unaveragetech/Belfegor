@@ -101,6 +101,22 @@ public class LocationMemory {
         _dirty = true;
     }
 
+    /** Removes every remembered location (any category) near the given point. */
+    public int forgetNear(BlockPos center, String dimension, double radius) {
+        if (center == null) return 0;
+        double radiusSq = Math.max(0, radius) * Math.max(0, radius);
+        int removed = 0;
+        for (List<RememberedLocation> list : _locations.values()) {
+            int before = list.size();
+            list.removeIf(loc -> loc != null
+                    && (dimension == null || dimension.isBlank() || dimension.equals(loc.dimension))
+                    && loc.distanceTo(center.getX(), center.getY(), center.getZ()) <= radiusSq);
+            removed += before - list.size();
+        }
+        if (removed > 0) _dirty = true;
+        return removed;
+    }
+
     public Optional<RememberedLocation> getNearest(String category, double px, double py, double pz, String dimension) {
         List<RememberedLocation> list = _locations.get(category);
         if (list == null || list.isEmpty()) return Optional.empty();

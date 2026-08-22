@@ -133,7 +133,7 @@ public abstract class AbstractDoToClosestObjectTask<T> extends Task {
                             double maybeClosestDistance = getPos(mod, newClosest).squaredDistanceTo(mod.getPlayer().getPos());
                             // Switch if new target is closer (better heuristic AND within distance factor)
                             if (maybeReAttempt.getHeuristicValue() < h.getHeuristicValue()
-                                    && maybeClosestDistance < maybeReAttempt.getClosestDistanceSqr() * DISTANCE_SWITCH_FACTOR) {
+                                    && maybeClosestDistance < closestDistanceSqr * DISTANCE_SWITCH_FACTOR) {
                                 setDebugState("Retrying old heuristic!");
                                 _currentlyPursuing = newClosest;
                                 maybeReAttempt.updateDistance(maybeClosestDistance);

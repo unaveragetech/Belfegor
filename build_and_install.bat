@@ -47,14 +47,27 @@ if %ERRORLEVEL% EQU 0 (
     echo Copying new mod file...
     copy /Y "!MOD_PATH!" "!MODS_DIR!\"
     if !ERRORLEVEL! EQU 0 (
+        :: Verify the installed copy is byte-identical to the built jar so a
+        :: torn copy (locked file, antivirus, disk hiccup) can never cause a
+        :: "invalid LOC header" crash when Minecraft loads a class from it.
+        for /f "tokens=*" %%h in ('powershell -NoProfile -ExecutionPolicy Bypass -Command "(Get-FileHash -Algorithm SHA256 -LiteralPath '!MOD_PATH!').Hash.ToLowerInvariant()"') do set "SRC_SHA256=%%h"
+        for /f "tokens=*" %%h in ('powershell -NoProfile -ExecutionPolicy Bypass -Command "(Get-FileHash -Algorithm SHA256 -LiteralPath '!MODS_DIR!\!MOD_NAME!').Hash.ToLowerInvariant()"') do set "DST_SHA256=%%h"
+        if not "!SRC_SHA256!"=="!DST_SHA256!" (
+            echo.
+            echo ERROR: installed copy hash mismatch - the mod jar may be corrupted!
+            echo   source: !SRC_SHA256!
+            echo   dest:   !DST_SHA256!
+            del gradle_output.txt
+            pause
+            exit /b 1
+        )
         echo.
         echo Installation successful! 
         echo Installed: !MOD_NAME!
         echo Location: !MODS_DIR!
-        for /f "tokens=*" %%h in ('powershell -NoProfile -ExecutionPolicy Bypass -Command "(Get-FileHash -Algorithm SHA256 -LiteralPath '!MOD_PATH!').Hash.ToLowerInvariant()"') do set "MOD_SHA256=%%h"
         echo.
         echo Jar SHA-256 for this build:
-        echo   MOD_SHA256=!MOD_SHA256!
+        echo   MOD_SHA256=!SRC_SHA256!
         echo.
         
         :: Clean up

@@ -29,9 +29,13 @@ import net.minecraft.util.math.BlockPos;
 public class BuildSupplyPreflightTask extends Task {
 
     private static final int MIN_FREE_SLOTS = 8;
-    private static final int MIN_STARTER_BUILDING_BLOCKS = 512;
-    private static final int MIN_BUILDING_BLOCKS = 1536;
-    private static final int MIN_STAGED_BUILDING_BLOCKS = 768;
+    // A player builds incrementally: start with a working shelter, then expand
+    // as materials come in. The region builder gathers working batches lazily,
+    // so preflighting a huge cobblestone reserve only bloats the inventory and
+    // delays the first walls. These reserves are intentionally modest.
+    private static final int MIN_STARTER_BUILDING_BLOCKS = 192;
+    private static final int MIN_BUILDING_BLOCKS = 384;
+    private static final int MIN_STAGED_BUILDING_BLOCKS = 256;
     private static final int BUILDING_BLOCK_SHORTAGE_TOLERANCE = 64;
     private static final int MIN_DIRT = 96;
     private static final int MAX_DIRT_IN_INVENTORY_AFTER_STAGING = 128;
@@ -170,7 +174,23 @@ public class BuildSupplyPreflightTask extends Task {
                 if (surplus != null) yield surplus;
                 if (OverflowInventoryTask.freeSlots(mod) < MIN_FREE_SLOTS) {
                     setDebugState("Freeing build inventory space into staging/overflow chest");
-                    yield cache(mod, new OverflowInventoryTask(MIN_FREE_SLOTS, protectedConstructionTargets()));
+                    Task overflow = cache(mod,
+                            new OverflowInventoryTask(MIN_FREE_SLOTS, protectedConstructionTargets()));
+                    // Overflow may finish below the preferred slot count when every
+                    // remaining stack is protected construction material. Treat that
+                    // as the best safe result instead of recreating an already-finished
+                    // child forever or discarding supplies required by later rooms.
+                    if (overflow.isFinished(mod)) {
+                        int available = OverflowInventoryTask.freeSlots(mod);
+                        adris.belfegor.debug.DebugLogger.getInstance().logImmediate("OVERFLOW",
+                                "preflight accepted protected-inventory limit free=" + available
+                                        + " preferred=" + MIN_FREE_SLOTS
+                                        + " home=" + _home.toShortString());
+                        rememberStaging("ready_protected_limit_free_slots=" + available);
+                        next(Phase.DONE);
+                        yield null;
+                    }
+                    yield overflow;
                 }
                 rememberStaging("ready_free_slots=" + OverflowInventoryTask.freeSlots(mod));
                 next(Phase.DONE);

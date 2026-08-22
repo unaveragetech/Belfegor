@@ -22,6 +22,7 @@ import net.minecraft.util.math.BlockPos;
  */
 public class SurfaceCobblestoneTask extends Task {
     private static final int RADIUS = 36;
+    private static final int SCAN_INTERVAL_TICKS = 10;
     private static final int MAX_DEPTH_BELOW_FEET = 5;
     private static final int MAX_COVER_ABOVE_FEET = 2;
     private static final net.minecraft.item.Item[] SHOVELS = {
@@ -53,6 +54,7 @@ public class SurfaceCobblestoneTask extends Task {
     private BlockPos _activeTarget;
     private int _activeTargetTicks;
     private int _failedScans;
+    private int _nextScanTick;
 
     public SurfaceCobblestoneTask(Belfegor mod) {
         _startCobble = mod.getItemStorage().getItemCount(Items.COBBLESTONE);
@@ -63,6 +65,7 @@ public class SurfaceCobblestoneTask extends Task {
         _activeTarget = null;
         _activeTargetTicks = 0;
         _failedScans = 0;
+        _nextScanTick = Integer.MIN_VALUE;
     }
 
     @Override
@@ -77,8 +80,10 @@ public class SurfaceCobblestoneTask extends Task {
         }
 
         BlockPos target = getLockedTarget(mod);
-        if (target == null) {
+        int tick = mod.getPlayer() == null ? WorldHelper.getTicks() : mod.getPlayer().age;
+        if (target == null && tick >= _nextScanTick) {
             target = findSurfaceStoneOrCover(mod);
+            _nextScanTick = tick + SCAN_INTERVAL_TICKS;
         }
         if (target != null) {
             if (!_activeTargetEquals(target)) {

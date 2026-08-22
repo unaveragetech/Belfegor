@@ -4,6 +4,7 @@ import adris.belfegor.Belfegor;
 import adris.belfegor.tasksystem.ITaskRequiresGrounded;
 import adris.belfegor.tasksystem.Task;
 import adris.belfegor.util.baritone.GoalFollowEntity;
+import adris.belfegor.util.helpers.DoorHelper;
 import adris.belfegor.util.helpers.WorldHelper;
 import adris.belfegor.util.progresscheck.MovementProgressChecker;
 import baritone.api.utils.input.Input;
@@ -136,6 +137,12 @@ public class GetToEntityTask extends Task implements ITaskRequiresGrounded {
         if (!_progress.check(mod) || !stuckCheck.check(mod)) {
             BlockPos blockStuck = stuckInBlock(mod);
             if (blockStuck != null) {
+                if (DoorHelper.tryOpenBlockedDoor(mod, blockStuck)) {
+                    setDebugState("Opening blocked door");
+                    _progress.reset();
+                    stuckCheck.reset();
+                    return null;
+                }
                 _unstuckTask = getFenceUnstuckTask();
                 return _unstuckTask;
             }

@@ -9,6 +9,7 @@ import adris.belfegor.tasksystem.ITaskRequiresGrounded;
 import adris.belfegor.tasksystem.Task;
 import adris.belfegor.util.ItemTarget;
 import adris.belfegor.util.MiningRequirement;
+import adris.belfegor.util.helpers.DoorHelper;
 import adris.belfegor.util.helpers.StlHelper;
 import adris.belfegor.util.helpers.StorageHelper;
 import adris.belfegor.util.helpers.WorldHelper;
@@ -163,6 +164,12 @@ public class PickupDroppedItemTask extends AbstractDoToClosestObjectTask<ItemEnt
         if (!_progressChecker.check(mod) || !stuckCheck.check(mod)) {
             BlockPos blockStuck = stuckInBlock(mod);
             if (blockStuck != null) {
+                if (DoorHelper.tryOpenBlockedDoor(mod, blockStuck)) {
+                    setDebugState("Opening blocked door");
+                    _progressChecker.reset();
+                    stuckCheck.reset();
+                    return null;
+                }
                 _unstuckTask = getFenceUnstuckTask();
                 return _unstuckTask;
             }

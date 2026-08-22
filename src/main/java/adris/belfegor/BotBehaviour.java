@@ -224,6 +224,12 @@ public class BotBehaviour {
         current().applyState();
     }
 
+    /** Controls Baritone's global permission to mine while pathing. */
+    public void setAllowBreaking(boolean allow) {
+        current().allowBreaking = allow;
+        current().applyState();
+    }
+
     public void setBlockPlacePenalty(double penalty) {
         current().blockPlacePenalty = penalty;
         current().applyState();
@@ -299,6 +305,7 @@ public class BotBehaviour {
         public boolean mineScanDroppedItems;
         public boolean swimThroughLava;
         public boolean allowDiagonalAscend;
+        public boolean allowBreaking;
         //public boolean preferredStairs;
         public double blockPlacePenalty;
         public double blockBreakAdditionalPenalty;
@@ -376,6 +383,7 @@ public class BotBehaviour {
             mineScanDroppedItems = s.mineScanDroppedItems.value;
             swimThroughLava = s.assumeWalkOnLava.value;
             allowDiagonalAscend = s.allowDiagonalAscend.value;
+            allowBreaking = s.allowBreak.value;
             blockPlacePenalty = s.blockPlacementPenalty.value;
             blockBreakAdditionalPenalty = s.blockBreakAdditionalPenalty.value;
             //preferredStairs = s.allowDownward.value;
@@ -414,6 +422,7 @@ public class BotBehaviour {
             s.followOffsetDistance.value = followOffsetDistance;
             s.mineScanDroppedItems.value = mineScanDroppedItems;
             s.allowDiagonalAscend.value = allowDiagonalAscend;
+            s.allowBreak.value = allowBreaking;
             s.blockPlacementPenalty.value = blockPlacePenalty;
             s.blockBreakAdditionalPenalty.value = blockBreakAdditionalPenalty;
 

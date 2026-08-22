@@ -7,11 +7,14 @@ import adris.belfegor.commandsystem.CommandException;
 import adris.belfegor.memory.BaseMemory;
 import adris.belfegor.memory.LocationMemory;
 import adris.belfegor.tasks.movement.GetToBlockTask;
+import adris.belfegor.tasks.movement.RouteToBlockTask;
+import adris.belfegor.tasksystem.Task;
 import adris.belfegor.util.Dimension;
 import adris.belfegor.util.helpers.WorldHelper;
 import net.minecraft.util.math.BlockPos;
 
 import java.util.Arrays;
+import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 
@@ -40,14 +43,15 @@ public class HomeCommand extends Command {
                     .findNearestModule(anchor, dimension, room);
             if (module.isPresent()) {
                 BaseMemory.BaseModule found = module.get();
-                mod.runUserTask(new GetToBlockTask(found.center(), parseDimension(dimension)), this::finish);
+                mod.runUserTask(routeTo(mod, found.center(), parseDimension(dimension)), this::finish);
                 return;
             }
 
             Optional<LocationMemory.RememberedLocation> location = LocationMemory.getInstance()
                     .getNearest("home_room_" + room, anchor.getX(), anchor.getY(), anchor.getZ(), dimension);
             if (location.isPresent()) {
-                mod.runUserTask(new GetToBlockTask(location.get().toBlockPos(), parseDimension(location.get().dimension)), this::finish);
+                mod.runUserTask(routeTo(mod, location.get().toBlockPos(),
+                        parseDimension(location.get().dimension)), this::finish);
                 return;
             }
             throw new CommandException("No remembered base room found for `" + room + "`. Try @home, @home farmland, @home storage, or @build " + room + ".");
@@ -58,17 +62,19 @@ public class HomeCommand extends Command {
                 .or(() -> LocationMemory.getInstance()
                         .getNearest("home_room_entrance", anchor.getX(), anchor.getY(), anchor.getZ(), dimension));
         if (door.isPresent()) {
-            mod.runUserTask(new GetToBlockTask(door.get().toBlockPos(), parseDimension(door.get().dimension)), this::finish);
+            mod.runUserTask(routeTo(mod, door.get().toBlockPos(),
+                    parseDimension(door.get().dimension)), this::finish);
             return;
         }
 
         if (configured != null) {
-            mod.runUserTask(new GetToBlockTask(configured), this::finish);
+            mod.runUserTask(routeTo(mod, configured, null), this::finish);
             return;
         }
         Optional<BaseMemory.BaseRecord> base = BaseMemory.getInstance().nearestBase(playerPos, dimension);
         if (base.isPresent()) {
-            mod.runUserTask(new GetToBlockTask(base.get().center(), parseDimension(base.get().dimension)), this::finish);
+            mod.runUserTask(routeTo(mod, base.get().center(),
+                    parseDimension(base.get().dimension)), this::finish);
             return;
         }
         throw new CommandException("No home base has been established yet. Run @camp or @build full here to seed a base.");
@@ -98,5 +104,26 @@ public class HomeCommand extends Command {
         return "Routes Belfegor to the locked remembered home base, its doorway, or to a room center. "
                 + "Rooms are resolved relative to the configured home instead of the player's nearest base, "
                 + "so long-running builds do not drift to another camp.";
+    }
+
+    /**
+     * Routes to a home/room target without breaking blocks when the player or
+     * the target is inside a remembered base, so the bot uses its doors and
+     * halls instead of mining through its own walls.
+     */
+    private static Task routeTo(Belfegor mod, BlockPos target, Dimension dimension) {
+        if (mod == null || mod.getPlayer() == null || target == null) {
+            return new GetToBlockTask(target, dimension);
+        }
+        String currentDimension = WorldHelper.getCurrentDimension().name();
+        List<BlockPos> waypoints = BaseMemory.getInstance()
+                .routeWaypoints(mod.getPlayer().getBlockPos(), target, currentDimension);
+        if (!waypoints.isEmpty()) return new RouteToBlockTask(waypoints, target);
+        GetToBlockTask task = new GetToBlockTask(target, dimension);
+        if (BaseMemory.getInstance().isInsideBase(mod.getPlayer().getBlockPos(), currentDimension, 4)
+                || BaseMemory.getInstance().isInsideBase(target, currentDimension, 4)) {
+            return task.withoutBreaking();
+        }
+        return task;
     }
 }

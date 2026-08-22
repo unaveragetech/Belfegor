@@ -4,12 +4,16 @@ import adris.belfegor.Belfegor;
 import adris.belfegor.Settings;
 import adris.belfegor.memory.BaseMemory;
 import adris.belfegor.tasks.movement.GetToBlockTask;
+import adris.belfegor.tasks.movement.RouteToBlockTask;
 import adris.belfegor.tasksystem.Task;
+import adris.belfegor.util.helpers.ExternalAutomationGuard;
 import adris.belfegor.util.helpers.WorldHelper;
 import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
 import net.minecraft.util.math.BlockPos;
 
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -24,6 +28,9 @@ import java.util.Optional;
 public class BuildFullBaseTask extends Task {
 
     private static final int DEFAULT_RADIUS = 12;
+    private static final int MAX_DETAILED_SITE_CANDIDATES = 16;
+
+    private record SiteCandidate(BlockPos position, int quickScore) {}
 
     private enum Phase {
         ORIENT_HOME,
@@ -33,6 +40,7 @@ public class BuildFullBaseTask extends Task {
         STAGING_PREFLIGHT,
         STORAGE,
         WORKSHOP,
+        ARMORY,
         FARMLAND,
         MOBFARM,
         REPAIR_VALIDATE,
@@ -44,6 +52,7 @@ public class BuildFullBaseTask extends Task {
             "core",
             "storage",
             "workshop",
+            "armory",
             "farmland",
             "mob_farm"
     );
@@ -57,6 +66,7 @@ public class BuildFullBaseTask extends Task {
     private Task _activeTask;
     private int _validationIndex;
     private boolean _restartExistingBase;
+    private ExternalAutomationGuard.Lease _externalPrinterLease;
 
     public BuildFullBaseTask(int radius, boolean setHomeHere) {
         this(radius, setHomeHere, false);
@@ -70,6 +80,7 @@ public class BuildFullBaseTask extends Task {
 
     @Override
     protected void onStart(Belfegor mod) {
+        _externalPrinterLease = ExternalAutomationGuard.suspendLitematicaPrinter("build-full-base");
         BlockPos playerPos = mod.getPlayer() == null ? BlockPos.ORIGIN : mod.getPlayer().getBlockPos();
         BlockPos configured = mod.getModSettings().getHomeBasePosition();
         _dimension = WorldHelper.getCurrentDimension().name();
@@ -104,6 +115,17 @@ public class BuildFullBaseTask extends Task {
                         : _restartExistingBase ? "full_base_restart_orienting" : "full_base_started");
         BaseMemory.getInstance().save();
         _phase = (_resume || _restartExistingBase) ? Phase.ORIENT_HOME : Phase.SUPPLY_PREFLIGHT;
+        // Resume an interrupted full-base run from its remembered phase.
+        BaseMemory.getInstance().loadBuildPhase(_home, _dimension, "fullbase").ifPresent(saved -> {
+            try {
+                Phase restored = Phase.valueOf(saved);
+                if (restored != Phase.DONE && restored != Phase.ORIENT_HOME) {
+                    _phase = restored;
+                }
+            } catch (Exception ignored) {
+            }
+        });
+        persistPhase();
         _activeTask = null;
         _validationIndex = 0;
     }
@@ -112,20 +134,27 @@ public class BuildFullBaseTask extends Task {
         if (mod.getWorld() == null) return origin;
         BlockPos best = normalizeBuildY(mod, origin);
         int bestScore = scoreBuildSite(mod, best) + estimateCampsiteClearBurden(mod, best) * 20;
-        int search = Math.max(72, Math.min(160, _radius + 128));
-        for (int dx = -search; dx <= search; dx += 6) {
-            for (int dz = -search; dz <= search; dz += 6) {
+        int search = Math.max(48, Math.min(96, _radius + 64));
+        List<SiteCandidate> candidates = new ArrayList<>();
+        for (int dx = -search; dx <= search; dx += 8) {
+            for (int dz = -search; dz <= search; dz += 8) {
                 BlockPos surface = findSurfaceNear(mod, origin.add(dx, 0, dz), origin.getY());
                 if (surface == null) continue;
-                BlockPos normalized = normalizeBuildY(mod, surface);
-                int score = scoreBuildSite(mod, normalized)
-                        + estimateCampsiteClearBurden(mod, normalized) * 20
-                        + (int) Math.sqrt(surface.getSquaredDistance(origin));
+                candidates.add(new SiteCandidate(surface, quickSiteScore(mod, surface, origin)));
+            }
+        }
+        candidates.sort(Comparator.comparingInt(SiteCandidate::quickScore));
+        int detailed = Math.min(MAX_DETAILED_SITE_CANDIDATES, candidates.size());
+        for (int i = 0; i < detailed; i++) {
+            BlockPos surface = candidates.get(i).position();
+            BlockPos normalized = normalizeBuildY(mod, surface);
+            int score = scoreBuildSite(mod, normalized)
+                    + estimateCampsiteClearBurden(mod, normalized) * 20
+                    + (int) Math.sqrt(surface.getSquaredDistance(origin));
                 if (score < bestScore) {
                     bestScore = score;
                     best = normalized;
                 }
-            }
         }
         BlockPos normalized = normalizeBuildY(mod, best);
         if (!normalized.equals(origin)) {
@@ -135,6 +164,28 @@ public class BuildFullBaseTask extends Task {
                             + ";buildY=" + normalized.getY() + ";score=" + bestScore);
         }
         return normalized;
+    }
+
+    private int quickSiteScore(Belfegor mod, BlockPos center, BlockPos origin) {
+        int score = (int) Math.sqrt(center.getSquaredDistance(origin));
+        int sample = Math.min(_radius, 12);
+        for (int dx = -sample; dx <= sample; dx += 6) {
+            for (int dz = -sample; dz <= sample; dz += 6) {
+                BlockPos surface = findSurfaceNear(mod, center.add(dx, 0, dz), center.getY());
+                if (surface == null) {
+                    score += 80;
+                    continue;
+                }
+                int delta = Math.abs(surface.getY() - center.getY());
+                score += delta * delta * 8;
+                Block floor = mod.getWorld().getBlockState(surface.down()).getBlock();
+                if (floor == Blocks.WATER || floor == Blocks.LAVA) score += 200;
+                Block feet = mod.getWorld().getBlockState(surface).getBlock();
+                Block head = mod.getWorld().getBlockState(surface.up()).getBlock();
+                if (isTreeBlock(feet) || isTreeBlock(head)) score += 120;
+            }
+        }
+        return score;
     }
 
     private BlockPos findSurfaceNear(Belfegor mod, BlockPos column, int originY) {
@@ -254,25 +305,30 @@ public class BuildFullBaseTask extends Task {
                     new BuildBaseValidationTask(),
                     "Restarting partial base: validating existing rooms before new build work");
             case SUPPLY_PREFLIGHT -> runPhase(mod, Phase.CAMP,
-                    new BuildSupplyPreflightTask(_home, _radius, false, false),
+                    new BuildSupplyPreflightTask(_home, _radius, false, false,
+                            !hasCompleteExpansion(BuildBaseExpansionTask.RoomType.FARMLAND)),
                     "Preparing full base supplies before campsite construction");
             case CAMP -> runPhase(mod, Phase.STAGING_PREFLIGHT,
                     new BuildCampsiteTask(_home, _radius),
                     "Building full base core campsite");
             case STAGING_PREFLIGHT -> runPhase(mod, Phase.STORAGE,
-                    new BuildSupplyPreflightTask(_home, _radius, true, true),
+                    new BuildSupplyPreflightTask(_home, _radius, true, true,
+                            !hasCompleteExpansion(BuildBaseExpansionTask.RoomType.FARMLAND)),
                     "Preparing central construction staging chest and inventory space");
-            case STORAGE -> runPhase(mod, Phase.WORKSHOP,
-                    new BuildBaseExpansionTask(BuildBaseExpansionTask.RoomType.STORAGE, "storage"),
-                    "Building full base storage room");
-            case WORKSHOP -> runPhase(mod, Phase.FARMLAND,
-                    new BuildBaseExpansionTask(BuildBaseExpansionTask.RoomType.WORKSHOP, "workshop"),
+            case STORAGE -> runExpansionPhase(mod, Phase.WORKSHOP,
+                    BuildBaseExpansionTask.RoomType.STORAGE, "storage",
+                    "Building full base bulk storage room");
+            case WORKSHOP -> runExpansionPhase(mod, Phase.ARMORY,
+                    BuildBaseExpansionTask.RoomType.WORKSHOP, "workshop",
                     "Building full base workshop");
-            case FARMLAND -> runPhase(mod, Phase.MOBFARM,
-                    new BuildBaseExpansionTask(BuildBaseExpansionTask.RoomType.FARMLAND, "farmland"),
+            case ARMORY -> runExpansionPhase(mod, Phase.FARMLAND,
+                    BuildBaseExpansionTask.RoomType.ARMORY, "armory",
+                    "Building full base armory and reserve-gear storage");
+            case FARMLAND -> runExpansionPhase(mod, Phase.MOBFARM,
+                    BuildBaseExpansionTask.RoomType.FARMLAND, "farmland",
                     "Building full base hydrated crop farm");
-            case MOBFARM -> runPhase(mod, Phase.REPAIR_VALIDATE,
-                    new BuildBaseExpansionTask(BuildBaseExpansionTask.RoomType.MOBFARM, "mob_farm"),
+            case MOBFARM -> runExpansionPhase(mod, Phase.REPAIR_VALIDATE,
+                    BuildBaseExpansionTask.RoomType.MOBFARM, "mob_farm",
                     "Building full base roofed mob farm");
             case REPAIR_VALIDATE -> runPhase(mod, Phase.VALIDATE_ROUTES,
                     new BuildBaseValidationTask(),
@@ -289,10 +345,11 @@ public class BuildFullBaseTask extends Task {
             BaseMemory.getInstance().save();
             _activeTask = null;
             _phase = Phase.RESTART_VALIDATE;
+            persistPhase();
             return null;
         }
         if (_activeTask == null || _activeTask.stopped() || _activeTask.isFinished(mod)) {
-            _activeTask = new GetToBlockTask(_home);
+            _activeTask = GetToBlockTask.baseAware(mod, _home);
         }
         setDebugState((_resume ? "Resuming" : "Restarting")
                 + " partial base: walking to remembered home room " + _home.toShortString());
@@ -308,7 +365,7 @@ public class BuildFullBaseTask extends Task {
                                 : next == Phase.VALIDATE_ROUTES ? "full_base_repaired"
                                 : "full_base_" + next.name().toLowerCase(Locale.ROOT));
                 BaseMemory.getInstance().save();
-                _phase = next;
+                setPhase(next);
                 return null;
             }
             _activeTask = phaseTask;
@@ -317,11 +374,36 @@ public class BuildFullBaseTask extends Task {
         return _activeTask;
     }
 
+    private Task runExpansionPhase(Belfegor mod, Phase next,
+                                   BuildBaseExpansionTask.RoomType type,
+                                   String name, String debug) {
+        if (_activeTask == null && hasCompleteExpansion(type)) {
+            BaseMemory.getInstance().rememberInspection(_home, _dimension, name,
+                    "full_base_phase", 1, 0, 0, 1, "reused",
+                    "existing complete connected " + type.name().toLowerCase(Locale.ROOT)
+                            + " room reused; no duplicate expansion created");
+            BaseMemory.getInstance().save();
+            setPhase(next);
+            return null;
+        }
+        return runPhase(mod, next, new BuildBaseExpansionTask(type, name), debug);
+    }
+
+    private boolean hasCompleteExpansion(BuildBaseExpansionTask.RoomType type) {
+        Optional<BaseMemory.BaseRecord> base = BaseMemory.getInstance().baseAt(_home, _dimension)
+                .or(() -> BaseMemory.getInstance().nearestBase(_home, _dimension));
+        if (base.isEmpty()) return false;
+        String expected = type.name().toLowerCase(Locale.ROOT);
+        return base.get().modules.stream()
+                .anyMatch(module -> expected.equals(normalize(module.type))
+                        && module.parent != null && !module.parent.isBlank()
+                        && BaseMemory.getInstance().moduleComplete(module));
+    }
+
     private Task validateRoutes(Belfegor mod) {
         while (_validationIndex < VALIDATION_TARGETS.size()) {
             String target = VALIDATION_TARGETS.get(_validationIndex);
-            Optional<BaseMemory.BaseModule> module = BaseMemory.getInstance()
-                    .findNearestModule(_home, _dimension, target);
+            Optional<BaseMemory.BaseModule> module = validationModule(target);
             if (module.isEmpty()) {
                 BaseMemory.getInstance().rememberInspection(_home, _dimension, target, "route_validation",
                         1, 0, 1, 0, "missing", "no remembered module center");
@@ -338,15 +420,55 @@ public class BuildFullBaseTask extends Task {
                 continue;
             }
             if (_activeTask == null || _activeTask.stopped() || _activeTask.isFinished(mod)) {
-                _activeTask = new GetToBlockTask(center);
+                List<BlockPos> waypoints = BaseMemory.getInstance()
+                        .routeWaypoints(mod.getPlayer().getBlockPos(), center, _dimension);
+                _activeTask = waypoints.isEmpty()
+                        ? GetToBlockTask.baseAware(mod, center)
+                        : new RouteToBlockTask(waypoints, center);
             }
             setDebugState("Validating route to full base room " + target + " at " + center.toShortString());
             return _activeTask;
         }
         BaseMemory.getInstance().rememberBase(_home, _dimension, _radius, 4, 5, "full_base_complete");
         BaseMemory.getInstance().save();
-        _phase = Phase.DONE;
+        setPhase(Phase.DONE);
         return null;
+    }
+
+    private void setPhase(Phase next) {
+        _phase = next;
+        persistPhase();
+    }
+
+    private void persistPhase() {
+        if (_home == null || _dimension == null) return;
+        if (_phase == Phase.DONE) {
+            BaseMemory.getInstance().clearBuildPhase(_home, _dimension, "fullbase");
+        } else {
+            BaseMemory.getInstance().rememberBuildPhase(_home, _dimension, "fullbase", _phase.name());
+        }
+        BaseMemory.getInstance().save();
+    }
+
+    private Optional<BaseMemory.BaseModule> validationModule(String target) {
+        Optional<BaseMemory.BaseRecord> base = BaseMemory.getInstance().baseAt(_home, _dimension)
+                .or(() -> BaseMemory.getInstance().nearestBase(_home, _dimension));
+        if (base.isEmpty()) return Optional.empty();
+        String query = normalize(target);
+        if (query.equals("core")) {
+            return base.get().modules.stream()
+                    .filter(module -> normalize(module.name).equals("core"))
+                    .findFirst();
+        }
+        return base.get().modules.stream()
+                .filter(module -> normalize(module.type).equals(query))
+                .filter(module -> module.parent != null && !module.parent.isBlank())
+                .filter(BaseMemory.getInstance()::moduleComplete)
+                .min(Comparator.comparingDouble(module -> module.center().getSquaredDistance(_home)));
+    }
+
+    private static String normalize(String value) {
+        return value == null ? "" : value.trim().toLowerCase(Locale.ROOT).replace(' ', '_');
     }
 
     @Override
@@ -359,6 +481,10 @@ public class BuildFullBaseTask extends Task {
 
     @Override
     protected void onStop(Belfegor mod, Task interruptTask) {
+        if (_externalPrinterLease != null) {
+            _externalPrinterLease.close();
+            _externalPrinterLease = null;
+        }
         _activeTask = null;
     }
 

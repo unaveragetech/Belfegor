@@ -3,6 +3,7 @@ package adris.belfegor.tasks.construction;
 import adris.belfegor.Belfegor;
 import adris.belfegor.Debug;
 import adris.belfegor.TaskCatalogue;
+import adris.belfegor.debug.DebugLogger;
 import adris.belfegor.memory.BaseMemory;
 import adris.belfegor.memory.BaseStorageMemory;
 import adris.belfegor.memory.LocationMemory;
@@ -13,18 +14,24 @@ import adris.belfegor.tasks.movement.RecoverToYLevelTask;
 import adris.belfegor.tasksystem.Task;
 import adris.belfegor.util.ItemTarget;
 import adris.belfegor.util.helpers.ItemHelper;
+import adris.belfegor.util.helpers.StorageHelper;
 import adris.belfegor.util.helpers.WorldHelper;
 import net.minecraft.block.Block;
 import net.minecraft.block.Blocks;
-import net.minecraft.item.Item;
+import net.minecraft.client.MinecraftClient;
 import net.minecraft.item.Items;
+import net.minecraft.util.ActionResult;
+import net.minecraft.util.Hand;
+import net.minecraft.util.hit.BlockHitResult;
 import net.minecraft.util.math.BlockPos;
 import net.minecraft.util.math.Direction;
+import net.minecraft.util.math.Vec3d;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * Builds and expands the @player home base.
@@ -55,6 +62,7 @@ public class BuildCampsiteTask extends Task {
         WALL,
         ROOMS,
         UTILITY,
+        DOORS,
         BED,
         DONE
     }
@@ -71,6 +79,9 @@ public class BuildCampsiteTask extends Task {
     private Task _activeTask;
     private boolean _bedSpawnClicked;
     private boolean _clickingBedToSetSpawn;
+    private int _doorPlacementCooldown;
+    private int _bedPlacementCooldown;
+    private int _bedPlacementAttempts;
 
     public BuildCampsiteTask(BlockPos home, int radius) {
         _home = home;
@@ -125,6 +136,8 @@ public class BuildCampsiteTask extends Task {
         _activeTask = null;
         _bedSpawnClicked = false;
         _clickingBedToSetSpawn = false;
+        _bedPlacementCooldown = 0;
+        _bedPlacementAttempts = 0;
         mod.getBehaviour().push();
         exportCurrentCoreSchematic();
         mod.getBehaviour().setAutoMLG(false);
@@ -137,9 +150,65 @@ public class BuildCampsiteTask extends Task {
                         && !isDoorway(pos)
                         && (Math.abs(pos.getX() - _home.getX()) == _radius
                         || Math.abs(pos.getZ() - _home.getZ()) == _radius));
-        mod.getBehaviour().avoidBlockBreaking(this::isCompletedBlueprintBlock);
+        mod.getBehaviour().avoidBlockBreaking(pos ->
+                isCompletedBlueprintBlock(pos) || isProtectedCampsiteFloor(pos));
         rememberBase("started");
         rememberRooms();
+        restorePhase(mod);
+    }
+
+    /**
+     * Continues an interrupted campsite build from the remembered phase. The
+     * saved phase is only trusted when its prerequisites are actually met in
+     * the world; otherwise the task falls back to the earliest unfinished
+     * phase, so a stale saved phase can never skip required construction.
+     */
+    private void restorePhase(Belfegor mod) {
+        Optional<String> saved = BaseMemory.getInstance()
+                .loadBuildPhase(_home, WorldHelper.getCurrentDimension().name(), "camp");
+        if (saved.isEmpty()) return;
+        Phase savedPhase;
+        try {
+            savedPhase = Phase.valueOf(saved.get());
+        } catch (Exception ignored) {
+            return;
+        }
+        _phase = savedPhase;
+        if (savedPhase.ordinal() >= Phase.FLOOR.ordinal() && !targetsClear(mod, _clearTargets)) {
+            _phase = Phase.CLEAR;
+        }
+        if (savedPhase.ordinal() >= Phase.WALL.ordinal() && !missingFloorTargets(mod).isEmpty()) {
+            _phase = Phase.FLOOR;
+        }
+        if (savedPhase.ordinal() >= Phase.ROOMS.ordinal() && countMissingCobblestone(mod, _wallTargets) > 0) {
+            _phase = Phase.WALL;
+        }
+        if (savedPhase.ordinal() >= Phase.UTILITY.ordinal() && countMissingCobblestone(mod, _roomTargets) > 0) {
+            _phase = Phase.ROOMS;
+        }
+        if (savedPhase.ordinal() >= Phase.DOORS.ordinal() && !utilitiesReady(mod)) {
+            _phase = Phase.UTILITY;
+        }
+        if (savedPhase.ordinal() >= Phase.BED.ordinal() && !entranceDoorsReady(mod)) {
+            _phase = Phase.DOORS;
+        }
+        if (_phase == Phase.DONE && !campsiteReady(mod)) {
+            _phase = Phase.BED;
+        }
+        persistPhase();
+    }
+
+    private boolean utilitiesReady(Belfegor mod) {
+        return mod.getWorld().getBlockState(_home.add(2, 0, 2)).getBlock() == Blocks.CRAFTING_TABLE
+                && mod.getWorld().getBlockState(_home.add(-2, 0, 2)).getBlock() == Blocks.FURNACE
+                && mod.getWorld().getBlockState(_home.add(2, 0, -2)).getBlock() == Blocks.CHEST;
+    }
+
+    private boolean campsiteReady(Belfegor mod) {
+        return entranceDoorsReady(mod)
+                && findCampBed(mod) != null
+                && countMissingCobblestone(mod, _wallTargets) == 0
+                && countMissingCobblestone(mod, _roomTargets) == 0;
     }
 
     private boolean isCompletedBlueprintBlock(BlockPos pos) {
@@ -152,6 +221,20 @@ public class BuildCampsiteTask extends Task {
         }
         return net.minecraft.client.MinecraftClient.getInstance().world
                 .getBlockState(pos).getBlock() == expected;
+    }
+
+    private boolean isProtectedCampsiteFloor(BlockPos pos) {
+        if (pos == null || pos.getY() != _home.getY() - 1 || modWorldUnavailable()) return false;
+        if (Math.abs(pos.getX() - _home.getX()) > _radius
+                || Math.abs(pos.getZ() - _home.getZ()) > _radius) {
+            return false;
+        }
+        Block block = MinecraftClient.getInstance().world.getBlockState(pos).getBlock();
+        return block != Blocks.AIR
+                && block != Blocks.CAVE_AIR
+                && block != Blocks.VOID_AIR
+                && block != Blocks.WATER
+                && block != Blocks.LAVA;
     }
 
     private boolean modWorldUnavailable() {
@@ -209,6 +292,26 @@ public class BuildCampsiteTask extends Task {
                 Task utility = placeUtilityBlocks(mod);
                 if (utility != null) return utility;
                 rememberBase("utility_complete");
+                nextPhase(Phase.DOORS);
+                return null;
+            }
+            case DOORS: {
+                Task returnToPlatform = returnToBuildPlatformIfDrifted(mod);
+                if (returnToPlatform != null) return returnToPlatform;
+                Task doors = placeEntranceDoors(mod);
+                if (doors != null) return doors;
+                // Direct controller placement returns null while the server is
+                // accepting the click. Do not interpret that as completion of
+                // the entire two-door phase. Re-enter this phase until both
+                // lower door blocks exist; placeEntranceDoors then records both
+                // fixtures as complete before we advance to the bed.
+                if (!entranceDoorsReady(mod)) {
+                    setDebugState("Waiting for both protected campsite entrance doors");
+                    return null;
+                }
+                rememberEntranceDoor(0, _home.add(_radius, 0, 0), "complete");
+                rememberEntranceDoor(1, _home.add(_radius, 0, 1), "complete");
+                rememberBase("doors_complete");
                 nextPhase(Phase.BED);
                 return null;
             }
@@ -248,23 +351,32 @@ public class BuildCampsiteTask extends Task {
     }
 
     private Task runCampsitePreflight(Belfegor mod) {
-        int requiredCobble = Math.max(512, _wallTargets.size() + _roomTargets.size() + 64);
+        int missingStructure = countMissingCobblestone(mod, _wallTargets)
+                + countMissingCobblestone(mod, _roomTargets);
+        int requiredCobble = Math.max(64, missingStructure + 64);
         int cobble = mod.getItemStorage().getItemCount(Items.COBBLESTONE);
-        if (cobble < requiredCobble) {
+        if (missingStructure > 0 && cobble < requiredCobble) {
             setDebugState("Preparing campsite cobblestone reserve " + cobble + "/" + requiredCobble);
             return cacheActive(mod, TaskCatalogue.getItemTask("cobblestone", requiredCobble));
         }
-        if (mod.getItemStorage().getItemCount(Items.CHEST) < 1) {
+        if (mod.getWorld().getBlockState(_home.add(2, 0, -2)).getBlock() != Blocks.CHEST
+                && mod.getItemStorage().getItemCount(Items.CHEST) < 1) {
             setDebugState("Preparing campsite storage chest");
             return cacheActive(mod, TaskCatalogue.getItemTask("chest", 1));
         }
-        if (mod.getItemStorage().getItemCount(Items.CRAFTING_TABLE) < 1) {
+        if (mod.getWorld().getBlockState(_home.add(2, 0, 2)).getBlock() != Blocks.CRAFTING_TABLE
+                && mod.getItemStorage().getItemCount(Items.CRAFTING_TABLE) < 1) {
             setDebugState("Preparing campsite crafting table");
             return cacheActive(mod, TaskCatalogue.getItemTask("crafting_table", 1));
         }
-        if (mod.getItemStorage().getItemCount(Items.FURNACE) < 1) {
+        if (mod.getWorld().getBlockState(_home.add(-2, 0, 2)).getBlock() != Blocks.FURNACE
+                && mod.getItemStorage().getItemCount(Items.FURNACE) < 1) {
             setDebugState("Preparing campsite furnace");
             return cacheActive(mod, TaskCatalogue.getItemTask("furnace", 1));
+        }
+        if (!entranceDoorsReady(mod) && !mod.getItemStorage().hasItem(ItemHelper.WOOD_DOOR)) {
+            setDebugState("Preparing campsite entrance doors");
+            return cacheActive(mod, TaskCatalogue.getItemTask("wooden_door", 2));
         }
         if (!hasBedInCamp(mod) && !mod.getItemStorage().hasItem(ItemHelper.BED)) {
             setDebugState("Preparing campsite bed");
@@ -315,7 +427,9 @@ public class BuildCampsiteTask extends Task {
         }
         if (_activeTask == null || _activeTask.stopped() || _activeTask.isFinished(mod)) {
             _activeTask = new BuildRegionSchematicTask("campsite floor patches",
-                    toTargetMap(missingFloorTargets), false);
+                    toTargetMap(missingFloorTargets), false)
+                    .withMinimumStandY(_home.getY())
+                    .withProtectedFloor(_home, _radius, _home.getY() - 1);
         }
         setDebugState("Patching unsafe campsite floor cells missing=" + missingFloorTargets.size());
         return _activeTask;
@@ -341,7 +455,9 @@ public class BuildCampsiteTask extends Task {
         int missing = countMissingCobblestone(mod, layerTargets);
         if (_activeTask == null || _activeTask.stopped() || _activeTask.isFinished(mod)) {
             _activeTask = new BuildRegionSchematicTask("campsite perimeter wall layer " + (_index + 1),
-                    toTargetMap(layerTargets), false);
+                    toTargetMap(layerTargets), false)
+                    .withMinimumStandY(_home.getY())
+                    .withProtectedFloor(_home, _radius, _home.getY() - 1);
         }
         rememberProgress("perimeter_wall", _wallTargets.size() - totalMissing, _wallTargets.size(), "building",
                 "placing four-high perimeter wall blocks layer=" + (_index + 1) + "/" + WALL_HEIGHT);
@@ -362,7 +478,10 @@ public class BuildCampsiteTask extends Task {
         }
 
         if (_activeTask == null || _activeTask.stopped() || _activeTask.isFinished(mod)) {
-            _activeTask = new BuildRegionSchematicTask("campsite interior rooms", toTargetMap(_roomTargets), false);
+            _activeTask = new BuildRegionSchematicTask("campsite interior rooms",
+                    toTargetMap(_roomTargets), false)
+                    .withMinimumStandY(_home.getY())
+                    .withProtectedFloor(_home, _radius, _home.getY() - 1);
         }
         rememberProgress("interior_dividers", _roomTargets.size() - missing, _roomTargets.size(), "building",
                 "placing room divider blocks");
@@ -385,7 +504,7 @@ public class BuildCampsiteTask extends Task {
                         if (isExteriorClearanceObstacle(block)) {
                             result.add(pos);
                         }
-                    } else if (isInteriorClearObstacle(block, h)) {
+                    } else if (isInteriorClearObstacle(block)) {
                         result.add(pos);
                     }
                 }
@@ -472,21 +591,21 @@ public class BuildCampsiteTask extends Task {
         if (mod.getItemStorage().hasItem(Items.CRAFTING_TABLE)
                 && mod.getWorld().getBlockState(table).getBlock() != Blocks.CRAFTING_TABLE) {
             setDebugState("Placing crafting room table");
-            return placeFixture(mod, table, Items.CRAFTING_TABLE);
+            return placeFixture(mod, table, Blocks.CRAFTING_TABLE);
         }
 
         BlockPos furnace = _home.add(-2, 0, 2);
         if (mod.getItemStorage().hasItem(Items.FURNACE)
                 && mod.getWorld().getBlockState(furnace).getBlock() != Blocks.FURNACE) {
             setDebugState("Placing smelting room furnace");
-            return placeFixture(mod, furnace, Items.FURNACE);
+            return placeFixture(mod, furnace, Blocks.FURNACE);
         }
 
         BlockPos chest = _home.add(2, 0, -2);
         if (mod.getItemStorage().hasItem(Items.CHEST)
                 && mod.getWorld().getBlockState(chest).getBlock() != Blocks.CHEST) {
             setDebugState("Placing storage room chest");
-            return placeFixture(mod, chest, Items.CHEST);
+            return placeFixture(mod, chest, Blocks.CHEST);
         }
         if (mod.getWorld().getBlockState(chest).getBlock() == Blocks.CHEST) {
             BaseStorageMemory.getInstance().rememberChest(_home, WorldHelper.getCurrentDimension().name(),
@@ -496,16 +615,111 @@ public class BuildCampsiteTask extends Task {
         return null;
     }
 
-    private Task placeFixture(Belfegor mod, BlockPos target, Item item) {
+    private Task placeEntranceDoors(Belfegor mod) {
+        BlockPos first = _home.add(_radius, 0, 0);
+        BlockPos second = _home.add(_radius, 0, 1);
+        for (int index = 0; index < 2; index++) {
+            BlockPos target = index == 0 ? first : second;
+            Block current = mod.getWorld().getBlockState(target).getBlock();
+            if (current instanceof net.minecraft.block.DoorBlock) {
+                rememberEntranceDoor(index, target, "complete");
+                continue;
+            }
+            Block head = mod.getWorld().getBlockState(target.up()).getBlock();
+            if (current != Blocks.AIR) {
+                setDebugState("Clearing campsite entrance door foot " + (index + 1) + "/2");
+                return cacheActive(mod, new DestroyBlockTask(target));
+            }
+            if (head != Blocks.AIR) {
+                setDebugState("Clearing campsite entrance door head " + (index + 1) + "/2");
+                return cacheActive(mod, new DestroyBlockTask(target.up()));
+            }
+            if (!mod.getItemStorage().hasItem(ItemHelper.WOOD_DOOR)) {
+                setDebugState("Crafting wooden entrance doors");
+                return cacheActive(mod, TaskCatalogue.getItemTask("wooden_door", 2));
+            }
+            BlockPos support = target.down();
+            if (!WorldHelper.isSolid(mod, support)) {
+                setDebugState("Repairing campsite entrance door support " + (index + 1) + "/2");
+                return cacheActive(mod, new PlaceBlockTask(support,
+                        new Block[]{Blocks.COBBLESTONE}, false, true));
+            }
+            // The entrance is always on the east wall, so approach it from
+            // inside the protected camp. Generic placement goals may consider
+            // both door cells valid stands and alternate between them after a
+            // rejected click. A stable inside stand gives the server one
+            // reachable top-face interaction and keeps the doorway traversable.
+            BlockPos stand = target.offset(Direction.WEST);
+            if (mod.getPlayer() == null
+                    || stand.getSquaredDistance(mod.getPlayer().getBlockPos()) > 2
+                    || mod.getPlayer().getEyePos().squaredDistanceTo(Vec3d.ofCenter(target)) > 20.25) {
+                setDebugState("Approaching campsite entrance door " + (index + 1) + "/2 from inside");
+                return cacheActive(mod, new GetToBlockTask(stand));
+            }
+            setDebugState("Installing protected campsite entrance door " + (index + 1) + "/2");
+            rememberEntranceDoor(index, target, "placing");
+            _activeTask = null;
+            if (MinecraftClient.getInstance().currentScreen != null) {
+                StorageHelper.closeScreen();
+                return null;
+            }
+            if (_doorPlacementCooldown-- > 0) return null;
+            if (!mod.getSlotHandler().forceEquipItem(new ItemTarget(ItemHelper.WOOD_DOOR, 1), false)) {
+                return cacheActive(mod, TaskCatalogue.getItemTask("wooden_door", 2));
+            }
+            Vec3d hit = Vec3d.ofCenter(support).add(0, 0.5, 0);
+            BlockHitResult result = new BlockHitResult(hit, Direction.UP, support, false);
+            ActionResult action = mod.getController().interactBlock(mod.getPlayer(), Hand.MAIN_HAND, result);
+            mod.getPlayer().swingHand(Hand.MAIN_HAND);
+            _doorPlacementCooldown = 4;
+            DebugLogger.getInstance().logImmediate("BASE-DOOR",
+                    "direct-place target=" + target + " stand=" + stand
+                            + " support=" + support + " action=" + action);
+            return null;
+        }
+        return null;
+    }
+
+    private boolean entranceDoorsReady(Belfegor mod) {
+        return mod.getWorld().getBlockState(_home.add(_radius, 0, 0)).getBlock()
+                instanceof net.minecraft.block.DoorBlock
+                && mod.getWorld().getBlockState(_home.add(_radius, 0, 1)).getBlock()
+                instanceof net.minecraft.block.DoorBlock;
+    }
+
+    private void rememberEntranceDoor(int index, BlockPos door, String status) {
+        String dim = WorldHelper.getCurrentDimension().name();
+        String name = index == 0 ? "entrance_door_a" : "entrance_door_b";
+        BaseMemory.getInstance().rememberModule(_home, dim, name, "fixture",
+                door, 1, 1, 2, status,
+                "protected wooden door used for camp entry and exit");
+        LocationMemory.getInstance().remember("home_door",
+                door.getX(), door.getY(), door.getZ(), dim,
+                "protected_double_entrance;door=" + (index + 1));
+    }
+
+    private Task placeFixture(Belfegor mod, BlockPos target, Block block) {
         BlockPos stand = fixtureStandPosition(mod, target);
+        if (stand == null) {
+            BlockPos obstruction = fixtureStandObstruction(mod, target);
+            if (obstruction != null) {
+                setDebugState("Clearing a safe standing position for " + block.getName().getString());
+                return new DestroyBlockTask(obstruction);
+            }
+        }
         if (stand != null && mod.getPlayer() != null
-                && stand.getSquaredDistance(mod.getPlayer().getBlockPos()) > 4) {
+                && (target.equals(mod.getPlayer().getBlockPos())
+                || stand.getSquaredDistance(mod.getPlayer().getBlockPos()) > 4)) {
             return new GetToBlockTask(stand);
         }
         if (!mod.getWorld().getBlockState(target).isAir()) {
             return new DestroyBlockTask(target);
         }
-        return new InteractWithBlockTask(new ItemTarget(item, 1), Direction.UP, target.down(), true);
+        // The generic interaction task can repeatedly click the support face
+        // while the player is standing inside the destination. PlaceBlockTask
+        // owns movement, support selection, screen closure, and retry state, so
+        // fixture placement cannot devolve into approach/wander spam.
+        return cacheActive(mod, new PlaceBlockTask(target, new Block[]{block}, false, true));
     }
 
     private BlockPos fixtureStandPosition(Belfegor mod, BlockPos target) {
@@ -516,6 +730,24 @@ public class BuildCampsiteTask extends Task {
                     && mod.getWorld().getBlockState(stand).isAir()
                     && mod.getWorld().getBlockState(stand.up()).isAir()) {
                 return stand;
+            }
+        }
+        return null;
+    }
+
+    private BlockPos fixtureStandObstruction(Belfegor mod, BlockPos target) {
+        Direction[] options = {Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST};
+        String dimension = WorldHelper.getCurrentDimension().name();
+        for (Direction option : options) {
+            BlockPos stand = target.offset(option);
+            if (!WorldHelper.isSolid(mod, stand.down())) continue;
+            BlockPos[] clearance = {stand.up(), stand};
+            for (BlockPos blocked : clearance) {
+                Block current = mod.getWorld().getBlockState(blocked).getBlock();
+                if (current == Blocks.AIR || current == Blocks.WATER || current == Blocks.LAVA) continue;
+                if (isCompletedBlueprintBlock(blocked)) continue;
+                if (BaseMemory.getInstance().isProtectedFixturePosition(blocked, dimension)) continue;
+                return blocked;
             }
         }
         return null;
@@ -544,7 +776,7 @@ public class BuildCampsiteTask extends Task {
         BlockPos bed = _home.add(-2, 0, -2);
         BlockPos existingBed = findCampBed(mod);
         if (existingBed != null) {
-            rememberBed(existingBed, "bed_ready");
+            rememberBed(existingBed, _bedSpawnClicked ? "spawn_clicked" : "bed_ready");
             if (_bedSpawnClicked) {
                 setDebugState("Campsite bed/spawn anchor ready");
                 return null;
@@ -570,38 +802,61 @@ public class BuildCampsiteTask extends Task {
             setDebugState("Collecting campsite bed");
             return cacheActive(mod, TaskCatalogue.getItemTask("bed", 1));
         }
+
+        // Beds are directional two-block fixtures. The generic one-block
+        // builder cannot control their facing, so it may place the head in the
+        // player's standing cell, reject the click, wander, and eventually dig
+        // out the support it was trying to use. Validate both footprint
+        // supports and own the complete placement transaction here instead.
+        BlockPos footSupport = bed.down();
+        BlockPos headSupport = second.down();
+        if (!WorldHelper.isSolid(mod, footSupport)) {
+            setDebugState("Repairing campsite bed foot support");
+            return cacheActive(mod, new PlaceBlockTask(footSupport,
+                    new Block[]{Blocks.COBBLESTONE}, false, true));
+        }
+        if (!WorldHelper.isSolid(mod, headSupport)) {
+            setDebugState("Repairing campsite bed head support");
+            return cacheActive(mod, new PlaceBlockTask(headSupport,
+                    new Block[]{Blocks.COBBLESTONE}, false, true));
+        }
         BlockPos stand = bed.offset(Direction.SOUTH);
-        if (mod.getPlayer() != null && stand.getSquaredDistance(mod.getPlayer().getBlockPos()) > 4) {
+        if (mod.getPlayer() == null
+                || !stand.equals(mod.getPlayer().getBlockPos())
+                || mod.getPlayer().getEyePos().squaredDistanceTo(Vec3d.ofCenter(bed)) > 20.25) {
             setDebugState("Standing by campsite bed position");
             return cacheActive(mod, new GetToBlockTask(stand));
         }
         setDebugState("Placing campsite bed");
         rememberBed(bed, "placing");
         _clickingBedToSetSpawn = false;
-        Block carriedBed = carriedBedBlock(mod);
-        return cacheActive(mod, new PlaceBlockTask(bed,
-                carriedBed == null ? ItemHelper.itemsToBlocks(ItemHelper.BED) : new Block[]{carriedBed},
-                false,
-                true));
-    }
+        _activeTask = null;
+        if (MinecraftClient.getInstance().currentScreen != null) {
+            StorageHelper.closeScreen();
+            return null;
+        }
+        if (_bedPlacementCooldown-- > 0) return null;
+        if (!mod.getSlotHandler().forceEquipItem(new ItemTarget(ItemHelper.BED, 1), false)) {
+            return cacheActive(mod, TaskCatalogue.getItemTask("bed", 1));
+        }
 
-    private Block carriedBedBlock(Belfegor mod) {
-        if (mod.getItemStorage().hasItem(Items.WHITE_BED)) return Blocks.WHITE_BED;
-        if (mod.getItemStorage().hasItem(Items.ORANGE_BED)) return Blocks.ORANGE_BED;
-        if (mod.getItemStorage().hasItem(Items.MAGENTA_BED)) return Blocks.MAGENTA_BED;
-        if (mod.getItemStorage().hasItem(Items.LIGHT_BLUE_BED)) return Blocks.LIGHT_BLUE_BED;
-        if (mod.getItemStorage().hasItem(Items.YELLOW_BED)) return Blocks.YELLOW_BED;
-        if (mod.getItemStorage().hasItem(Items.LIME_BED)) return Blocks.LIME_BED;
-        if (mod.getItemStorage().hasItem(Items.PINK_BED)) return Blocks.PINK_BED;
-        if (mod.getItemStorage().hasItem(Items.GRAY_BED)) return Blocks.GRAY_BED;
-        if (mod.getItemStorage().hasItem(Items.LIGHT_GRAY_BED)) return Blocks.LIGHT_GRAY_BED;
-        if (mod.getItemStorage().hasItem(Items.CYAN_BED)) return Blocks.CYAN_BED;
-        if (mod.getItemStorage().hasItem(Items.PURPLE_BED)) return Blocks.PURPLE_BED;
-        if (mod.getItemStorage().hasItem(Items.BLUE_BED)) return Blocks.BLUE_BED;
-        if (mod.getItemStorage().hasItem(Items.BROWN_BED)) return Blocks.BROWN_BED;
-        if (mod.getItemStorage().hasItem(Items.GREEN_BED)) return Blocks.GREEN_BED;
-        if (mod.getItemStorage().hasItem(Items.RED_BED)) return Blocks.RED_BED;
-        if (mod.getItemStorage().hasItem(Items.BLACK_BED)) return Blocks.BLACK_BED;
+        // BedItem uses the player's horizontal facing to choose its head cell.
+        // Face north so this fixed campsite footprint is always foot=bed and
+        // head=bed.north, away from the player standing immediately south.
+        mod.getInputControls().forceLook(180.0F, 55.0F);
+        Vec3d hit = Vec3d.ofCenter(footSupport).add(0, 0.5, 0);
+        BlockHitResult result = new BlockHitResult(hit, Direction.UP, footSupport, false);
+        ActionResult action = mod.getController().interactBlock(mod.getPlayer(), Hand.MAIN_HAND, result);
+        mod.getPlayer().swingHand(Hand.MAIN_HAND);
+        _bedPlacementCooldown = 5;
+        _bedPlacementAttempts++;
+        DebugLogger.getInstance().logImmediate("BASE-BED",
+                "direct-place attempt=" + _bedPlacementAttempts
+                        + " foot=" + bed + " head=" + second
+                        + " stand=" + stand + " player=" + mod.getPlayer().getBlockPos()
+                        + " footSupport=" + mod.getWorld().getBlockState(footSupport).getBlock()
+                        + " headSupport=" + mod.getWorld().getBlockState(headSupport).getBlock()
+                        + " action=" + action);
         return null;
     }
 
@@ -673,7 +928,7 @@ public class BuildCampsiteTask extends Task {
                 "chest and shulker staging area");
         memory.rememberModule(_home, dim, "entrance", "door",
                 _home.add(_radius, 0, 0), 1, 2, 3, "complete",
-                "remembered two-wide east doorway for safe base entry/exit");
+                "remembered two-wide east doorway with protected wooden doors for safe base entry/exit");
         inspectBaseFootprint();
         LocationMemory.getInstance().save();
         BaseMemory.getInstance().save();
@@ -734,6 +989,17 @@ public class BuildCampsiteTask extends Task {
         _phase = next;
         _index = 0;
         _activeTask = null;
+        persistPhase();
+    }
+
+    private void persistPhase() {
+        String dimension = WorldHelper.getCurrentDimension().name();
+        if (_phase == Phase.DONE) {
+            BaseMemory.getInstance().clearBuildPhase(_home, dimension, "camp");
+        } else {
+            BaseMemory.getInstance().rememberBuildPhase(_home, dimension, "camp", _phase.name());
+        }
+        BaseMemory.getInstance().save();
     }
 
     private Task returnToBuildPlatformIfDrifted(Belfegor mod) {
@@ -762,15 +1028,14 @@ public class BuildCampsiteTask extends Task {
         return _activeTask;
     }
 
-    private boolean isInteriorClearObstacle(Block block, int heightAboveHome) {
-        if (heightAboveHome > 0) {
-            return block != Blocks.WATER;
-        }
-        return block != Blocks.GRASS_BLOCK
-                && block != Blocks.DIRT
-                && block != Blocks.COARSE_DIRT
-                && block != Blocks.PODZOL
-                && block != Blocks.FARMLAND;
+    private boolean isInteriorClearObstacle(Block block) {
+        // _home is the player's feet/build-plane Y and the preserved natural
+        // floor is _home.down(). Dirt or grass at _home is therefore raised
+        // terrain inside the room, not a usable floor. Leaving it in place made
+        // the bot dig a one-block fixture hole, fall into it, and retry chest
+        // placement forever. Fluids are handled by site selection/fill logic;
+        // repeatedly "mining" a source block here would not clear it.
+        return block != Blocks.WATER && block != Blocks.LAVA;
     }
 
     private boolean isExteriorClearanceObstacle(Block block) {
@@ -808,42 +1073,6 @@ public class BuildCampsiteTask extends Task {
 
     private boolean floorDone(Belfegor mod, BlockPos pos) {
         return isAcceptableFlatFloor(mod.getWorld().getBlockState(pos).getBlock());
-    }
-
-    private int missingFloors(Belfegor mod) {
-        int missing = 0;
-        for (BlockPos pos : _floorTargets) {
-            if (!floorDone(mod, pos)) missing++;
-        }
-        return missing;
-    }
-
-    private int countFinishedWalls(Belfegor mod) {
-        int count = 0;
-        for (BlockPos pos : _wallTargets) {
-            if (wallBlockDone(mod, pos)) count++;
-        }
-        return count;
-    }
-
-    private int countFinishedRoomWalls(Belfegor mod) {
-        return countFinishedTargets(mod, _roomTargets);
-    }
-
-    private int countFinishedTargets(Belfegor mod, List<BlockPos> targets) {
-        int count = 0;
-        for (BlockPos pos : targets) {
-            if (wallBlockDone(mod, pos)) count++;
-        }
-        return count;
-    }
-
-    private int countMissingSolid(Belfegor mod, List<BlockPos> targets) {
-        int missing = 0;
-        for (BlockPos pos : targets) {
-            if (!WorldHelper.isSolid(mod, pos)) missing++;
-        }
-        return missing;
     }
 
     private List<BlockPos> missingFloorTargets(Belfegor mod) {
@@ -888,30 +1117,6 @@ public class BuildCampsiteTask extends Task {
             map.put(target, STRUCTURE_BLOCKS);
         }
         return map;
-    }
-
-    private BlockPos min(List<BlockPos> positions) {
-        int minX = Integer.MAX_VALUE;
-        int minY = Integer.MAX_VALUE;
-        int minZ = Integer.MAX_VALUE;
-        for (BlockPos pos : positions) {
-            minX = Math.min(minX, pos.getX());
-            minY = Math.min(minY, pos.getY());
-            minZ = Math.min(minZ, pos.getZ());
-        }
-        return new BlockPos(minX, minY, minZ);
-    }
-
-    private BlockPos max(List<BlockPos> positions) {
-        int maxX = Integer.MIN_VALUE;
-        int maxY = Integer.MIN_VALUE;
-        int maxZ = Integer.MIN_VALUE;
-        for (BlockPos pos : positions) {
-            maxX = Math.max(maxX, pos.getX());
-            maxY = Math.max(maxY, pos.getY());
-            maxZ = Math.max(maxZ, pos.getZ());
-        }
-        return new BlockPos(maxX, maxY, maxZ);
     }
 
     private boolean targetsClear(Belfegor mod, List<BlockPos> targets) {

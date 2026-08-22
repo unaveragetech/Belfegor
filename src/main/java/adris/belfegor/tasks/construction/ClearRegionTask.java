@@ -63,6 +63,10 @@ public class ClearRegionTask extends Task implements ITaskRequiresGrounded {
         mod.getBehaviour().setAutoMLG(false);
         mod.getBehaviour().setAllowDiagonalAscend(false);
         mod.getBehaviour().forceUseTool((state, stack) -> stack != null && stack.isSuitableFor(state));
+        // Re-evaluated by Baritone immediately before every break. This closes
+        // the race where a nested overflow/tool-recovery task places a chest
+        // after this clear task has already captured its target list.
+        mod.getBehaviour().avoidBlockBreaking(this::isProtectedBaseFixture);
         _lastRemaining = Integer.MAX_VALUE;
         _noProgressTicks = 0;
         _manualDestroyTask = null;
@@ -245,7 +249,16 @@ public class ClearRegionTask extends Task implements ITaskRequiresGrounded {
     }
 
     private boolean isProtectedBaseFixture(BlockPos pos) {
-        return BaseMemory.getInstance().isProtectedFixturePosition(pos, WorldHelper.getCurrentDimension().name());
+        if (BaseMemory.getInstance().isProtectedFixturePosition(
+                pos, WorldHelper.getCurrentDimension().name())) {
+            return true;
+        }
+        // A block entity is stateful data, not disposable terrain. Containers
+        // and furnaces may be created while this task is paused under a nested
+        // inventory job, so check the live world on every scan instead of only
+        // consulting the original target batch.
+        return MinecraftClient.getInstance().world != null
+                && MinecraftClient.getInstance().world.getBlockEntity(pos) != null;
     }
 
     @Override

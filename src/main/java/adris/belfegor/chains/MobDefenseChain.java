@@ -26,6 +26,7 @@ import net.minecraft.entity.Entity;
 import net.minecraft.entity.boss.WitherEntity;
 import net.minecraft.entity.effect.StatusEffects;
 import net.minecraft.entity.mob.*;
+import net.minecraft.entity.passive.BeeEntity;
 import net.minecraft.entity.player.PlayerEntity;
 import net.minecraft.entity.projectile.*;
 import net.minecraft.entity.projectile.thrown.PotionEntity;
@@ -271,6 +272,7 @@ public class MobDefenseChain extends SingleTaskChain {
             for (Item item : SWORDS) {
                 if (mod.getItemStorage().hasItem(item)) {
                     bestSword = (SwordItem) item;
+                    break;
                 }
             }
 
@@ -281,6 +283,14 @@ public class MobDefenseChain extends SingleTaskChain {
                     if (entity instanceof MobEntity mob) {
                         boolean isAttackingPlayer = EntityHelper.isAngryAtPlayer(mod, mob);
                         if (isAttackingPlayer) {
+                            // An angry bee is handled by the close-range force field. Chasing one by
+                            // replacing a long-running construction task makes base work oscillate
+                            // between two unrelated goals. Only escalate to a task-level response
+                            // when the player is actually vulnerable.
+                            if (mob instanceof BeeEntity && userTask != null
+                                    && mod.getPlayer().getHealth() > 10) {
+                                continue;
+                            }
                             toDealWith.add(mob);
                         }
                     }

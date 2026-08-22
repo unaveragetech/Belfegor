@@ -5,9 +5,11 @@ import adris.belfegor.Debug;
 import adris.belfegor.TaskCatalogue;
 import adris.belfegor.memory.BaseMemory;
 import adris.belfegor.memory.BaseStorageMemory;
+import adris.belfegor.memory.ErrandMemory;
 import adris.belfegor.memory.LocationMemory;
 import adris.belfegor.tasks.construction.DestroyBlockTask;
 import adris.belfegor.tasks.construction.PlaceBlockTask;
+import adris.belfegor.tasks.container.RetrieveFromStashTask;
 import adris.belfegor.tasks.container.StoreInContainerTask;
 import adris.belfegor.tasks.movement.GetToBlockTask;
 import adris.belfegor.tasksystem.Task;
@@ -19,7 +21,9 @@ import net.minecraft.item.Items;
 import net.minecraft.util.math.BlockPos;
 
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Maintains useful supplies inside the remembered campsite storage room.
@@ -41,6 +45,7 @@ public class CampStockpileTask extends Task {
         GO_HOME,
         ENSURE_STORAGE,
         TOOLS,
+        RETRIEVE_STASH,
         COLLECT,
         RETURN_HOME,
         STORE,
@@ -57,8 +62,14 @@ public class CampStockpileTask extends Task {
     private Task _activeTask;
     private BlockPos _home;
     private BlockPos _storageChest;
+    private BlockPos _lastStoreChest;
+    private BlockPos _lastAttemptChest;
     private String _dimension;
     private int _targetIndex;
+    private int _lastAttemptCarryTotal;
+    private int _sameChestAttempts;
+    private final Set<BlockPos> _saturatedChests = new HashSet<>();
+    private ItemTarget[] _lastStoreTargets;
 
     public CampStockpileTask(ToolSetTask.Tier toolTier, Profile profile) {
         _toolTier = toolTier == null ? ToolSetTask.Tier.STONE : toolTier;
@@ -79,6 +90,12 @@ public class CampStockpileTask extends Task {
         _phase = Phase.RESOLVE;
         _activeTask = null;
         _targetIndex = 0;
+        _saturatedChests.clear();
+        _lastStoreChest = null;
+        _lastAttemptChest = null;
+        _lastAttemptCarryTotal = 0;
+        _sameChestAttempts = 0;
+        _lastStoreTargets = null;
         _dimension = WorldHelper.getCurrentDimension().name();
     }
 
@@ -99,7 +116,7 @@ public class CampStockpileTask extends Task {
             case GO_HOME -> {
                 if (!near(mod, _home, HOME_RANGE_SQ)) {
                     setDebugState("Returning to camp before stockpile maintenance");
-                    yield cache(mod, new GetToBlockTask(_home));
+                    yield cache(mod, GetToBlockTask.baseAware(mod, _home));
                 }
                 next(Phase.ENSURE_STORAGE);
                 yield null;
@@ -115,6 +132,27 @@ public class CampStockpileTask extends Task {
                 if (!hasToolSet(mod, _toolTier)) {
                     setDebugState("Preparing " + _toolTier.name().toLowerCase() + " toolset for stockpile gathering");
                     yield cache(mod, new ToolSetTask(_toolTier));
+                }
+                next(Phase.RETRIEVE_STASH);
+                yield null;
+            }
+            case RETRIEVE_STASH -> {
+                if (_activeTask != null && !_activeTask.stopped() && !_activeTask.isFinished(mod)) {
+                    yield _activeTask;
+                }
+                _activeTask = null;
+                ItemTarget missing = firstMissingTarget(mod);
+                if (missing == null) {
+                    next(Phase.COLLECT);
+                    yield null;
+                }
+                boolean stashed = Arrays.stream(missing.getMatches())
+                        .anyMatch(item -> ErrandMemory.getInstance()
+                                .hasStash(_home, _dimension, item));
+                if (stashed) {
+                    setDebugState("Withdrawing stockpile target from remembered stash " + missing);
+                    _activeTask = new RetrieveFromStashTask(_home, missing);
+                    yield _activeTask;
                 }
                 next(Phase.COLLECT);
                 yield null;
@@ -145,7 +183,7 @@ public class CampStockpileTask extends Task {
             case RETURN_HOME -> {
                 if (!near(mod, _storageChest, STORAGE_RANGE_SQ)) {
                     setDebugState("Returning to storage room to deposit gathered supplies");
-                    yield cache(mod, new GetToBlockTask(_storageChest));
+                    yield cache(mod, GetToBlockTask.baseAware(mod, _storageChest));
                 }
                 next(Phase.STORE);
                 yield null;
@@ -153,9 +191,78 @@ public class CampStockpileTask extends Task {
             case STORE -> {
                 ItemTarget[] carried = carriedStockpileTargets(mod);
                 if (carried.length > 0) {
-                    setDebugState("Depositing gathered supplies into camp storage "
+                    if (_activeTask instanceof StoreInContainerTask storeTask) {
+                        if (!_activeTask.stopped() && !_activeTask.isFinished(mod)) {
+                            yield _activeTask;
+                        }
+                        _activeTask = null;
+                        carried = carriedStockpileTargets(mod);
+                        if (carried.length == 0) {
+                            if (_lastStoreTargets != null && _lastStoreChest != null) {
+                                ErrandMemory.getInstance().recordStored(
+                                        _home, _lastStoreChest, _dimension,
+                                        "stockpile", _lastStoreTargets);
+                                ErrandMemory.getInstance().save();
+                            }
+                            rememberStorage("stockpiled");
+                            next(Phase.DONE);
+                            yield null;
+                        }
+                        if (_lastStoreChest != null) {
+                            Debug.logInternal("[CampStockpile] Storage chest accepted no more items; "
+                                    + "expanding network from " + _lastStoreChest.toShortString()
+                                    + " explicitFull=" + storeTask.wasContainerFull()
+                                    + " remaining=" + Arrays.toString(carried));
+                            BaseStorageMemory.getInstance().markChestFull(_home, _dimension, _lastStoreChest);
+                            _saturatedChests.add(_lastStoreChest);
+                            _storageChest = nextNetworkChest(mod, carried);
+                            next(Phase.ENSURE_STORAGE);
+                            yield null;
+                        }
+                    }
+                    _storageChest = bestNetworkChest(mod, carried);
+                    if (StoreInContainerTask.hadRepeatedNoProgress(_storageChest, carried)) {
+                        Debug.logInternal("[CampStockpile] Storage chest has repeated no-progress store attempts; "
+                                + "forcing network expansion chest=" + _storageChest.toShortString()
+                                + " carried=" + Arrays.toString(carried));
+                        BaseStorageMemory.getInstance().markChestFull(_home, _dimension, _storageChest);
+                        _saturatedChests.add(_storageChest);
+                        _storageChest = nextNetworkChest(mod, carried);
+                        next(Phase.ENSURE_STORAGE);
+                        yield null;
+                    }
+                    int carriedTotal = totalCount(carried);
+                    if (_lastAttemptChest != null
+                            && _lastAttemptChest.equals(_storageChest)
+                            && _lastAttemptCarryTotal == carriedTotal) {
+                        _sameChestAttempts++;
+                    } else {
+                        _lastAttemptChest = _storageChest;
+                        _lastAttemptCarryTotal = carriedTotal;
+                        _sameChestAttempts = 1;
+                    }
+                    if (_sameChestAttempts > 2) {
+                        Debug.logInternal("[CampStockpile] Same storage chest made no progress; "
+                                + "forcing network expansion chest=" + _storageChest.toShortString()
+                                + " carried=" + Arrays.toString(carried));
+                        BaseStorageMemory.getInstance().markChestFull(_home, _dimension, _storageChest);
+                        _saturatedChests.add(_storageChest);
+                        _storageChest = nextNetworkChest(mod, carried);
+                        _lastAttemptChest = _storageChest;
+                        _lastAttemptCarryTotal = carriedTotal;
+                        _sameChestAttempts = 0;
+                        next(Phase.ENSURE_STORAGE);
+                        yield null;
+                    }
+                    int row = BaseStorageMemory.getInstance().rowIndexForChest(_home, _dimension, _storageChest);
+                    BaseStorageMemory.getInstance().rememberPreferredRow(_home, _dimension, row, carried);
+                    setDebugState("Depositing gathered supplies into camp storage network row="
+                            + row + " chest=" + _storageChest.toShortString() + " "
                             + Arrays.toString(carried));
-                    yield cache(mod, new StoreInContainerTask(_storageChest, false, carried));
+                    _lastStoreChest = _storageChest;
+                    _lastStoreTargets = carried;
+                    _activeTask = new StoreInContainerTask(_storageChest, false, carried);
+                    yield _activeTask;
                 }
                 if (firstMissingTarget(mod) != null) {
                     next(Phase.COLLECT);
@@ -178,8 +285,9 @@ public class CampStockpileTask extends Task {
         _home = configuredHome != null
                 ? configuredHome
                 : base.map(BaseMemory.BaseRecord::center).orElse(null);
-        if (_home == null && player != null) {
-            _home = player;
+        if (_home == null) {
+            Debug.logWarning("[CampStockpile] No configured or remembered base found; refusing to create a transient stockpile home at player position");
+            return;
         }
 
         Optional<LocationMemory.RememberedLocation> rememberedStorage =
@@ -188,6 +296,9 @@ public class CampStockpileTask extends Task {
         _storageChest = rememberedStorage
                 .map(LocationMemory.RememberedLocation::toBlockPos)
                 .orElse(_home == null ? null : _home.add(2, 0, -2));
+        _storageChest = BaseStorageMemory.getInstance()
+                .preferredChestFor(mod, _home, _dimension)
+                .orElse(_storageChest);
         if (_home != null && _storageChest != null) {
             BaseStorageMemory.getInstance().rememberChest(_home, _dimension, _storageChest,
                     "camp_storage", false, "camp stockpile storage room");
@@ -198,6 +309,9 @@ public class CampStockpileTask extends Task {
     private Task ensureStorageChest(Belfegor mod) {
         if (mod.getWorld().getBlockState(_storageChest).getBlock() == Blocks.CHEST) {
             setDebugState("Camp storage chest ready at " + _storageChest.toShortString());
+            BaseStorageMemory.getInstance().rememberChest(_home, _dimension, _storageChest,
+                    "camp_storage", false, "storage network chest");
+            BaseStorageMemory.getInstance().save();
             return null;
         }
         if (!WorldHelper.isSolid(mod, _storageChest.down())) {
@@ -215,6 +329,31 @@ public class CampStockpileTask extends Task {
         }
         setDebugState("Placing camp storage chest");
         return cache(mod, new PlaceBlockTask(_storageChest, Blocks.CHEST));
+    }
+
+    private BlockPos bestNetworkChest(Belfegor mod, ItemTarget[] carried) {
+        Optional<BlockPos> preferred = BaseStorageMemory.getInstance()
+                .preferredChestFor(mod, _home, _dimension, carried);
+        if (preferred.isPresent() && !_saturatedChests.contains(preferred.get())) {
+            return preferred.get();
+        }
+        return nextNetworkChest(mod, carried);
+    }
+
+    private BlockPos nextNetworkChest(Belfegor mod, ItemTarget[] carried) {
+        Optional<BlockPos> next = BaseStorageMemory.getInstance().nextChestPosition(_home, _dimension);
+        BlockPos result = next.orElse(_home.add(2, 0, -2));
+        BaseStorageMemory.getInstance().rememberChest(_home, _dimension, result,
+                BaseStorageMemory.getInstance().chestCount(_home, _dimension) >= 5
+                        ? "storage_row_overflow"
+                        : "camp_storage",
+                false, "auto-expanded stockpile network chest");
+        BaseStorageMemory.getInstance().rememberPreferredRow(_home, _dimension,
+                BaseStorageMemory.getInstance().rowIndexForChest(_home, _dimension, result), carried);
+        BaseStorageMemory.getInstance().save();
+        Debug.logInternal("[CampStockpile] Selected storage network chest " + result.toShortString()
+                + " count=" + BaseStorageMemory.getInstance().chestCount(_home, _dimension));
+        return result;
     }
 
     private ItemTarget firstMissingTarget(Belfegor mod) {
@@ -250,6 +389,14 @@ public class CampStockpileTask extends Task {
         return result.toArray(ItemTarget[]::new);
     }
 
+    private int totalCount(ItemTarget[] targets) {
+        int total = 0;
+        for (ItemTarget target : targets) {
+            if (target != null) total += Math.max(0, target.getTargetCount());
+        }
+        return total;
+    }
+
     private static ItemTarget[] buildTargets(Profile profile) {
         if (profile == Profile.BUILD) {
             return new ItemTarget[]{
@@ -278,6 +425,21 @@ public class CampStockpileTask extends Task {
     }
 
     private boolean hasToolSet(Belfegor mod, ToolSetTask.Tier tier) {
+        return switch (tier) {
+            case WOOD -> hasExactToolSet(mod, ToolSetTask.Tier.WOOD)
+                    || hasExactToolSet(mod, ToolSetTask.Tier.STONE)
+                    || hasExactToolSet(mod, ToolSetTask.Tier.IRON)
+                    || hasExactToolSet(mod, ToolSetTask.Tier.DIAMOND);
+            case STONE -> hasExactToolSet(mod, ToolSetTask.Tier.STONE)
+                    || hasExactToolSet(mod, ToolSetTask.Tier.IRON)
+                    || hasExactToolSet(mod, ToolSetTask.Tier.DIAMOND);
+            case IRON -> hasExactToolSet(mod, ToolSetTask.Tier.IRON)
+                    || hasExactToolSet(mod, ToolSetTask.Tier.DIAMOND);
+            case DIAMOND -> hasExactToolSet(mod, ToolSetTask.Tier.DIAMOND);
+        };
+    }
+
+    private boolean hasExactToolSet(Belfegor mod, ToolSetTask.Tier tier) {
         return switch (tier) {
             case WOOD -> mod.getItemStorage().hasItem(Items.WOODEN_PICKAXE)
                     && mod.getItemStorage().hasItem(Items.WOODEN_AXE)
@@ -321,7 +483,7 @@ public class CampStockpileTask extends Task {
     private void rememberStorage(String status) {
         if (_home == null || _storageChest == null) return;
         BaseMemory.getInstance().rememberModule(_home, _dimension,
-                "camp_stockpile_storage", "storage",
+                "camp_stockpile_chest", "fixture",
                 _storageChest, 1, 1, 1, status,
                 "targeted storage chest for @stockpile/@player resource maintenance");
         BaseStorageMemory.getInstance().rememberChest(_home, _dimension, _storageChest,

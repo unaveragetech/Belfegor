@@ -7,6 +7,8 @@ This roadmap is intentionally practical. Belfegor’s main challenge is not “a
 - Resolve the remaining visual UI display conflict observed in the heavily modded local profile. Current diagnostics show `@ui` sets `BelfegorScreen` as the active Minecraft screen and logs `UI-OPEN`; the remaining issue is visual/capture/profile-layer visibility when other overlay mods are active.
 - Re-test the `C`/`@ui` panel in a clean Fabric profile and capture a final UI screenshot/video once stable.
 - Continue hardening inventory cursor recovery in every container/crafting path.
+- Extend the exact-target container ownership/close-on-stop rule to any future handled-screen task before it is allowed into `@player`; current chest deposit/retrieval paths are covered and live-tested.
+- Add deterministic tests for resource travel budgets and target replacement. Current mining honors `maxResourceTravelDistance` and replaces far targets before the bot reaches mining range, but biome/dimension-specific sourcing still needs policy-level limits.
 - Add more structured shulker transaction tests and debug summaries.
 - Improve `@get` planning so carried shulker resources are chosen before gathering duplicates.
 - Expand the `C`/`@ui` settings controls for auto-shulker thresholds and timers.
@@ -108,15 +110,17 @@ See [SCHEMATIC_ENGINE.md](SCHEMATIC_ENGINE.md) for the planned architecture.
 
 ## Base building
 
-Current base behavior is intentionally simple: square two-high wall, doorway, crafting table, furnace, chest.
+Current base behavior builds a persisted radius-based core with four-high cobblestone perimeter walls, a two-wide remembered doorway, interior room dividers, crafting/smelting/storage fixtures, a bed/spawn anchor, natural-flat-floor preservation, five-block exterior clearance, and separate connected expansion modules. Validation now returns to the locked home and checks that home's exported internal blueprint rather than applying one global schematic at an arbitrary origin.
 
-Planned modules:
+The next quality step is to make the existing modules more schematic-driven and less procedural while preserving the working lifecycle rules: one Baritone owner at a time, staged working batches, protected completed blocks, exact fixture positions, bounded scans, and repair-before-expansion.
 
-- storage wall;
-- shulker station;
-- bedroom;
-- furnace room;
-- starter farm;
+Next module upgrades:
+
+- high-capacity sorted storage wall beyond the current networked camp chests;
+- dedicated shulker station;
+- bedroom upgrade around the current bed/spawn anchor;
+- multi-furnace processing room beyond the current smelting fixture/workshop;
+- crop rotation, harvest, and replant automation for the current hydrated farm module;
 - mine entrance;
 - portal pad;
 - animal pen;

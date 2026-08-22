@@ -2,10 +2,13 @@ package adris.belfegor.tasks.construction;
 
 import adris.belfegor.Belfegor;
 import adris.belfegor.Debug;
+import adris.belfegor.TaskCatalogue;
+import adris.belfegor.debug.DebugLogger;
 import adris.belfegor.tasks.movement.RunAwayFromPositionTask;
 import adris.belfegor.tasks.movement.SafeRandomShimmyTask;
 import adris.belfegor.tasksystem.ITaskRequiresGrounded;
 import adris.belfegor.tasksystem.Task;
+import adris.belfegor.util.MiningRequirement;
 import adris.belfegor.util.helpers.BaritoneCompat;
 import adris.belfegor.util.helpers.ItemHelper;
 import adris.belfegor.util.helpers.LookHelper;
@@ -23,6 +26,7 @@ import net.minecraft.entity.Entity;
 import net.minecraft.entity.mob.PillagerEntity;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 import net.minecraft.screen.slot.SlotActionType;
 import net.minecraft.util.math.BlockPos;
 
@@ -53,6 +57,8 @@ public class DestroyBlockTask extends Task implements ITaskRequiresGrounded {
             Blocks.SWEET_BERRY_BUSH
     };
     private Task _unstuckTask = null;
+    private Task _toolRecoveryTask = null;
+    private Item _toolRecoveryItem = null;
     private boolean isMining;
 
     public DestroyBlockTask(BlockPos pos) {
@@ -286,9 +292,11 @@ public class DestroyBlockTask extends Task implements ITaskRequiresGrounded {
             return null;
         }
         if (targetState.isToolRequired() && !equippedToolCanHarvest(targetState)) {
-            setDebugState("Waiting for suitable tool before mining " + targetState.getBlock()
-                    + " at " + _pos.toShortString());
             mod.getClientBaritone().getInputOverrideHandler().setInputForceState(Input.CLICK_LEFT, false);
+            Task recovery = recoverMissingMiningTool(mod, targetState);
+            if (recovery != null) return recovery;
+            setDebugState("No craftable suitable tool found for " + targetState.getBlock()
+                    + " at " + _pos.toShortString());
             return null;
         }
 
@@ -371,6 +379,43 @@ public class DestroyBlockTask extends Task implements ITaskRequiresGrounded {
     private boolean equippedToolCanHarvest(BlockState state) {
         ItemStack equipped = StorageHelper.getItemStackInSlot(PlayerSlot.getEquipSlot());
         return equipped != null && !equipped.isEmpty() && equipped.isSuitableFor(state);
+    }
+
+    private Task recoverMissingMiningTool(Belfegor mod, BlockState state) {
+        MiningRequirement requirement = MiningRequirement.getMinimumRequirementForBlock(state.getBlock());
+        if (requirement == MiningRequirement.HAND) return null;
+
+        Item replacement = requirement.getMinimumPickaxe().getItem();
+        // A stone pickaxe is much less wasteful for bulk construction clearing and
+        // is immediately craftable whenever the build inventory already contains
+        // cobblestone. Early-game resource tasks without cobblestone still fall
+        // back to the wooden minimum.
+        if (requirement == MiningRequirement.WOOD
+                && mod.getItemStorage().getItemCount(Items.COBBLESTONE) >= 3) {
+            replacement = Items.STONE_PICKAXE;
+        }
+
+        int inventoryCount = mod.getItemStorage().getItemCountInventoryOnly(replacement);
+        int requestedCount = Math.max(1, inventoryCount + 1);
+        if (_toolRecoveryTask == null
+                || _toolRecoveryItem != replacement
+                || _toolRecoveryTask.stopped()
+                || _toolRecoveryTask.isFinished(mod)) {
+            _toolRecoveryItem = replacement;
+            _toolRecoveryTask = TaskCatalogue.getItemTask(replacement, requestedCount);
+            DebugLogger.getInstance().logImmediate("TOOL-RECOVERY",
+                    "missingSuitableTool block=" + state.getBlock()
+                            + " pos=" + _pos.toShortString()
+                            + " requirement=" + requirement
+                            + " requesting=" + replacement
+                            + " count=" + requestedCount
+                            + " inventoryFull=" + !mod.getItemStorage().hasEmptyInventorySlot());
+        }
+        if (_toolRecoveryTask != null) {
+            setDebugState("Recovering " + replacement + " before mining "
+                    + state.getBlock() + " at " + _pos.toShortString());
+        }
+        return _toolRecoveryTask;
     }
 
     /**

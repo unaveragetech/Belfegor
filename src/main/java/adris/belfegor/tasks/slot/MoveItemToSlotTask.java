@@ -115,6 +115,12 @@ public class MoveItemToSlotTask extends Task implements ITaskCanForce {
 
     @Override
     public boolean isFinished(Belfegor mod) {
+        ItemStack cursor = StorageHelper.getItemStackInCursorSlot();
+        if (isStorageDestination(_destination)
+                && !cursor.isEmpty()
+                && _toMove.matches(cursor.getItem())) {
+            return false;
+        }
         ItemStack atDestination = StorageHelper.getItemStackInSlot(_destination);
         return (_toMove.matches(atDestination.getItem()) && atDestination.getCount() >= _toMove.getTargetCount());
     }

@@ -1,8 +1,13 @@
 package adris.belfegor.commandsystem;
 
+import com.google.gson.Gson;
+import com.google.gson.GsonBuilder;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Collection;
 
 public final class CommandDocumentation {
     private static final Map<String, List<String>> EXAMPLES = Map.ofEntries(
@@ -191,6 +196,38 @@ public final class CommandDocumentation {
             result.append("\n");
         }
         return result.toString();
+    }
+
+    /**
+     * Exports the command catalogue as a JSON "tool" list, MCP-style, so the
+     * LLM advisor can look up command names, arguments, descriptions, and
+     * examples at runtime instead of guessing.
+     */
+    public static String exportJson(Collection<Command> commands, String prefix) {
+        String cmdPrefix = prefix == null ? "@" : prefix;
+        List<Map<String, Object>> tools = new ArrayList<>();
+        for (Command command : commands) {
+            if (command == null) continue;
+            Map<String, Object> tool = new LinkedHashMap<>();
+            tool.put("name", cmdPrefix + command.getName());
+            tool.put("category", categoryFor(command.getName()));
+            tool.put("description", command.getDetailedDescription());
+            List<Map<String, Object>> args = new ArrayList<>();
+            for (ArgBase arg : command.getArguments()) {
+                Map<String, Object> argMap = new LinkedHashMap<>();
+                argMap.put("name", arg.getName());
+                argMap.put("type", arg.getTypeName());
+                argMap.put("required", !arg.hasDefault());
+                args.add(argMap);
+            }
+            tool.put("arguments", args);
+            tool.put("examples", command.getExamples());
+            tools.add(tool);
+        }
+        Map<String, Object> root = new LinkedHashMap<>();
+        root.put("tools", tools);
+        Gson gson = new GsonBuilder().setPrettyPrinting().create();
+        return gson.toJson(root);
     }
 }
 

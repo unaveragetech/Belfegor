@@ -28,7 +28,7 @@ public class BuildCommand extends Command {
     protected void call(Belfegor mod, ArgParser parser) throws CommandException {
         String[] args = parser.getArgUnits();
         if (args.length == 0) {
-            throw new CommandException("Usage: @build full [radius] [here], @build farmland [name], @build storage [name], @build workshop [name], or @build mobfarm [name]");
+            throw new CommandException("Usage: @build full [radius] [here], @build farmland [name], @build storage [name], @build workshop [name], @build armory [name], or @build mobfarm [name]");
         }
         String first = args[0].trim().toLowerCase(Locale.ROOT);
         if (first.equals("validate") || first.equals("repair") || first.equals("fix")) {
@@ -103,6 +103,7 @@ public class BuildCommand extends Command {
                 "@build farmland wheat_wing",
                 "@build storage shulker_vault",
                 "@build workshop",
+                "@build armory",
                 "@build mobfarm",
                 "@build full",
                 "@build full 12 here",
@@ -118,7 +119,7 @@ public class BuildCommand extends Command {
     @Override
     public String getDetailedDescription() {
         return "Expands the remembered home base. Use @build full to build and validate "
-                + "the complete base: campsite/core, storage, workshop, hydrated crop farmland, "
+                + "the complete base: campsite/core, bulk storage, workshop, armory, hydrated crop farmland, "
                 + "and roofed mob-farm room. Use @build base import \"file.litematic\" [name] to copy a user schematic "
                 + "into Belfegor, parse it into the internal blueprint format, create a staging chest, collect/deposit "
                 + "the required block materials, and build/remember the imported structure at the player's current origin. "

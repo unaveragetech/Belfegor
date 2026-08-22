@@ -8,6 +8,7 @@ import adris.belfegor.memory.RecentPlacedBlockMemory;
 import adris.belfegor.tasks.AbstractDoToClosestObjectTask;
 import adris.belfegor.tasks.ResourceTask;
 import adris.belfegor.tasks.construction.DestroyBlockTask;
+import adris.belfegor.tasks.movement.GetToBlockTask;
 import adris.belfegor.tasks.movement.PickupDroppedItemTask;
 import adris.belfegor.tasks.movement.TimeoutWanderTask;
 import adris.belfegor.tasksystem.Task;
@@ -201,6 +202,7 @@ public class MineAndCollectTask extends ResourceTask {
         private Optional<BlockPos> _lastLocalScanResult = Optional.empty();
         private BlockPos _surplusAnchor;
         private boolean _surplusVeinMode;
+        private Vec3d _searchOrigin;
 
         public MineOrCollectTask(Block[] blocks, ItemTarget[] targets) {
             _blocks = blocks;
@@ -230,6 +232,7 @@ public class MineAndCollectTask extends ResourceTask {
                 if (RecentPlacedBlockMemory.wasRecentlyPlaced(check)) return false;
                 if (isProtectedBaseMiningArea(check)) return false;
                 if (mod.getBlockTracker().unreachable(check)) return false;
+                if (!withinTravelBudget(mod, WorldHelper.toVec3d(check))) return false;
                 return WorldHelper.canBreak(mod, check);
             }, _blocks);
 
@@ -262,6 +265,10 @@ public class MineAndCollectTask extends ResourceTask {
             Optional<ItemEntity> closestDrop = Optional.empty();
             if (mod.getEntityTracker().itemDropped(_targets)) {
                 closestDrop = mod.getEntityTracker().getClosestItemDrop(pos, _targets);
+                if (closestDrop.isPresent()
+                        && !withinTravelBudget(mod, closestDrop.get().getPos())) {
+                    closestDrop = Optional.empty();
+                }
             }
 
             double blockSq = closestBlock.isEmpty() ? Double.POSITIVE_INFINITY : closestBlock.get().getSquaredDistance(pos);
@@ -307,6 +314,7 @@ public class MineAndCollectTask extends ResourceTask {
                         if (isProtectedBaseMiningArea(candidate)) continue;
                         if (mod.getBlockTracker().unreachable(candidate)) continue;
                         if (!mod.getChunkTracker().isChunkLoaded(candidate)) continue;
+                        if (!withinTravelBudget(mod, WorldHelper.toVec3d(candidate))) continue;
                         if (!mod.getBlockTracker().blockIsValid(candidate, _blocks)) continue;
                         if (!WorldHelper.canBreak(mod, candidate)) continue;
                         double sq = candidate.getSquaredDistance(origin);
@@ -327,8 +335,12 @@ public class MineAndCollectTask extends ResourceTask {
 
         @Override
         protected Task onTick(Belfegor mod) {
-            // If we're actively mining a block, lock the target so we don't switch
-            if (_miningPos != null) {
+            // Lock only once we are close enough to actually work the block.
+            // Locking as soon as a far target was selected made the bot ignore a
+            // much closer resource discovered while Baritone was still travelling.
+            if (_miningPos != null
+                    && mod.getPlayer() != null
+                    && _miningPos.isWithinDistance(mod.getPlayer().getPos(), 6.0)) {
                 lockTarget();
             } else {
                 unlockTarget();
@@ -393,6 +405,8 @@ public class MineAndCollectTask extends ResourceTask {
             _miningPos = null;
             _surplusVeinMode = false;
             _surplusAnchor = null;
+            _searchOrigin = mod.getPlayer() == null ? null : mod.getPlayer().getPos();
+            _cachedWanderTask = null;
         }
 
         @Override
@@ -402,10 +416,22 @@ public class MineAndCollectTask extends ResourceTask {
 
         @Override
         protected Task getWanderTask(Belfegor mod) {
+            if (_searchOrigin != null && mod.getPlayer() != null
+                    && !withinTravelBudget(mod, mod.getPlayer().getPos())) {
+                setDebugState("Returning to resource-search radius before exploring again");
+                return new GetToBlockTask(BlockPos.ofFloored(_searchOrigin));
+            }
             if (_cachedWanderTask == null || _cachedWanderTask.stopped()) {
                 _cachedWanderTask = new TimeoutWanderTask(true);
             }
             return _cachedWanderTask;
+        }
+
+        private boolean withinTravelBudget(Belfegor mod, Vec3d position) {
+            if (_searchOrigin == null || position == null) return true;
+            double maxDistance = mod.getModSettings().getMaxResourceTravelDistance();
+            if (maxDistance <= 0 || Double.isInfinite(maxDistance)) return true;
+            return _searchOrigin.squaredDistanceTo(position) <= maxDistance * maxDistance;
         }
 
         public void enableSurplusVeinMode() {
@@ -468,6 +494,22 @@ public class MineAndCollectTask extends ResourceTask {
                 int dz = pos.getZ() - base.z;
                 if (dx * dx + dz * dz <= protectRadius * protectRadius) {
                     return true;
+                }
+                // The core-radius guard does not cover connected rooms. Protect
+                // every remembered module plus the configured five-block
+                // exterior buffer so stockpile/preflight mining cannot consume
+                // farm soil, room floors, hall supports, or their foundations.
+                int clearance = Math.max(5, Math.max(0, base.exteriorClearance));
+                for (BaseMemory.BaseModule module : base.modules) {
+                    if (module == null) continue;
+                    int minX = module.x - clearance;
+                    int maxX = module.x + Math.max(1, module.width) - 1 + clearance;
+                    int minZ = module.z - clearance;
+                    int maxZ = module.z + Math.max(1, module.depth) - 1 + clearance;
+                    if (pos.getX() >= minX && pos.getX() <= maxX
+                            && pos.getZ() >= minZ && pos.getZ() <= maxZ) {
+                        return true;
+                    }
                 }
             }
             return false;

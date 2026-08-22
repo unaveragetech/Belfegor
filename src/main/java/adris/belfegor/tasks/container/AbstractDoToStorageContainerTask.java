@@ -9,8 +9,11 @@ import adris.belfegor.tasksystem.ITaskUsesContainer;
 import adris.belfegor.tasksystem.Task;
 import adris.belfegor.trackers.storage.ContainerCache;
 import adris.belfegor.trackers.storage.ContainerType;
+import adris.belfegor.util.helpers.StorageHelper;
 import adris.belfegor.util.helpers.WorldHelper;
 import net.minecraft.block.Block;
+import net.minecraft.client.MinecraftClient;
+import net.minecraft.client.gui.screen.ingame.HandledScreen;
 import net.minecraft.util.math.BlockPos;
 
 import java.util.Optional;
@@ -21,10 +24,12 @@ import java.util.Optional;
 public abstract class AbstractDoToStorageContainerTask extends Task implements ITaskUsesContainer {
 
     private ContainerType _currentContainerType = null;
+    private int _openTargetMismatchTicks;
 
     @Override
     protected void onStart(Belfegor mod) {
-
+        _currentContainerType = null;
+        _openTargetMismatchTicks = 0;
     }
 
     @Override
@@ -39,6 +44,50 @@ public abstract class AbstractDoToStorageContainerTask extends Task implements I
         }
 
         BlockPos targetPos = containerTarget.get();
+
+        boolean handledScreenOpen = MinecraftClient.getInstance().currentScreen instanceof HandledScreen;
+        Optional<BlockPos> lastInteracted = mod.getItemStorage().getLastBlockPosInteraction();
+        boolean screenBelongsToTarget = lastInteracted.filter(targetPos::equals).isPresent();
+
+        if (handledScreenOpen
+                && _currentContainerType != null
+                && ContainerType.screenHandlerMatches(_currentContainerType)
+                && !screenBelongsToTarget) {
+            _openTargetMismatchTicks++;
+            if (_openTargetMismatchTicks <= 5) {
+                setDebugState("Waiting for container ownership tracking at " + targetPos.toShortString());
+                return null;
+            }
+            DebugLogger.getInstance().log("CONTAINER",
+                    "closing-wrong-open-screen target=" + targetPos.toShortString()
+                            + " lastInteracted=" + lastInteracted.map(BlockPos::toShortString).orElse("none")
+                            + " type=" + _currentContainerType
+                            + " task=" + toString());
+            StorageHelper.closeScreen();
+            _currentContainerType = null;
+            _openTargetMismatchTicks = 0;
+            return null;
+        }
+
+        if (screenBelongsToTarget) {
+            _openTargetMismatchTicks = 0;
+        }
+
+        if (_currentContainerType == null && mod.getChunkTracker().isChunkLoaded(targetPos)) {
+            Block type = mod.getWorld().getBlockState(targetPos).getBlock();
+            ContainerType liveType = ContainerType.getFromBlock(type);
+            if (liveType != ContainerType.EMPTY
+                    && handledScreenOpen
+                    && screenBelongsToTarget
+                    && ContainerType.screenHandlerMatches(liveType)) {
+                _currentContainerType = liveType;
+                DebugLogger.getInstance().log("CONTAINER",
+                        "adopted-already-open-screen target=" + targetPos.toShortString()
+                                + " type=" + _currentContainerType
+                                + " task=" + toString()
+                                + " note=avoiding reopen spam");
+            }
+        }
 
         // We're open
         if (_currentContainerType != null && ContainerType.screenHandlerMatches(_currentContainerType)) {
@@ -58,7 +107,7 @@ public abstract class AbstractDoToStorageContainerTask extends Task implements I
         }
 
         // Get to the container
-        if (mod.getChunkTracker().isChunkLoaded(targetPos)) {
+        if (_currentContainerType == null && mod.getChunkTracker().isChunkLoaded(targetPos)) {
             Block type = mod.getWorld().getBlockState(targetPos).getBlock();
             _currentContainerType = ContainerType.getFromBlock(type);
         }
@@ -72,7 +121,30 @@ public abstract class AbstractDoToStorageContainerTask extends Task implements I
 
     @Override
     protected void onStop(Belfegor mod, Task interruptTask) {
-
+        Optional<BlockPos> target = getContainerTarget();
+        Optional<BlockPos> lastInteracted = mod.getItemStorage().getLastBlockPosInteraction();
+        boolean ownsOpenScreen = _currentContainerType != null
+                && ContainerType.screenHandlerMatches(_currentContainerType)
+                && target.isPresent()
+                && lastInteracted.filter(target.get()::equals).isPresent();
+        if (ownsOpenScreen) {
+            if (StorageHelper.getItemStackInCursorSlot().isEmpty()) {
+                DebugLogger.getInstance().log("CONTAINER",
+                        "closing-owned-screen-on-stop target=" + target.get().toShortString()
+                                + " type=" + _currentContainerType
+                                + " task=" + toString()
+                                + " interrupt=" + (interruptTask == null ? "clean" : interruptTask));
+                StorageHelper.closeScreen();
+            } else {
+                DebugLogger.getInstance().logImmediate("CONTAINER",
+                        "owned-screen-stop-deferred-cursor-held target=" + target.get().toShortString()
+                                + " type=" + _currentContainerType
+                                + " task=" + toString()
+                                + " cursor=" + StorageHelper.getItemStackInCursorSlot());
+            }
+        }
+        _currentContainerType = null;
+        _openTargetMismatchTicks = 0;
     }
 
     protected abstract Optional<BlockPos> getContainerTarget();

@@ -5,6 +5,7 @@ import adris.belfegor.Debug;
 import adris.belfegor.TaskCatalogue;
 import adris.belfegor.tasks.ResourceTask;
 import adris.belfegor.tasksystem.Task;
+import adris.belfegor.util.helpers.ItemHelper;
 import net.minecraft.item.Item;
 import net.minecraft.item.Items;
 
@@ -16,7 +17,7 @@ import java.util.*;
  * Delegates to TaskCatalogue.getItemTask for each tool, which handles
  * all resource gathering, crafting table/furnace creation, and crafting.
  *
- * Tools crafted in order: pickaxe, axe, shovel, sword.
+ * Tools crafted in order: pickaxe, axe, shovel, sword, hoe.
  * If you already have a tool, it is skipped.
  *
  * Progression:
@@ -57,8 +58,56 @@ public class ToolSetTask extends Task {
         tools.add(getTool(tierBase, "axe"));
         tools.add(getTool(tierBase, "shovel"));
         tools.add(getTool(tierBase, "sword"));
+        tools.add(getTool(tierBase, "hoe"));
         tools.removeIf(Objects::isNull);
         return tools;
+    }
+
+    /** The full tool set (including hoe) for a tier. */
+    public static Item[] tierTools(Tier tier) {
+        return switch (tier) {
+            case WOOD -> ItemHelper.WOODEN_TOOLS;
+            case STONE -> ItemHelper.STONE_TOOLS;
+            case IRON -> ItemHelper.IRON_TOOLS;
+            case DIAMOND -> ItemHelper.DIAMOND_TOOLS;
+        };
+    }
+
+    /** Highest tier the bot currently has a pickaxe for. */
+    public static Tier currentTier(Belfegor mod) {
+        if (mod.getItemStorage().hasItem(Items.DIAMOND_PICKAXE)) return Tier.DIAMOND;
+        if (mod.getItemStorage().hasItem(Items.IRON_PICKAXE)) return Tier.IRON;
+        if (mod.getItemStorage().hasItem(Items.STONE_PICKAXE)) return Tier.STONE;
+        return Tier.WOOD;
+    }
+
+    public static boolean hasFullSet(Belfegor mod, Tier tier) {
+        for (Item tool : tierTools(tier)) {
+            if (tool != null && !mod.getItemStorage().hasItem(tool)) return false;
+        }
+        return true;
+    }
+
+    /**
+     * The tool progression chain. A complete set of one tier is the trigger to
+     * build the next tier; a complete diamond set is the end goal and is
+     * "good enough" for most tasks.
+     */
+    public static Tier next(Tier tier) {
+        return switch (tier) {
+            case WOOD -> Tier.STONE;
+            case STONE -> Tier.IRON;
+            case IRON -> Tier.DIAMOND;
+            case DIAMOND -> null;
+        };
+    }
+
+    /** Highest tier for which a complete set is currently carried. */
+    public static Tier highestCompleteSetTier(Belfegor mod) {
+        for (Tier tier : new Tier[]{Tier.DIAMOND, Tier.IRON, Tier.STONE, Tier.WOOD}) {
+            if (hasFullSet(mod, tier)) return tier;
+        }
+        return null;
     }
 
     private Item getTierBaseItem() {

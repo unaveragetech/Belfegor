@@ -85,15 +85,15 @@ public class EnsureToolTask extends Task {
 
             case WOOD:
                 // Need wooden pickaxe (and axe for wood gathering)
-                if (!mod.getItemStorage().hasItem(Items.WOODEN_PICKAXE)) {
+                if (!mod.getItemStorage().hasItemInventoryOnly(Items.WOODEN_PICKAXE)) {
                     return TaskCatalogue.getItemTask(Items.WOODEN_PICKAXE, 1);
                 }
                 return null;
 
             case STONE:
                 // Need stone pickaxe (requires wooden pickaxe first)
-                if (!mod.getItemStorage().hasItem(Items.STONE_PICKAXE)) {
-                    if (!mod.getItemStorage().hasItem(Items.WOODEN_PICKAXE)) {
+                if (!mod.getItemStorage().hasItemInventoryOnly(Items.STONE_PICKAXE)) {
+                    if (!mod.getItemStorage().hasItemInventoryOnly(Items.WOODEN_PICKAXE)) {
                         return TaskCatalogue.getItemTask(Items.WOODEN_PICKAXE, 1);
                     }
                     return TaskCatalogue.getItemTask(Items.STONE_PICKAXE, 1);
@@ -102,9 +102,9 @@ public class EnsureToolTask extends Task {
 
             case IRON:
                 // Need iron pickaxe (requires stone pickaxe first)
-                if (!mod.getItemStorage().hasItem(Items.IRON_PICKAXE)) {
-                    if (!mod.getItemStorage().hasItem(Items.STONE_PICKAXE)) {
-                        if (!mod.getItemStorage().hasItem(Items.WOODEN_PICKAXE)) {
+                if (!mod.getItemStorage().hasItemInventoryOnly(Items.IRON_PICKAXE)) {
+                    if (!mod.getItemStorage().hasItemInventoryOnly(Items.STONE_PICKAXE)) {
+                        if (!mod.getItemStorage().hasItemInventoryOnly(Items.WOODEN_PICKAXE)) {
                             return TaskCatalogue.getItemTask(Items.WOODEN_PICKAXE, 1);
                         }
                         return TaskCatalogue.getItemTask(Items.STONE_PICKAXE, 1);
@@ -115,10 +115,10 @@ public class EnsureToolTask extends Task {
 
             case DIAMOND:
                 // Need diamond pickaxe (requires iron pickaxe first)
-                if (!mod.getItemStorage().hasItem(Items.DIAMOND_PICKAXE)) {
-                    if (!mod.getItemStorage().hasItem(Items.IRON_PICKAXE)) {
-                        if (!mod.getItemStorage().hasItem(Items.STONE_PICKAXE)) {
-                            if (!mod.getItemStorage().hasItem(Items.WOODEN_PICKAXE)) {
+                if (!mod.getItemStorage().hasItemInventoryOnly(Items.DIAMOND_PICKAXE)) {
+                    if (!mod.getItemStorage().hasItemInventoryOnly(Items.IRON_PICKAXE)) {
+                        if (!mod.getItemStorage().hasItemInventoryOnly(Items.STONE_PICKAXE)) {
+                            if (!mod.getItemStorage().hasItemInventoryOnly(Items.WOODEN_PICKAXE)) {
                                 return TaskCatalogue.getItemTask(Items.WOODEN_PICKAXE, 1);
                             }
                             return TaskCatalogue.getItemTask(Items.STONE_PICKAXE, 1);
@@ -131,11 +131,11 @@ public class EnsureToolTask extends Task {
 
             case NETHERITE:
                 // Need netherite pickaxe (requires diamond pickaxe + netherite ingot)
-                if (!mod.getItemStorage().hasItem(Items.NETHERITE_PICKAXE)) {
-                    if (!mod.getItemStorage().hasItem(Items.DIAMOND_PICKAXE)) {
-                        if (!mod.getItemStorage().hasItem(Items.IRON_PICKAXE)) {
-                            if (!mod.getItemStorage().hasItem(Items.STONE_PICKAXE)) {
-                                if (!mod.getItemStorage().hasItem(Items.WOODEN_PICKAXE)) {
+                if (!mod.getItemStorage().hasItemInventoryOnly(Items.NETHERITE_PICKAXE)) {
+                    if (!mod.getItemStorage().hasItemInventoryOnly(Items.DIAMOND_PICKAXE)) {
+                        if (!mod.getItemStorage().hasItemInventoryOnly(Items.IRON_PICKAXE)) {
+                            if (!mod.getItemStorage().hasItemInventoryOnly(Items.STONE_PICKAXE)) {
+                                if (!mod.getItemStorage().hasItemInventoryOnly(Items.WOODEN_PICKAXE)) {
                                     return TaskCatalogue.getItemTask(Items.WOODEN_PICKAXE, 1);
                                 }
                                 return TaskCatalogue.getItemTask(Items.STONE_PICKAXE, 1);
@@ -190,7 +190,7 @@ public class EnsureToolTask extends Task {
 
     @Override
     protected String toDebugString() {
-        return "Ensure Tool: " + _minimumRequirement + (isToolReady(null) ? " [READY]" : " [CRAFTING]");
+        return "Ensure Tool: " + _minimumRequirement + (_toolReady ? " [READY]" : " [CRAFTING]");
     }
 
     @Override

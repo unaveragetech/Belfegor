@@ -3,6 +3,7 @@ package adris.belfegor.util.helpers;
 import adris.belfegor.Belfegor;
 import adris.belfegor.Debug;
 import adris.belfegor.TaskCatalogue;
+import adris.belfegor.debug.DebugLogger;
 import adris.belfegor.mixins.AbstractFurnaceScreenHandlerAccessor;
 import adris.belfegor.tasks.CraftInInventoryTask;
 import adris.belfegor.util.CraftingRecipe;
@@ -55,6 +56,15 @@ public class StorageHelper {
                         !(screen instanceof GameOptionsScreen) &&
                         !(screen instanceof ChatScreen) &&
                         !(screen instanceof adris.belfegor.ui.BelfegorScreen)) {
+            StackTraceElement caller = Arrays.stream(Thread.currentThread().getStackTrace())
+                    .filter(frame -> !frame.getClassName().equals(StorageHelper.class.getName()))
+                    .filter(frame -> !frame.getClassName().equals(Thread.class.getName()))
+                    .findFirst()
+                    .orElse(null);
+            DebugLogger.getInstance().logImmediate("SCREEN-CLOSE",
+                    "screen=" + screen.getClass().getName()
+                            + " handler=" + MinecraftClient.getInstance().player.currentScreenHandler.getClass().getName()
+                            + " caller=" + caller);
             // Close the screen if we're in-game
             MinecraftClient.getInstance().player.closeHandledScreen();
         }

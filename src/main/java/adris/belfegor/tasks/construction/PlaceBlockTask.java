@@ -46,6 +46,8 @@ public class PlaceBlockTask extends Task implements ITaskRequiresGrounded {
     private final Block[] _toPlace;
     private final boolean _useThrowaways;
     private final boolean _autoCollectStructureBlocks;
+    private final boolean _directOnly;
+    private final int _minimumStandY;
     private final MovementProgressChecker _progressChecker = new MovementProgressChecker();
     private final TimeoutWanderTask _wanderTask = new TimeoutWanderTask(5); // This can get stuck forever, so we increase the range.
     private Task _materialTask;
@@ -56,12 +58,25 @@ public class PlaceBlockTask extends Task implements ITaskRequiresGrounded {
     private Task _directPlacementTask = null;
     private int _directPlacementTicks = 0;
     private int _directPlacementSupportSkip = 0;
+    private int _directOnlyCooldown = 0;
 
     public PlaceBlockTask(BlockPos target, Block[] toPlace, boolean useThrowaways, boolean autoCollectStructureBlocks) {
+        this(target, toPlace, useThrowaways, autoCollectStructureBlocks, false, Integer.MIN_VALUE);
+    }
+
+    public PlaceBlockTask(BlockPos target, Block[] toPlace, boolean useThrowaways,
+                          boolean autoCollectStructureBlocks, boolean directOnly) {
+        this(target, toPlace, useThrowaways, autoCollectStructureBlocks, directOnly, Integer.MIN_VALUE);
+    }
+
+    public PlaceBlockTask(BlockPos target, Block[] toPlace, boolean useThrowaways,
+                          boolean autoCollectStructureBlocks, boolean directOnly, int minimumStandY) {
         _target = target;
         _toPlace = toPlace;
         _useThrowaways = useThrowaways;
         _autoCollectStructureBlocks = autoCollectStructureBlocks;
+        _directOnly = directOnly && !useThrowaways;
+        _minimumStandY = minimumStandY;
     }
 
     public PlaceBlockTask(BlockPos target, Block... toPlace) {
@@ -175,6 +190,16 @@ public class PlaceBlockTask extends Task implements ITaskRequiresGrounded {
             return new DestroyBlockTask(_target);
         }
 
+        // Integrity repair already moves to a known adjacent stand before it
+        // creates this task. Do not hand a one-block repair back to Baritone's
+        // schematic process: if that process accepts the material but cannot
+        // place from the current geometry it may remain active indefinitely.
+        // A bounded controller click has no persistent builder goal and the
+        // parent can validate the world state again on the next tick.
+        if (_directOnly) {
+            return tickDirectOnly(mod);
+        }
+
 
         // Check if we're approaching our point. If we fail, wander for a bit.
         if (!_progressChecker.check(mod)) {
@@ -252,7 +277,11 @@ public class PlaceBlockTask extends Task implements ITaskRequiresGrounded {
     @Override
     protected boolean isEqual(Task other) {
         if (other instanceof PlaceBlockTask task) {
-            return task._target.equals(_target) && task._useThrowaways == _useThrowaways && Arrays.equals(task._toPlace, _toPlace);
+            return task._target.equals(_target)
+                    && task._useThrowaways == _useThrowaways
+                    && task._directOnly == _directOnly
+                    && task._minimumStandY == _minimumStandY
+                    && Arrays.equals(task._toPlace, _toPlace);
         }
         return false;
     }
@@ -282,6 +311,39 @@ public class PlaceBlockTask extends Task implements ITaskRequiresGrounded {
 
     private boolean tryingAlternativeWay() {
         return _failCount % 4 == 3;
+    }
+
+    private Task tickDirectOnly(Belfegor mod) {
+        mod.getClientBaritone().getBuilderProcess().onLostControl();
+        if (_directOnlyCooldown-- > 0) {
+            setDebugState("Waiting for direct repair placement acknowledgement");
+            return null;
+        }
+        if (getCarriedPlaceableBlock(mod) == null) {
+            setDebugState("Waiting for exact direct repair material");
+            return getExactMaterialTask(PREFERRED_MATERIALS);
+        }
+        BlockPos stand = findAdjacentStandPosition(mod);
+        if (mod.getPlayer() == null
+                || stand == null
+                || !stand.equals(mod.getPlayer().getBlockPos())
+                || mod.getPlayer().getEyePos().squaredDistanceTo(Vec3d.ofCenter(_target)) > 20.25) {
+            if (stand != null) {
+                setDebugState("Moving to bounded direct repair stand");
+                return new GetToBlockTask(stand).withoutBreaking();
+            }
+            DebugLogger.getInstance().logImmediate("PLACE-BLOCK",
+                    "direct-only no safe stand target=" + _target
+                            + " blocks=" + Arrays.toString(_toPlace));
+            return null;
+        }
+        _directPlacementAttempted = false;
+        boolean verifiedImmediately = tryDirectInteractPlacement(mod);
+        _directOnlyCooldown = 3;
+        setDebugState(verifiedImmediately
+                ? "Direct repair placement verified"
+                : "Direct repair placement sent; awaiting world state");
+        return null;
     }
 
     private int getExactMaterialCount(Belfegor mod) {
@@ -318,26 +380,33 @@ public class PlaceBlockTask extends Task implements ITaskRequiresGrounded {
         BlockPos best = null;
         double bestDistance = Double.POSITIVE_INFINITY;
         for (Direction direction : directions) {
-            BlockPos stand = _target.offset(direction);
-            if (!WorldHelper.isSolid(mod, stand.down())) continue;
-            if (!mod.getWorld().getBlockState(stand).isAir()) continue;
-            if (!mod.getWorld().getBlockState(stand.up()).isAir()) continue;
-            double distance = stand.getSquaredDistance(player);
-            if (distance < bestDistance) {
-                bestDistance = distance;
-                best = stand;
+            // The target may be the third or fourth wall layer. Standing at
+            // target Y can be an unreachable mid-air goal; search downward for
+            // a supported two-block-high position that remains within reach.
+            for (int yOffset = 1; yOffset >= -3; yOffset--) {
+                BlockPos stand = _target.offset(direction).add(0, yOffset, 0);
+                if (stand.getY() < _minimumStandY) continue;
+                if (!WorldHelper.isSolid(mod, stand.down())) continue;
+                if (!mod.getWorld().getBlockState(stand).isAir()) continue;
+                if (!mod.getWorld().getBlockState(stand.up()).isAir()) continue;
+                Vec3d eye = Vec3d.ofCenter(stand).add(0, 1.62, 0);
+                if (eye.squaredDistanceTo(Vec3d.ofCenter(_target)) > 20.25) continue;
+                double distance = stand.getSquaredDistance(player);
+                if (distance < bestDistance) {
+                    bestDistance = distance;
+                    best = stand;
+                }
             }
         }
         return best;
     }
 
     private Task createDirectPlacementTask(Belfegor mod) {
-        if (_directPlacementAttempted || _useThrowaways || _toPlace.length != 1) return null;
-        Block block = _toPlace[0];
-        if (block == null || block.asItem() == Items.AIR) return null;
-        if (mod.getItemStorage().getItemCount(block.asItem()) < 1) return null;
+        if (_directPlacementAttempted || _useThrowaways) return null;
+        Block block = getCarriedPlaceableBlock(mod);
+        if (block == null) return null;
 
-        Direction[] supportDirections = supportDirections(mod);
+        Direction[] supportDirections = supportDirections(mod, block);
         int validSupportIndex = 0;
         for (Direction supportDirection : supportDirections) {
             BlockPos support = _target.offset(supportDirection);
@@ -361,13 +430,21 @@ public class PlaceBlockTask extends Task implements ITaskRequiresGrounded {
     }
 
     private boolean tryDirectInteractPlacement(Belfegor mod) {
-        if (_useThrowaways || _toPlace.length != 1) return false;
-        Block block = _toPlace[0];
-        if (block == null || block.asItem() == Items.AIR) return false;
-        if (mod.getItemStorage().getItemCount(block.asItem()) < 1) return false;
+        if (_useThrowaways) return false;
+        Block block = getCarriedPlaceableBlock(mod);
+        if (block == null) return false;
+        // Client-side interaction can briefly predict a placed block even when
+        // the server will reject the click for being out of reach. Treating
+        // that transient state as success caused placement tasks to restart
+        // and bounce between adjacent goals forever. Let the owned
+        // InteractWithBlockTask approach the support before any direct click.
+        if (mod.getPlayer() == null
+                || mod.getPlayer().getEyePos().squaredDistanceTo(Vec3d.ofCenter(_target)) > 20.25) {
+            return false;
+        }
         if (!mod.getSlotHandler().forceEquipItem(new ItemTarget(block.asItem(), 1), false)) return false;
 
-        Direction[] directions = supportDirections(mod);
+        Direction[] directions = supportDirections(mod, block);
         int validSupportIndex = 0;
         for (Direction supportDirection : directions) {
             BlockPos support = _target.offset(supportDirection);
@@ -409,7 +486,31 @@ public class PlaceBlockTask extends Task implements ITaskRequiresGrounded {
         return false;
     }
 
-    private Direction[] supportDirections(Belfegor mod) {
+    private Block getCarriedPlaceableBlock(Belfegor mod) {
+        for (Block block : _toPlace) {
+            if (block == null || block.asItem() == Items.AIR) continue;
+            if (mod.getItemStorage().getItemCount(block.asItem()) > 0) {
+                return block;
+            }
+        }
+        return null;
+    }
+
+    private Direction[] supportDirections(Belfegor mod, Block block) {
+        // Doors can only be placed against the top face of the supporting
+        // floor. Trying adjacent wall faces first reports a successful click
+        // without producing a door, which previously sent grouped wooden-door
+        // targets into a minute-long approach/wander loop.
+        if (block instanceof net.minecraft.block.DoorBlock) {
+            return new Direction[]{
+                    Direction.DOWN,
+                    Direction.NORTH,
+                    Direction.SOUTH,
+                    Direction.EAST,
+                    Direction.WEST,
+                    Direction.UP
+            };
+        }
         if (mod.getPlayer() != null && _target.getY() <= mod.getPlayer().getBlockPos().getY()) {
             return new Direction[]{
                     Direction.NORTH,

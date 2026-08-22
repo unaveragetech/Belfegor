@@ -18,6 +18,8 @@ import adris.belfegor.memory.CraftingMemory;
 import adris.belfegor.memory.BaseMemory;
 import adris.belfegor.memory.BaseStorageMemory;
 import adris.belfegor.memory.DecisionEngine;
+import adris.belfegor.memory.ErrandMemory;
+import adris.belfegor.memory.GamePlanMemory;
 import adris.belfegor.memory.LocationMemory;
 import adris.belfegor.memory.ShulkerMemory;
 import adris.belfegor.memory.SpatialAwareness;
@@ -195,6 +197,16 @@ public class Belfegor implements ModInitializer {
             Debug.logWarning("Failed to initialize base storage memory: " + e.getMessage());
         }
         try {
+            ErrandMemory.init(new java.io.File("."));
+        } catch (Exception e) {
+            Debug.logWarning("Failed to initialize errand memory: " + e.getMessage());
+        }
+        try {
+            GamePlanMemory.init(new java.io.File("."));
+        } catch (Exception e) {
+            Debug.logWarning("Failed to initialize game plan memory: " + e.getMessage());
+        }
+        try {
             SpatialAwareness.init(new java.io.File("."));
         } catch (Exception e) {
             Debug.logWarning("Failed to initialize spatial awareness: " + e.getMessage());
@@ -289,6 +301,11 @@ public class Belfegor implements ModInitializer {
     // Client tick
     private void onClientTick() {
         runEnqueuedPostInits();
+
+        // Deliver completed @ai chat responses to game chat automatically,
+        // just like any other bot message, without needing a panel.
+        adris.belfegor.llm.LlmAdvisor.getInstance().pollChatDecision().ifPresent(
+                decision -> adris.belfegor.commands.AiCommand.logDecision(this, decision));
 
         _inputControls.onTickPre();
 

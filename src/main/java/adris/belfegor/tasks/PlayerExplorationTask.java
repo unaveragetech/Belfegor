@@ -6,18 +6,26 @@ import adris.belfegor.Settings;
 import adris.belfegor.TaskCatalogue;
 import adris.belfegor.memory.BaseMemory;
 import adris.belfegor.memory.BaseStorageMemory;
+import adris.belfegor.memory.GamePlanMemory;
 import adris.belfegor.memory.LocationMemory;
 import adris.belfegor.memory.SpatialAwareness;
 import adris.belfegor.llm.LlmAdvisor;
 import adris.belfegor.tasks.construction.BuildBaseExpansionTask;
+import adris.belfegor.tasks.construction.BuildBaseValidationTask;
 import adris.belfegor.tasks.construction.BuildCampsiteTask;
+import adris.belfegor.tasks.container.InventoryTriageTask;
 import adris.belfegor.tasks.container.ShulkerInteractionTask;
+import adris.belfegor.tasks.entity.ShootArrowSimpleProjectileTask;
 import adris.belfegor.tasks.movement.GetToBlockTask;
 import adris.belfegor.tasks.movement.PickupDroppedItemTask;
+import adris.belfegor.tasks.movement.RunAwayFromHostilesTask;
 import adris.belfegor.tasks.movement.TimeoutWanderTask;
+import adris.belfegor.tasks.resources.CampArmoryTask;
 import adris.belfegor.tasks.resources.CampStockpileTask;
+import adris.belfegor.tasks.resources.EnsureToolReservesTask;
 import adris.belfegor.tasks.resources.KillAndLootTask;
 import adris.belfegor.tasks.resources.ToolSetTask;
+import adris.belfegor.tasks.speedrun.GamePlanTask;
 import adris.belfegor.tasksystem.Task;
 import adris.belfegor.trackers.BlockTracker;
 import adris.belfegor.util.ItemTarget;
@@ -36,6 +44,7 @@ import net.minecraft.util.math.BlockPos;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Predicate;
 
 /**
@@ -62,6 +71,7 @@ public class PlayerExplorationTask extends Task {
     private int _explorationCounter = 0;
     private int _campBuildCount = 0;
     private BlockPos _homeBase;
+    private boolean _homeValidationComplete;
 
     private final TimerGame _phaseTimer = new TimerGame(30);
     private final TimerGame _foodCheckTimer = new TimerGame(10);
@@ -69,6 +79,10 @@ public class PlayerExplorationTask extends Task {
     private final TimerGame _homeCheckTimer = new TimerGame(90);
     private final TimerGame _shulkerSortTimer = new TimerGame(20);
     private final TimerGame _stockpileTimer = new TimerGame(45);
+    private final TimerGame _armoryTimer = new TimerGame(120);
+    private final TimerGame _inventoryTriageTimer = new TimerGame(60);
+    private final TimerGame _toolReserveTimer = new TimerGame(120);
+    private boolean _inventoryTriageDone;
 
     private enum Phase {
         EXPLORE,
@@ -83,6 +97,8 @@ public class PlayerExplorationTask extends Task {
     protected void onStart(Belfegor mod) {
         _phase = Phase.EXPLORE;
         _explorationCounter = 0;
+        _homeValidationComplete = false;
+        _inventoryTriageDone = false;
         _homeBase = resolvePersistentHome(mod);
         _campBuildCount = estimateCompletedBaseCycles();
         mod.getModSettings().setHomeBasePosition(_homeBase);
@@ -90,12 +106,17 @@ public class PlayerExplorationTask extends Task {
         mod.getModSettings().setDefendHomeBase(true);
         mod.getModSettings().setHomeBaseDefenseRadius(32);
         Settings.save(mod.getModSettings());
+        mod.getBehaviour().push();
+        mod.getBehaviour().avoidBlockBreaking(pos -> isProtectedHomeStructureBlock(mod, pos));
         LocationMemory.getInstance().remember("home_base",
                 _homeBase.getX(), _homeBase.getY(), _homeBase.getZ(),
                 WorldHelper.getCurrentDimension().name(), "set_by_player_mode");
         rememberExpandedBasePlan();
         LocationMemory.getInstance().save();
         BaseMemory.getInstance().save();
+        if (!isCoreComplete() || nextMissingExpansionType() != null) {
+            _phase = Phase.HOME;
+        }
         Debug.logInternal("PlayerExplorationTask: Starting autonomous exploration");
     }
 
@@ -108,7 +129,12 @@ public class PlayerExplorationTask extends Task {
         }
         if (mod.getPlayer() != null) {
             var nearest = BaseMemory.getInstance().nearestBase(mod.getPlayer().getBlockPos(), dim);
-            if (nearest.isPresent()) {
+            // Only adopt a remembered base that is genuinely nearby. After
+            // @drop home (or on a fresh world), a far-away stale base must not
+            // pull the bot back to the old location; a new home is established
+            // near the player instead.
+            if (nearest.isPresent()
+                    && nearest.get().distanceSq(mod.getPlayer().getBlockPos()) <= 48 * 48) {
                 return nearest.get().center();
             }
             return mod.getPlayer().getBlockPos();
@@ -126,9 +152,8 @@ public class PlayerExplorationTask extends Task {
         int expansions = 0;
         for (BaseMemory.BaseModule module : base.get().modules) {
             if (BaseMemory.getInstance().moduleComplete(module)
-                    && ("farm".equalsIgnoreCase(module.type)
-                    || "utility".equalsIgnoreCase(module.type)
-                    || "mob_farm".equalsIgnoreCase(module.type))) {
+                    && module.parent != null && !module.parent.isBlank()
+                    && isManagedExpansionType(module.type)) {
                 expansions++;
             }
         }
@@ -137,10 +162,33 @@ public class PlayerExplorationTask extends Task {
 
     @Override
     protected Task onTick(Belfegor mod) {
+        // One @player-owned child has the lane until it finishes. Timers, LLM
+        // advice, stockpiling, and phase changes must never replace a craft,
+        // container transfer, or Baritone build halfway through its state.
+        boolean taskJustFinished = false;
+        if (_activeTask != null) {
+            if (!_activeTask.stopped() && !_activeTask.isFinished(mod)) {
+                LlmAdvisor.getInstance().setTaskStatus(
+                        _activeTaskKey == null ? "active" : _activeTaskKey);
+                return _activeTask;
+            }
+            taskJustFinished = true;
+            if (_activeTask instanceof BuildBaseValidationTask && _activeTask.isFinished(mod)) {
+                _homeValidationComplete = true;
+            }
+            _activeTask = null;
+            _activeTaskKey = null;
+        }
+        if (taskJustFinished) {
+            // Let the advisor chain the next goal shortly after a task ends.
+            LlmAdvisor.getInstance().onTaskCompleted();
+        }
+        LlmAdvisor.getInstance().setTaskStatus("idle phase=" + _phase);
+
         if (shouldFleeDanger(mod)) {
             setDebugState("Fleeing danger!");
             LlmAdvisor.getInstance().recordAction("player_mode:flee_danger", "nearby danger or low health");
-            return new TimeoutWanderTask(true);
+            return cacheTask("flee-hostiles", new RunAwayFromHostilesTask(24, true));
         }
 
         SpatialAwareness.SpatialSnapshot snapshot = SpatialAwareness.getInstance().scan(mod, 8);
@@ -160,6 +208,22 @@ public class PlayerExplorationTask extends Task {
             return shulkerTask;
         }
 
+        Task triageTask = maybeTriageInventory(mod);
+        if (triageTask != null) {
+            setDebugState("Triage inventory at home storage");
+            LlmAdvisor.getInstance().recordAction("player_mode:inventory_triage",
+                    "storing unused items into base storage and keeping field kit");
+            return triageTask;
+        }
+
+        Task toolReserveTask = maybeMaintainToolReserves(mod);
+        if (toolReserveTask != null) {
+            setDebugState("Maintaining carried tool set and backup reserves");
+            LlmAdvisor.getInstance().recordAction("player_mode:tool_reserves",
+                    "ensuring full carried tool set plus backup set at base");
+            return toolReserveTask;
+        }
+
         Task stockpileTask = maybeMaintainCampStockpile(mod);
         if (stockpileTask != null) {
             setDebugState("Maintaining home stockpile");
@@ -167,18 +231,29 @@ public class PlayerExplorationTask extends Task {
             return stockpileTask;
         }
 
+        Task armoryTask = maybeMaintainArmory(mod);
+        if (armoryTask != null) {
+            setDebugState("Maintaining carried combat kit and armory reserves");
+            LlmAdvisor.getInstance().recordAction("player_mode:armory",
+                    "long-term survival gear reserve requires maintenance");
+            return armoryTask;
+        }
+
         if (maybeUseAdvisor(mod)) {
             return null;
         }
 
-        if (!mod.getItemStorage().hasItem(Items.WOODEN_PICKAXE)) {
+        if (!mod.getItemStorage().hasItem(
+                Items.WOODEN_PICKAXE, Items.STONE_PICKAXE, Items.IRON_PICKAXE,
+                Items.GOLDEN_PICKAXE, Items.DIAMOND_PICKAXE, Items.NETHERITE_PICKAXE)) {
             setDebugState("Getting first pickaxe");
             LlmAdvisor.getInstance().recordAction("player_mode:get_wooden_pickaxe", "required starter tool missing");
-            return TaskCatalogue.getItemTask(Items.WOODEN_PICKAXE, 1);
+            return cacheTask("starter-pickaxe", TaskCatalogue.getItemTask(Items.WOODEN_PICKAXE, 1));
         }
 
         if ((_campBuildCount == 0 || _homeCheckTimer.elapsed()) && _phase != Phase.SURVIVE) {
             _phase = Phase.HOME;
+            _homeValidationComplete = false;
             _homeCheckTimer.reset();
         }
 
@@ -205,7 +280,7 @@ public class PlayerExplorationTask extends Task {
 
         setDebugState("Exploring #" + _explorationCounter);
         LlmAdvisor.getInstance().setPlannedAction("wander/explore nearby terrain");
-        return new TimeoutWanderTask(true);
+        return cacheTask("explore-wander", new TimeoutWanderTask(true));
     }
 
     private void rememberExpandedBasePlan() {
@@ -213,74 +288,15 @@ public class PlayerExplorationTask extends Task {
         int radius = 8;
         int wallHeight = 4;
         int clearance = 5;
-        int inner = Math.max(3, radius - 2);
-        int farmSize = Math.max(5, Math.min(9, radius + 1));
-        int mobSize = Math.max(7, Math.min(13, radius));
-        BlockPos farmOrigin = _homeBase.add(-radius + 2, -1, radius - farmSize - 1);
-        BlockPos mobOrigin = _homeBase.add(-radius + 2, 0, -radius + 2);
-        BlockPos mobCenter = mobOrigin.add(mobSize / 2, 0, mobSize / 2);
-
         LocationMemory.getInstance().remember("home_room_core",
                 _homeBase.getX(), _homeBase.getY(), _homeBase.getZ(), dim,
-                "center;player_mode_blueprint");
-        LocationMemory.getInstance().remember("home_room_crafting",
-                _homeBase.getX() + 2, _homeBase.getY(), _homeBase.getZ() + 2, dim,
-                "crafting_table_anchor;player_mode_blueprint");
-        LocationMemory.getInstance().remember("home_room_smelting",
-                _homeBase.getX() - 2, _homeBase.getY(), _homeBase.getZ() + 2, dim,
-                "furnace_anchor;player_mode_blueprint");
-        LocationMemory.getInstance().remember("home_room_storage",
-                _homeBase.getX() + 2, _homeBase.getY(), _homeBase.getZ() - 2, dim,
-                "chest_and_shulker_anchor;player_mode_blueprint");
-        LocationMemory.getInstance().remember("home_room_farm",
-                farmOrigin.getX() + farmSize / 2, farmOrigin.getY(), farmOrigin.getZ() + farmSize / 2,
-                dim, "crop_plot_center;hydrated_by_2x2_infinite_source;player_mode_blueprint");
-        LocationMemory.getInstance().remember("home_room_farm_water",
-                farmOrigin.getX() + farmSize / 2, farmOrigin.getY(), farmOrigin.getZ() + farmSize / 2,
-                dim, "2x2_infinite_water_source;hydration_center;player_mode_blueprint");
-        LocationMemory.getInstance().remember("home_room_mob_farm",
-                mobCenter.getX(), mobCenter.getY(), mobCenter.getZ(), dim,
-                "roofed_dark_room;four_high_walls;two_wide_entrance;player_mode_blueprint");
-
+                "locked player-mode home center");
         BaseMemory memory = BaseMemory.getInstance();
         memory.rememberBase(_homeBase, dim, radius, wallHeight, clearance, "set_by_player_mode");
-        memory.rememberModule(_homeBase, dim, "core", "room",
-                _homeBase.add(-radius + 1, 0, -radius + 1),
-                radius * 2 - 1, radius * 2 - 1, wallHeight, "planned",
-                "central living/work area");
-        memory.rememberModule(_homeBase, dim, "perimeter_wall", "defense",
-                _homeBase.add(-radius, 0, -radius),
-                radius * 2 + 1, radius * 2 + 1, wallHeight, "planned",
-                "four-high wall with two-wide east doorway and five-block exterior clearance");
-        memory.rememberModule(_homeBase, dim, "interior_dividers", "rooms",
-                _homeBase.add(-radius + 2, 0, -radius + 2),
-                radius * 2 - 3, radius * 2 - 3, 3, "planned",
-                "cross-shaped divider walls with door gaps for four functional wings");
-        memory.rememberModule(_homeBase, dim, "crafting_workshop", "utility",
-                _homeBase.add(2, 0, 2), inner, inner, 2, "planned",
-                "crafting and general work area");
-        memory.rememberModule(_homeBase, dim, "smelting_workshop", "utility",
-                _homeBase.add(-2, 0, 2), inner, inner, 2, "planned",
-                "furnace and future smelter area");
-        memory.rememberModule(_homeBase, dim, "storage_wing", "utility",
-                _homeBase.add(2, 0, -2), inner, inner, 2, "planned",
-                "chest and shulker staging area");
-        memory.rememberModule(_homeBase, dim, "crop_farm", "farm",
-                farmOrigin, farmSize, farmSize, 1, "planned",
-                "hydrated wheat plot with centered 2x2 infinite water source");
-        memory.rememberModule(_homeBase, dim, "mob_farm_chamber", "mob_farm",
-                mobOrigin, mobSize, mobSize, wallHeight + 1, "planned",
-                "large cobblestone roofed chamber with four-block walls and a two-wide entrance");
-        memory.rememberModule(_homeBase, dim, "mob_farm_entrance", "access",
-                mobOrigin.add(mobSize / 2 - 1, 0, mobSize - 1),
-                2, 1, 3, "planned",
-                "two-wide entrance/exit into the roofed mob-farm chamber");
-        memory.rememberInspection(_homeBase, dim, "perimeter_wall", "blueprint",
-                (radius * 2 + 1) * (radius * 2 + 1), 0, (radius * 2 + 1) * wallHeight,
-                0, "planned", "player-mode immediate blueprint seed");
-        memory.rememberInspection(_homeBase, dim, "mob_farm_chamber", "blueprint",
-                mobSize * mobSize, 0, (mobSize * mobSize) + (mobSize * 4 * wallHeight),
-                0, "planned", "roof and four-high wall target list seeded before build phase");
+        memory.rememberInspection(_homeBase, dim, "player_base_agenda", "plan",
+                6, 0, Math.max(0, 6 - estimateCompletedBaseCycles()),
+                estimateCompletedBaseCycles(), "active",
+                "persistent order=core,storage,workshop,armory,farmland,mob_farm; completed modules are never downgraded");
     }
 
     private Task doGather(Belfegor mod) {
@@ -288,21 +304,21 @@ public class PlayerExplorationTask extends Task {
         if (pickupTask != null) {
             setDebugState("Picking up items");
             LlmAdvisor.getInstance().recordAction("player_mode:pickup_items", "valuable or food drops nearby");
-            return pickupTask;
+            return cacheTask("gather-pickup:" + pickupTask, pickupTask);
         }
 
         Task killTask = findKillTask(mod);
         if (killTask != null) {
             setDebugState("Hunting mobs");
             LlmAdvisor.getInstance().recordAction("player_mode:hunt_mobs", "useful mob target nearby");
-            return killTask;
+            return cacheTask("gather-kill:" + killTask, killTask);
         }
 
         Task mineTask = findMineTask(mod);
         if (mineTask != null) {
             setDebugState("Mining blocks");
             LlmAdvisor.getInstance().recordAction("player_mode:mine_blocks", "useful tracked ore/block nearby");
-            return mineTask;
+            return cacheTask("gather-mine:" + mineTask, mineTask);
         }
 
         if (_phaseTimer.elapsed()) {
@@ -311,7 +327,7 @@ public class PlayerExplorationTask extends Task {
             return null;
         }
 
-        return new TimeoutWanderTask(true);
+        return cacheTask("gather-wander", new TimeoutWanderTask(true));
     }
 
     private Task maybeMaintainCampStockpile(Belfegor mod) {
@@ -319,12 +335,56 @@ public class PlayerExplorationTask extends Task {
         _stockpileTimer.reset();
         if (_homeBase == null || mod.getPlayer() == null) return null;
         if (_campBuildCount <= 0) return null;
+        if (firstMissingStockpileTarget(mod) == null) return null;
 
         CampStockpileTask.Profile profile = _campBuildCount >= 2
                 ? CampStockpileTask.Profile.BUILD
                 : CampStockpileTask.Profile.STARTER;
         return cacheTask("camp-stockpile:" + profile.name().toLowerCase(),
                 new CampStockpileTask(ToolSetTask.Tier.STONE, profile));
+    }
+
+    /**
+     * Player-like inventory management: near home, store the surplus the bot
+     * is not using and keep the field kit it will need. Runs periodically so
+     * the bot's inventory stays lean while exploring and gathering.
+     */
+    private Task maybeTriageInventory(Belfegor mod) {
+        if (_phase == Phase.HOME || _phase == Phase.SURVIVE) return null;
+        if (!isCoreComplete()) return null;
+        if (!_inventoryTriageTimer.elapsed()) return null;
+        _inventoryTriageTimer.reset();
+        if (_homeBase == null || mod.getPlayer() == null) return null;
+        if (_homeBase.getSquaredDistance(mod.getPlayer().getBlockPos()) > 40 * 40) return null;
+
+        int occupied = 0;
+        for (var stack : mod.getPlayer().getInventory().main) {
+            if (!stack.isEmpty()) occupied++;
+        }
+        if (occupied <= 22 && _inventoryTriageDone) return null;
+
+        ItemTarget[] surplus = surplusTargetsInInventory(mod);
+        if (surplus.length == 0 && occupied <= 22) {
+            _inventoryTriageDone = true;
+            return null;
+        }
+        return cacheTask("inventory-triage",
+                new InventoryTriageTask(12, InventoryTriageTask.fieldKit(),
+                        InventoryTriageTask.standardSurplusTargets(), surplus));
+    }
+
+    /**
+     * Keeps a full carried tool set and a backup set stored at base, like a
+     * player who never leaves home without a spare pickaxe in the chest.
+     */
+    private Task maybeMaintainToolReserves(Belfegor mod) {
+        if (_phase == Phase.HOME || _phase == Phase.SURVIVE) return null;
+        if (!isCoreComplete()) return null;
+        if (!_toolReserveTimer.elapsed()) return null;
+        _toolReserveTimer.reset();
+        if (_homeBase == null || mod.getPlayer() == null) return null;
+        if (_homeBase.getSquaredDistance(mod.getPlayer().getBlockPos()) > 40 * 40) return null;
+        return cacheTask("tool-reserves", new EnsureToolReservesTask(_homeBase));
     }
 
     private ItemTarget firstMissingStockpileTarget(Belfegor mod) {
@@ -382,7 +442,7 @@ public class PlayerExplorationTask extends Task {
                     if (craftTask != null) {
                         LlmAdvisor.getInstance().recordAction("player_mode:practice_craft " + item,
                                 "craft target selected from curated practice list");
-                        return craftTask;
+                        return cacheTask("practice-craft:" + item, craftTask);
                     }
                 }
             }
@@ -400,78 +460,147 @@ public class PlayerExplorationTask extends Task {
                 && _homeBase.getSquaredDistance(mod.getPlayer().getBlockPos()) > 48 * 48) {
             setDebugState("Returning to home base");
             LlmAdvisor.getInstance().recordAction("player_mode:return_home", "too far from home base");
-            return cacheTask("goto-home:" + _homeBase, new GetToBlockTask(_homeBase));
+            return cacheTask("goto-home:" + _homeBase, GetToBlockTask.baseAware(mod, _homeBase));
         }
 
-        if (!mod.getItemStorage().hasItem(Items.CRAFTING_TABLE)) {
-            setDebugState("Preparing campsite crafting table");
-            LlmAdvisor.getInstance().recordAction("player_mode:prepare_crafting_table", "home base lacks crafting table");
-            return TaskCatalogue.getItemTask("crafting_table", 1);
-        }
-        if (!mod.getItemStorage().hasItem(Items.FURNACE)
-                && mod.getItemStorage().getItemCount(Items.COBBLESTONE, Items.COBBLED_DEEPSLATE) >= 8) {
-            setDebugState("Preparing campsite furnace");
-            Task furnace = TaskCatalogue.getItemTask("furnace", 1);
-            if (furnace != null) return furnace;
-        }
-        if (!mod.getItemStorage().hasItem(Items.CHEST)) {
-            setDebugState("Preparing campsite chest");
-            Task chest = TaskCatalogue.getItemTask("chest", 1);
-            if (chest != null) return chest;
-        }
-        if (!mod.getItemStorage().hasItem(Items.WHEAT_SEEDS)) {
-            Task seeds = TaskCatalogue.getItemTask("wheat_seeds", 8);
-            if (seeds != null) {
-                setDebugState("Preparing starter farm seeds");
-                return seeds;
-            }
-        }
-        if (!mod.getItemStorage().hasItem(Items.WOODEN_HOE, Items.STONE_HOE, Items.IRON_HOE,
-                Items.GOLDEN_HOE, Items.DIAMOND_HOE, Items.NETHERITE_HOE)) {
-            Task hoe = TaskCatalogue.getItemTask("wooden_hoe", 1);
-            if (hoe != null) {
-                setDebugState("Preparing starter farm hoe");
-                return hoe;
-            }
+        int radius = BaseMemory.getInstance().baseAt(_homeBase, WorldHelper.getCurrentDimension().name())
+                .map(base -> Math.max(8, base.radius)).orElse(8);
+        if (!isCoreComplete()) {
+            setDebugState("Building or repairing locked core campsite radius " + radius);
+            return cacheTask("camp:" + radius + ":" + _homeBase,
+                    new BuildCampsiteTask(_homeBase, radius));
         }
 
-        int radius = Math.min(18, 8 + (_campBuildCount * 2));
-        Task build = _campBuildCount == 0
-                ? cacheTask("camp:" + radius + ":" + _homeBase, new BuildCampsiteTask(_homeBase, radius))
-                : nextBaseExpansion();
-        if (!build.isFinished(mod)) {
-            setDebugState(_campBuildCount == 0
-                    ? "Building core home campsite radius " + radius
-                    : "Building remembered base expansion");
-            LlmAdvisor.getInstance().recordAction(_campBuildCount == 0
-                            ? "player_mode:build_core_campsite radius=" + radius
-                            : "player_mode:build_base_expansion",
-                    "expanding remembered home base using modular room graph");
-            return build;
+        BuildBaseExpansionTask.RoomType missing = nextMissingExpansionType();
+        if (missing != null) {
+            String name = switch (missing) {
+                case STORAGE -> "storage";
+                case WORKSHOP -> "workshop";
+                case ARMORY -> "armory";
+                case FARMLAND -> "farmland";
+                case MOBFARM -> "mob_farm";
+                case EMPTY -> "room";
+            };
+            setDebugState("Building missing persistent base room " + name);
+            LlmAdvisor.getInstance().recordAction("player_mode:build_base_expansion " + name,
+                    "next missing room in persistent base agenda");
+            return cacheTask("base-expansion:" + missing + ":" + name,
+                    new BuildBaseExpansionTask(missing, name));
         }
 
-        _campBuildCount++;
+        _campBuildCount = estimateCompletedBaseCycles();
+        if (!_homeValidationComplete) {
+            setDebugState("Validating completed base and remembered room routes");
+            return cacheTask("base-validation", new BuildBaseValidationTask());
+        }
+        // Long-term play: once the base is complete, let the persistent game
+        // plan drive the next goals (nether resources -> stronghold -> Ender
+        // Dragon) automatically, so @player never runs out of direction.
+        GamePlanMemory gamePlan = GamePlanMemory.getInstance();
+        gamePlan.ensureStages();
+        if (gamePlan.isActive() && gamePlan.nextStage().isPresent()) {
+            setDebugState("Base complete; resuming long-term game plan");
+            LlmAdvisor.getInstance().recordAction("player_mode:game_plan",
+                    "base complete; resuming long-term plan at " + gamePlan.nextStage().get().id);
+            return cacheTask("game-plan", new GamePlanTask());
+        }
+        // The bot is leaving home; refresh the triage pass so surplus gathered
+        // during the build/validation window is stored before exploring again.
+        _inventoryTriageDone = false;
         _phase = Phase.EXPLORE;
         return null;
     }
 
-    private Task nextBaseExpansion() {
-        BuildBaseExpansionTask.RoomType[] cycle = {
-                BuildBaseExpansionTask.RoomType.FARMLAND,
+    private BuildBaseExpansionTask.RoomType nextMissingExpansionType() {
+        BuildBaseExpansionTask.RoomType[] order = {
                 BuildBaseExpansionTask.RoomType.STORAGE,
                 BuildBaseExpansionTask.RoomType.WORKSHOP,
+                BuildBaseExpansionTask.RoomType.ARMORY,
+                BuildBaseExpansionTask.RoomType.FARMLAND,
                 BuildBaseExpansionTask.RoomType.MOBFARM
         };
-        BuildBaseExpansionTask.RoomType type = cycle[(_campBuildCount - 1) % cycle.length];
-        String name = switch (type) {
-            case FARMLAND -> "farmland_" + ((_campBuildCount + 3) / 4);
-            case STORAGE -> "storage_" + ((_campBuildCount + 2) / 4);
-            case WORKSHOP -> "workshop_" + ((_campBuildCount + 1) / 4);
-            case MOBFARM -> "mobfarm_" + ((_campBuildCount) / 4);
-            case EMPTY -> "room_" + _campBuildCount;
-        };
-        return cacheTask("base-expansion:" + type + ":" + name,
-                new BuildBaseExpansionTask(type, name));
+        for (BuildBaseExpansionTask.RoomType type : order) {
+            if (!hasCompleteExpansion(type)) return type;
+        }
+        return null;
+    }
+
+    private boolean isCoreComplete() {
+        if (_homeBase == null) return false;
+        String dimension = WorldHelper.getCurrentDimension().name();
+        return BaseMemory.getInstance().baseAt(_homeBase, dimension)
+                .or(() -> BaseMemory.getInstance().nearestBase(_homeBase, dimension))
+                .stream()
+                .flatMap(base -> base.modules.stream())
+                .anyMatch(module -> "core".equalsIgnoreCase(module.name)
+                        && BaseMemory.getInstance().moduleComplete(module));
+    }
+
+    private boolean hasCompleteExpansion(BuildBaseExpansionTask.RoomType type) {
+        if (_homeBase == null || type == null) return false;
+        String dimension = WorldHelper.getCurrentDimension().name();
+        String expected = type.name().toLowerCase(java.util.Locale.ROOT);
+        return BaseMemory.getInstance().baseAt(_homeBase, dimension)
+                .or(() -> BaseMemory.getInstance().nearestBase(_homeBase, dimension))
+                .stream()
+                .flatMap(base -> base.modules.stream())
+                .anyMatch(module -> expected.equals(normalize(module.type))
+                        && module.parent != null && !module.parent.isBlank()
+                        && BaseMemory.getInstance().moduleComplete(module));
+    }
+
+    private boolean isManagedExpansionType(String type) {
+        String normalized = normalize(type);
+        return normalized.equals("storage")
+                || normalized.equals("workshop")
+                || normalized.equals("armory")
+                || normalized.equals("farmland")
+                || normalized.equals("mobfarm")
+                || normalized.equals("mob_farm")
+                || normalized.equals("empty");
+    }
+
+    private Task maybeMaintainArmory(Belfegor mod) {
+        if (_phase == Phase.HOME || _phase == Phase.SURVIVE) return null;
+        if (!isCoreComplete() || !hasCompleteExpansion(BuildBaseExpansionTask.RoomType.ARMORY)) return null;
+        boolean kitMissing = !mod.getItemStorage().hasItem(Items.BOW)
+                || mod.getItemStorage().getItemCountInventoryOnly(Items.ARROW) < 16
+                || (!mod.getItemStorage().hasItem(Items.SHIELD)
+                && !mod.getItemStorage().hasItemInOffhand(Items.SHIELD));
+        if (!kitMissing && !_armoryTimer.elapsed()) return null;
+        _armoryTimer.reset();
+        return cacheTask("camp-armory", new CampArmoryTask());
+    }
+
+    private boolean isProtectedHomeStructureBlock(Belfegor mod, BlockPos pos) {
+        if (_homeBase == null || pos == null || mod.getWorld() == null) return false;
+        String dimension = WorldHelper.getCurrentDimension().name();
+        if (BaseMemory.getInstance().isProtectedFixturePosition(pos, dimension)) return true;
+        net.minecraft.block.Block block = mod.getWorld().getBlockState(pos).getBlock();
+        if (block != net.minecraft.block.Blocks.COBBLESTONE
+                && !(block instanceof net.minecraft.block.DoorBlock)
+                && !(block instanceof net.minecraft.block.BedBlock)
+                && block != net.minecraft.block.Blocks.CHEST
+                && block != net.minecraft.block.Blocks.CRAFTING_TABLE
+                && block != net.minecraft.block.Blocks.FURNACE) {
+            return false;
+        }
+        return BaseMemory.getInstance().baseAt(_homeBase, dimension)
+                .or(() -> BaseMemory.getInstance().nearestBase(_homeBase, dimension))
+                .stream()
+                .flatMap(base -> base.modules.stream())
+                .filter(BaseMemory.getInstance()::moduleComplete)
+                .anyMatch(module -> insideModule(module, pos));
+    }
+
+    private boolean insideModule(BaseMemory.BaseModule module, BlockPos pos) {
+        return pos.getX() >= module.x && pos.getX() < module.x + Math.max(1, module.width)
+                && pos.getY() >= module.y && pos.getY() < module.y + Math.max(1, module.height)
+                && pos.getZ() >= module.z && pos.getZ() < module.z + Math.max(1, module.depth);
+    }
+
+    private static String normalize(String value) {
+        return value == null ? "" : value.trim().toLowerCase(java.util.Locale.ROOT).replace(' ', '_');
     }
 
     private Task doSurvive(Belfegor mod) {
@@ -484,25 +613,36 @@ public class PlayerExplorationTask extends Task {
         LlmAdvisor.getInstance().recordAction("player_mode:get_food", "hunger below threshold");
         Task foodTask = TaskCatalogue.getItemTask("cooked_beef", 1);
         if (foodTask != null) {
-            return foodTask;
+            return cacheTask("survival-food:cooked_beef", foodTask);
         }
-        return TaskCatalogue.getItemTask("beef", 1);
+        return cacheTask("survival-food:beef", TaskCatalogue.getItemTask("beef", 1));
     }
 
     private Task doTools(Belfegor mod) {
-        if (!mod.getItemStorage().hasItem(Items.STONE_PICKAXE) && mod.getItemStorage().hasItem(Items.WOODEN_PICKAXE)) {
-            setDebugState("Upgrading to stone pickaxe");
-            LlmAdvisor.getInstance().recordAction("player_mode:upgrade_stone_pickaxe", "wooden pickaxe exists");
-            return TaskCatalogue.getItemTask(Items.STONE_PICKAXE, 1);
+        // Tool progression: complete the current tier's set first, then move up
+        // the chain wood -> stone -> iron -> diamond. A complete diamond set is
+        // the end goal and is "good enough" for most tasks.
+        ToolSetTask.Tier completed = ToolSetTask.highestCompleteSetTier(mod);
+        ToolSetTask.Tier target = completed == null ? ToolSetTask.Tier.WOOD : ToolSetTask.next(completed);
+        if (target == null) {
+            setDebugState("Full diamond tool set complete; tools are good enough");
+            _phase = Phase.EXPLORE;
+            return null;
         }
-        if (!mod.getItemStorage().hasItem(Items.IRON_PICKAXE) && mod.getItemStorage().hasItem(Items.STONE_PICKAXE)) {
-            setDebugState("Upgrading to iron pickaxe");
-            LlmAdvisor.getInstance().recordAction("player_mode:upgrade_iron_pickaxe", "stone pickaxe exists");
-            return TaskCatalogue.getItemTask(Items.IRON_PICKAXE, 1);
+        // If the bot already holds tools of a higher tier (drops, trades),
+        // jump straight to completing that tier instead of building lower tiers.
+        ToolSetTask.Tier highestHeld = ToolSetTask.currentTier(mod);
+        if (highestHeld.ordinal() > target.ordinal()) {
+            target = highestHeld;
         }
-
-        _phase = Phase.EXPLORE;
-        return null;
+        if (ToolSetTask.hasFullSet(mod, target)) {
+            _phase = Phase.EXPLORE;
+            return null;
+        }
+        setDebugState("Working toward full " + target.name().toLowerCase() + " tool set");
+        LlmAdvisor.getInstance().recordAction("player_mode:tool_progression",
+                "target full " + target.name().toLowerCase() + " set");
+        return cacheTask("tool-upgrade:" + target, new ToolSetTask(target));
     }
 
     private Task maybeUseShulkers(Belfegor mod) {
@@ -530,11 +670,14 @@ public class PlayerExplorationTask extends Task {
         // crafting in progress, movement pathing). Only poll for decisions that
         // arrived BEFORE we started this task.
         boolean taskInProgress = _activeTask != null && !_activeTask.stopped();
+        boolean userLaneBusy = mod.getUserTaskChain() != null
+                && mod.getUserTaskChain().isActive()
+                && !mod.getUserTaskChain().isRunningIdleTask();
         boolean inventoryOpen = StorageHelper.isPlayerInventoryOpen();
         boolean bigCraftOpen = StorageHelper.isBigCraftingOpen();
         boolean handledContainerOpen = StorageHelper.isHandledContainerOpen();
 
-        var decision = LlmAdvisor.getInstance().pollDecision();
+        var decision = LlmAdvisor.getInstance().pollPlayerDecision();
         if (decision.isPresent()) {
             var result = decision.get();
             if (!result.goal().isBlank()) {
@@ -544,7 +687,7 @@ public class PlayerExplorationTask extends Task {
                 mod.log("AI: " + result.chat());
             }
             if (result.valid() && !result.command().isBlank()) {
-                if (taskInProgress || inventoryOpen || bigCraftOpen || handledContainerOpen) {
+                if (taskInProgress || userLaneBusy || inventoryOpen || bigCraftOpen || handledContainerOpen) {
                     LlmAdvisor.getInstance().recordAction("llm_skipped_busy",
                             "skipped command " + result.command() + " — task active: " + taskInProgress
                                     + " inventoryOpen=" + inventoryOpen
@@ -554,6 +697,7 @@ public class PlayerExplorationTask extends Task {
                 }
                 mod.log("AI selected next command: " + result.command());
                 if (mod.getCommandExecutor().executeAdvisorSuggestion(result.command())) {
+                    LlmAdvisor.getInstance().recordCommandExecuted(result.command());
                     LlmAdvisor.getInstance().recordAction("llm_execute " + result.command(), result.reason());
                     return true;
                 }
@@ -564,7 +708,7 @@ public class PlayerExplorationTask extends Task {
         }
 
         // Don't request new LLM decisions while a task is actively running
-        if (taskInProgress || inventoryOpen || bigCraftOpen || handledContainerOpen) {
+        if (taskInProgress || userLaneBusy || inventoryOpen || bigCraftOpen || handledContainerOpen) {
             return false;
         }
 
@@ -645,6 +789,20 @@ public class PlayerExplorationTask extends Task {
     private Task findKillTask(Belfegor mod) {
         Predicate<Entity> notBaby = e -> e instanceof LivingEntity le && !le.isBaby();
 
+        if (mod.getItemStorage().hasItem(Items.BOW)
+                && mod.getItemStorage().hasItem(Items.ARROW, Items.SPECTRAL_ARROW, Items.TIPPED_ARROW)) {
+            Optional<Entity> rangedHostile = mod.getEntityTracker().getHostiles().stream()
+                    .filter(Entity::isAlive)
+                    .filter(entity -> entity.distanceTo(mod.getPlayer()) >= 6
+                            && entity.distanceTo(mod.getPlayer()) <= 18)
+                    .min(java.util.Comparator.comparingDouble(entity -> entity.squaredDistanceTo(mod.getPlayer())));
+            if (rangedHostile.isPresent()) {
+                LlmAdvisor.getInstance().recordAction("player_mode:ranged_defense",
+                        "using bow against hostile at safer standoff distance");
+                return new ShootArrowSimpleProjectileTask(rangedHostile.get());
+            }
+        }
+
         // Prefer cows
         var cow = mod.getEntityTracker().getClosestEntity(notBaby, CowEntity.class);
         if (cow.isPresent() && cow.get().distanceTo(mod.getPlayer()) < 16) {
@@ -706,6 +864,7 @@ public class PlayerExplorationTask extends Task {
     protected void onStop(Belfegor mod, Task interruptTask) {
         _activeTask = null;
         _activeTaskKey = null;
+        mod.getBehaviour().pop();
         Debug.logInternal("PlayerExplorationTask: Stopped after " + _explorationCounter + " exploration cycles");
     }
 

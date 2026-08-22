@@ -252,10 +252,16 @@ public class StoreInAnyContainerTask extends Task implements ITaskUsesContainer 
     private Optional<BlockPos> findEmergencyContainerPlacement(Belfegor mod, Block block) {
         if (mod.getPlayer() == null) return Optional.empty();
         BlockPos player = mod.getPlayer().getBlockPos();
+        BlockPos configuredHome = mod.getModSettings().getHomeBasePosition();
+        int preferredFloorY = configuredHome == null ? player.getY() : configuredHome.getY();
         BlockPos best = null;
         double bestScore = Double.POSITIVE_INFINITY;
-        int range = 5;
-        for (int dy = -1; dy <= 2; dy++) {
+        // Construction commonly leaves the player on top of the volume being
+        // excavated. Search down to the remembered base floor so an emergency
+        // chest becomes an interior staging fixture instead of occupying a
+        // future wall/roof target.
+        int range = 8;
+        for (int dy = -8; dy <= 2; dy++) {
             for (int dx = -range; dx <= range; dx++) {
                 for (int dz = -range; dz <= range; dz++) {
                     BlockPos candidate = player.add(dx, dy, dz);
@@ -269,8 +275,9 @@ public class StoreInAnyContainerTask extends Task implements ITaskUsesContainer 
                         continue;
                     }
                     if (!WorldHelper.canPlace(mod, candidate)) continue;
-                    double yPenalty = Math.abs(candidate.getY() - player.getY()) * 3.0;
-                    double score = candidate.getSquaredDistance(player) + yPenalty;
+                    double floorPenalty = Math.abs(candidate.getY() - preferredFloorY) * 24.0;
+                    double travelPenalty = Math.abs(candidate.getY() - player.getY()) * 0.5;
+                    double score = candidate.getSquaredDistance(player) + floorPenalty + travelPenalty;
                     if (score < bestScore) {
                         best = candidate;
                         bestScore = score;

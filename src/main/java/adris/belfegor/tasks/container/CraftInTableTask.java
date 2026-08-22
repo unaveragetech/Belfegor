@@ -7,6 +7,7 @@ import adris.belfegor.tasks.construction.DestroyBlockTask;
 import adris.belfegor.tasks.movement.TimeoutWanderTask;
 import adris.belfegor.tasks.resources.CollectRecipeCataloguedResourcesTask;
 import adris.belfegor.tasks.slot.EnsureFreeInventorySlotTask;
+import adris.belfegor.tasks.slot.DropJunkToMakeSpaceTask;
 import adris.belfegor.tasks.slot.ReceiveCraftingOutputSlotTask;
 import adris.belfegor.tasksystem.ITaskUsesCraftingGrid;
 import adris.belfegor.tasksystem.Task;
@@ -22,6 +23,7 @@ import adris.belfegor.tasksystem.CraftingPathRegistry;
 import net.minecraft.block.Blocks;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
+import net.minecraft.item.Items;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.ingame.CraftingScreen;
 import net.minecraft.screen.CraftingScreenHandler;
@@ -167,6 +169,7 @@ public class CraftInTableTask extends ResourceTask {
 class DoCraftInTableTask extends DoStuffInContainerTask implements ITaskUsesCraftingGrid {
 
     private final float CRAFT_RESET_TIMER_BONUS_SECONDS = 10;
+    private static final int MIN_CRAFT_FREE_SLOTS = 4;
 
     private final RecipeTarget[] _targets;
 
@@ -181,6 +184,8 @@ class DoCraftInTableTask extends DoStuffInContainerTask implements ITaskUsesCraf
     private CraftGenericManuallyTask _cachedCraftTask = null;
     private RecipeTarget _cachedCraftTarget = null;
     private Task _freeInventoryTask = null;
+    private int _freeSpaceStage;
+    private boolean _freeSpaceGivenUp;
     // When true, the crafting table was placed by the bot and should be
     // broken and collected after crafting is complete so the bot carries
     // it instead of walking back to a fixed location every time.
@@ -216,6 +221,8 @@ class DoCraftInTableTask extends DoStuffInContainerTask implements ITaskUsesCraf
         _cachedCraftTask = null;
         _cachedCraftTarget = null;
         _freeInventoryTask = null;
+        _freeSpaceStage = 0;
+        _freeSpaceGivenUp = false;
 
         // Protect crafting materials from being placed as blocks
         mod.getBehaviour().addPlacementProtectedItems(getMaterialsArray());
@@ -283,8 +290,10 @@ class DoCraftInTableTask extends DoStuffInContainerTask implements ITaskUsesCraf
         // Call the onStop method of the super class
         super.onStop(mod, interruptTask);
 
-        // Record crafting table location in LocationMemory if we used one
-        if (_cachedContainerPosition != null) {
+        // Only forget a crafting table that we placed temporarily ourselves.
+        // A table the bot walked to (for example the base's own workshop
+        // fixture) is a persistent location and must stay remembered.
+        if (_shouldPickupTable && _cachedContainerPosition != null) {
             LocationMemory.getInstance().forget("crafting_table",
                     _cachedContainerPosition.getX(), _cachedContainerPosition.getY(), _cachedContainerPosition.getZ());
         }
@@ -312,7 +321,7 @@ class DoCraftInTableTask extends DoStuffInContainerTask implements ITaskUsesCraf
         // make room before opening/placing a table. Prefer shulker storage
         // because it preserves resources; fall back to the existing garbage
         // slot recovery only when no carried shulker transaction is available.
-        if (countEmptyMainInventorySlots(mod) == 0
+        if (countEmptyMainInventorySlots(mod) < MIN_CRAFT_FREE_SLOTS
                 && StorageHelper.getItemStackInCursorSlot().isEmpty()) {
             if (_freeInventoryTask != null
                     && !_freeInventoryTask.isFinished(mod)
@@ -320,20 +329,49 @@ class DoCraftInTableTask extends DoStuffInContainerTask implements ITaskUsesCraf
                 setDebugState("Freeing inventory space before table craft");
                 return _freeInventoryTask;
             }
-            if (ShulkerInteractionTask.hasCarriedShulker(mod)) {
-                ItemTarget[] autoStore = ShulkerInteractionTask.getAutoStoreTargets(mod);
-                if (autoStore.length > 0) {
-                    _freeInventoryTask = new ShulkerInteractionTask(
-                            ShulkerInteractionTask.Mode.STORE, autoStore);
-                    setDebugState("Storing overflow into carried shulker before table craft");
-                    return _freeInventoryTask;
+            _freeInventoryTask = null;
+            if (_freeSpaceGivenUp) {
+                // Every recovery option was already tried; continue with the
+                // space we have so the craft can at least attempt to proceed.
+                _freeSpaceGivenUp = false;
+            } else {
+                switch (_freeSpaceStage) {
+                    case 0 -> {
+                        if (ShulkerInteractionTask.hasCarriedShulker(mod)) {
+                            ItemTarget[] autoStore = ShulkerInteractionTask.getAutoStoreTargets(mod);
+                            if (autoStore.length > 0) {
+                                _freeSpaceStage = 1;
+                                _freeInventoryTask = new ShulkerInteractionTask(
+                                        ShulkerInteractionTask.Mode.STORE, autoStore);
+                                setDebugState("Storing overflow into carried shulker before table craft");
+                                return _freeInventoryTask;
+                            }
+                        }
+                        _freeSpaceStage = 1;
+                    }
+                    case 1 -> {
+                        _freeSpaceStage = 2;
+                        _freeInventoryTask = new EnsureFreeInventorySlotTask();
+                        setDebugState("Storing overflow into chest before table craft");
+                        return _freeInventoryTask;
+                    }
+                    case 2 -> {
+                        _freeSpaceStage = 3;
+                        _freeInventoryTask = new DropJunkToMakeSpaceTask(MIN_CRAFT_FREE_SLOTS);
+                        setDebugState("Dropping junk to make craft space");
+                        return _freeInventoryTask;
+                    }
+                    default -> {
+                        _freeSpaceGivenUp = true;
+                        _freeSpaceStage = 0;
+                    }
                 }
             }
-            _freeInventoryTask = new EnsureFreeInventorySlotTask();
-            setDebugState("Freeing one inventory slot before table craft");
-            return _freeInventoryTask;
+        } else if (countEmptyMainInventorySlots(mod) >= MIN_CRAFT_FREE_SLOTS) {
+            _freeInventoryTask = null;
+            _freeSpaceStage = 0;
+            _freeSpaceGivenUp = false;
         }
-        _freeInventoryTask = null;
 
         // Avoid breaking crafting tables while we're using them,
         // UNLESS we're done and want to pick up the table
@@ -450,14 +488,13 @@ class DoCraftInTableTask extends DoStuffInContainerTask implements ITaskUsesCraf
         if (isContainerOpen(mod)) {
             StorageHelper.closeScreen();
         }
-        // Always break the crafting table when done so the bot carries it.
-        // This prevents the bot from walking back to a fixed table location
-        // every time it needs to craft, greatly reducing travel time.
         BlockPos tablePos = _cachedContainerPosition;
         if (tablePos == null && _placeTask != null && _placeTask.getPlaced() != null) {
             tablePos = _placeTask.getPlaced();
         }
-        if (tablePos != null && mod.getWorld().getBlockState(tablePos).getBlock() == Blocks.CRAFTING_TABLE) {
+        if (_shouldPickupTable
+                && tablePos != null
+                && mod.getWorld().getBlockState(tablePos).getBlock() == Blocks.CRAFTING_TABLE) {
             if (_pickupTableTask == null || _pickupTableTask.stopped()) {
                 _pickupTableTask = new DestroyBlockTask(tablePos);
             }
@@ -489,11 +526,21 @@ class DoCraftInTableTask extends DoStuffInContainerTask implements ITaskUsesCraf
      */
     @Override
     protected double getCostToMakeNew(Belfegor mod) {
+        // If the bot is already carrying a crafting table, placing it at the
+        // bot's feet, crafting, and picking it back up is nearly free. This
+        // must beat walking to any distant tracked table, which is what the
+        // previous fixed 40-block rule forced even when the bot had a table
+        // in its own inventory.
+        if (mod.getItemStorage().hasItem(Items.CRAFTING_TABLE)) {
+            return 2.0;
+        }
+
         // Get the nearest crafting table.
         Optional<BlockPos> closestCraftingTable = mod.getBlockTracker().getNearestTracking(Blocks.CRAFTING_TABLE);
 
-        // If a crafting table is within 40 blocks of the player, return positive infinity.
-        if (closestCraftingTable.isPresent() && closestCraftingTable.get().isWithinDistance(mod.getPlayer().getPos(), 40)) {
+        // Only prefer walking to an existing table when it is genuinely
+        // adjacent. Anything farther is slower than crafting/placing our own.
+        if (closestCraftingTable.isPresent() && closestCraftingTable.get().isWithinDistance(mod.getPlayer().getPos(), 6)) {
             return Double.POSITIVE_INFINITY;
         }
 

@@ -10,6 +10,7 @@ import adris.belfegor.util.ItemTarget;
 import adris.belfegor.util.baritone.GoalAnd;
 import adris.belfegor.util.baritone.GoalBlockSide;
 import adris.belfegor.util.helpers.BaritoneCompat;
+import adris.belfegor.util.helpers.DoorHelper;
 import adris.belfegor.util.helpers.ItemHelper;
 import adris.belfegor.util.helpers.LookHelper;
 import adris.belfegor.util.helpers.StorageHelper;
@@ -263,6 +264,12 @@ public class InteractWithBlockTask extends Task {
         if (!_moveChecker.check(mod) || !stuckCheck.check(mod)) {
             BlockPos blockStuck = stuckInBlock(mod);
             if (blockStuck != null) {
+                if (DoorHelper.tryOpenBlockedDoor(mod, blockStuck)) {
+                    setDebugState("Opening blocked door");
+                    _moveChecker.reset();
+                    stuckCheck.reset();
+                    return null;
+                }
                 _unstuckTask = getFenceUnstuckTask();
                 return _unstuckTask;
             }

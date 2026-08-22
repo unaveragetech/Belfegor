@@ -1,6 +1,7 @@
 package adris.belfegor.tasks;
 
 import adris.belfegor.Belfegor;
+import adris.belfegor.tasks.container.OverflowInventoryTask;
 import adris.belfegor.tasks.resources.CollectRecipeCataloguedResourcesTask;
 import adris.belfegor.tasks.slot.ReceiveCraftingOutputSlotTask;
 import adris.belfegor.tasksystem.Task;
@@ -41,8 +42,12 @@ public class CraftInInventoryTask extends ResourceTask implements adris.belfegor
     private MinecraftClient client = MinecraftClient.getInstance();
     private Task _cachedCollectTask = null;
     private Task _cachedCraftTask = null;
+    private Task _craftSpaceTask = null;
     private int _inventoryOpenWaitTicks = 0;
     private int _screenOpenCooldownTicks = 0;
+    private int _screenOpenAttempts = 0;
+    private int _inventoryStableTicks = 0;
+    private int _screenStormBackoffTicks = 0;
     private String _lastGateState = "";
 
     public CraftInInventoryTask(RecipeTarget target, boolean collect, boolean ignoreUncataloguedSlots) {
@@ -70,7 +75,11 @@ public class CraftInInventoryTask extends ResourceTask implements adris.belfegor
         _startTimeMs = System.currentTimeMillis();
         _cachedCollectTask = null;
         _cachedCraftTask = null;
+        _craftSpaceTask = null;
         _inventoryOpenWaitTicks = 0;
+        _screenOpenAttempts = 0;
+        _inventoryStableTicks = 0;
+        _screenStormBackoffTicks = 0;
         _lastGateState = "";
         invScreen = new InventoryScreen(mod.getPlayer());
         // Clear cursor but DON'T open inventory yet — open only when ready to craft
@@ -94,6 +103,27 @@ public class CraftInInventoryTask extends ResourceTask implements adris.belfegor
 
     @Override
     protected Task onResourceTick(Belfegor mod) {
+        // Once overflow storage owns a container transaction, it must remain the
+        // only child serviced by this craft task until it releases that screen.
+        // Re-evaluating free slots through a chest handler can otherwise bypass
+        // the child after its first successful transfer, and the crafting code
+        // below will close the chest while the store task is still clicking it.
+        if (_craftSpaceTask != null) {
+            if (!_craftSpaceTask.stopped() && !_craftSpaceTask.isFinished(mod)) {
+                setDebugState("Waiting for overflow transaction to release its screen");
+                return _craftSpaceTask;
+            }
+            if (!_craftSpaceTask.stopped()) {
+                _craftSpaceTask.stop(mod);
+            }
+            adris.belfegor.debug.DebugLogger.getInstance().logImmediate("CRAFT-SPACE",
+                    "overflow transaction released target=" + _target
+                            + " free=" + OverflowInventoryTask.freeSlots(mod));
+            _craftSpaceTask = null;
+            _screenOpenCooldownTicks = Math.max(_screenOpenCooldownTicks, 2);
+            return null;
+        }
+
         // Grab from output FIRST (inventory must be open for this)
         if (StorageHelper.isPlayerInventoryOpen()) {
             if (StorageHelper.getItemStackInCursorSlot().isEmpty()) {
@@ -107,7 +137,11 @@ public class CraftInInventoryTask extends ResourceTask implements adris.belfegor
                 }
             }
         }
-        if (StorageHelper.isBigCraftingOpen()) {
+        // The client can display InventoryScreen for a tick while the previous
+        // server container handler is still CraftingScreenHandler. The visible
+        // inventory owns this 2x2 craft; do not close it because of that stale
+        // handler or it will enter an open/close storm.
+        if (StorageHelper.isBigCraftingOpen() && !(client.currentScreen instanceof InventoryScreen)) {
             StorageHelper.closeScreen();
         }
         ItemTarget toGet = _itemTargets[0];
@@ -128,8 +162,40 @@ public class CraftInInventoryTask extends ResourceTask implements adris.belfegor
             return _cachedCollectTask;
         }
 
+        // Reserve room for the crafted output and a possible cursor remainder
+        // before opening the grid. Packed inventories previously stranded the
+        // result and could recursively bootstrap another chest/table craft.
+        if (!StorageHelper.isPlayerInventoryOpen()
+                && OverflowInventoryTask.freeSlots(mod) < 2) {
+            if (_craftSpaceTask == null || _craftSpaceTask.stopped() || _craftSpaceTask.isFinished(mod)) {
+                _craftSpaceTask = new OverflowInventoryTask(3, _itemTargets);
+                adris.belfegor.debug.DebugLogger.getInstance().logImmediate("CRAFT-SPACE",
+                        "reserving output slots target=" + _target
+                                + " free=" + OverflowInventoryTask.freeSlots(mod));
+            }
+            if (!_craftSpaceTask.isFinished(mod)) {
+                setDebugState("Reserving inventory space before crafting");
+                return _craftSpaceTask;
+            }
+        }
+
         // Materials ready — open inventory if not already open
         if (!StorageHelper.isPlayerInventoryOpen()) {
+            _inventoryStableTicks = 0;
+            if (_screenStormBackoffTicks > 0) {
+                _screenStormBackoffTicks--;
+                return null;
+            }
+            if (_screenOpenAttempts >= 5) {
+                adris.belfegor.debug.DebugLogger.getInstance().logImmediate("CRAFT-SCREEN-STORM",
+                        "circuit-open target=" + _target
+                                + " attempts=" + _screenOpenAttempts
+                                + " handler=" + describeHandler(mod)
+                                + " " + inventorySnapshot(mod));
+                _screenOpenAttempts = 0;
+                _screenStormBackoffTicks = 40;
+                return null;
+            }
             if (_screenOpenCooldownTicks > 0) {
                 _screenOpenCooldownTicks--;
                 return null; // Wait for screen to settle after last open attempt
@@ -163,6 +229,9 @@ public class CraftInInventoryTask extends ResourceTask implements adris.belfegor
         }
         _inventoryOpenWaitTicks = 0;
         _screenOpenCooldownTicks = 0;
+        if (++_inventoryStableTicks > 20) {
+            _screenOpenAttempts = 0;
+        }
         logGateState("inventory-ready");
 
         // No need to free inventory, output gets picked up.
@@ -291,6 +360,7 @@ public class CraftInInventoryTask extends ResourceTask implements adris.belfegor
     }
 
     private void openInventoryWithDiagnostics(Belfegor mod, String reason) {
+        _screenOpenAttempts++;
         long sequence = SCREEN_OPEN_SEQUENCE.incrementAndGet();
         ACTIVE_SCREEN_OPEN = sequence;
         Thread renderThread = Thread.currentThread();

@@ -435,7 +435,18 @@ public class Settings implements IFailableConfigFile {
             Items.OAK_LEAVES, Items.JUNGLE_LEAVES, Items.SPRUCE_LEAVES,
             Items.NETHERRACK, Items.MAGMA_BLOCK, Items.SOUL_SOIL, Items.SOUL_SAND,
             Items.NETHER_BRICKS, Items.NETHER_BRICK, Items.BASALT, Items.BLACKSTONE,
-            Items.END_STONE, Items.SANDSTONE, Items.STONE_BRICKS
+            Items.END_STONE, Items.SANDSTONE, Items.STONE_BRICKS,
+            // Decorative plants and flowers: pretty, but they do not contribute
+            // to any survival crafting recipe the bot needs.
+            Items.POPPY, Items.DANDELION, Items.BLUE_ORCHID, Items.ALLIUM,
+            Items.AZURE_BLUET, Items.RED_TULIP, Items.ORANGE_TULIP,
+            Items.WHITE_TULIP, Items.PINK_TULIP, Items.OXEYE_DAISY,
+            Items.CORNFLOWER, Items.LILY_OF_THE_VALLEY, Items.WITHER_ROSE,
+            Items.TORCHFLOWER, Items.PITCHER_PLANT, Items.LILAC,
+            Items.ROSE_BUSH, Items.PEONY, Items.SUNFLOWER,
+            Items.FERN, Items.LARGE_FERN, Items.SHORT_GRASS, Items.TALL_GRASS,
+            Items.DEAD_BUSH, Items.VINE, Items.TWISTING_VINES,
+            Items.WEEPING_VINES, Items.GLOW_LICHEN
     );
 
     /**
@@ -564,12 +575,12 @@ public class Settings implements IFailableConfigFile {
     /**
      * Minimum seconds between automatic player-mode LLM requests.
      */
-    private int llmAdvisorCooldownSeconds = 300;
+    private int llmAdvisorCooldownSeconds = 60;
 
     /**
      * Maximum seconds to wait for llama.cpp before falling back to normal logic.
      */
-    private int llmAdvisorTimeoutSeconds = 20;
+    private int llmAdvisorTimeoutSeconds = 30;
 
     /**
      * Requested context window for the model prompt. llama.cpp may clamp/ignore this
@@ -580,7 +591,7 @@ public class Settings implements IFailableConfigFile {
     /**
      * Maximum generated tokens for the advisor response.
      */
-    private int llmMaxTokens = 160;
+    private int llmMaxTokens = 320;
 
     /**
      * Maximum CPU threads llama.cpp may use. Keep low so Minecraft remains responsive.

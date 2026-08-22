@@ -49,6 +49,8 @@ public class RecoverToYLevelTask extends Task {
     private int _placeAttempts;
     private int _highestY;
     private int _noRiseTicks;
+    private int _stableSupportTicks;
+    private int _groundedSupportTicks;
     private Task _clearStallBlockTask;
 
     public RecoverToYLevelTask(int targetY) {
@@ -66,10 +68,17 @@ public class RecoverToYLevelTask extends Task {
         _placeAttempts = 0;
         _highestY = mod.getPlayer() == null ? Integer.MIN_VALUE : mod.getPlayer().getBlockY();
         _noRiseTicks = 0;
+        _stableSupportTicks = 0;
+        _groundedSupportTicks = 0;
         _clearStallBlockTask = null;
         StorageHelper.closeScreen();
         if (mod.getClientBaritone() != null) {
             mod.getClientBaritone().getPathingBehavior().cancelEverything();
+            mod.getClientBaritone().getInputOverrideHandler()
+                    .setInputForceState(Input.CLICK_LEFT, false);
+        }
+        if (mod.getController() != null) {
+            mod.getController().cancelBlockBreaking();
         }
         DebugLogger.getInstance().logImmediate("Y-RECOVERY",
                 "start targetY=" + _targetY
@@ -80,6 +89,13 @@ public class RecoverToYLevelTask extends Task {
     protected Task onTick(Belfegor mod) {
         _ticks++;
         if (mod.getPlayer() == null || mod.getWorld() == null) return null;
+        // Recovery spends most of its time looking straight down. Never let a
+        // stale mining input from the interrupted path destroy the new pillar.
+        mod.getClientBaritone().getInputOverrideHandler()
+                .setInputForceState(Input.CLICK_LEFT, false);
+        if (mod.getController() != null && mod.getControllerExtras().isBreakingBlock()) {
+            mod.getController().cancelBlockBreaking();
+        }
         BlockPos feet = mod.getPlayer().getBlockPos();
         if (feet.getY() > _highestY) {
             _highestY = feet.getY();
@@ -88,13 +104,28 @@ public class RecoverToYLevelTask extends Task {
             _noRiseTicks++;
         }
 
+        if (hasStableTargetSupport(mod, feet)) {
+            mod.getInputControls().release(Input.JUMP);
+            _stableSupportTicks++;
+            if (mod.getPlayer().isOnGround()
+                    && Math.abs(mod.getPlayer().getVelocity().getY()) < 0.01) {
+                _groundedSupportTicks++;
+            } else {
+                _groundedSupportTicks = 0;
+            }
+            setDebugState("Confirming grounded support at build Y "
+                    + _groundedSupportTicks + "/5");
+            return null;
+        }
+        _stableSupportTicks = 0;
+        _groundedSupportTicks = 0;
+
         mod.getInputControls().hold(Input.JUMP);
         mod.getInputControls().forceLook(mod.getPlayer().getYaw(), 90);
 
-        if (feet.getY() >= _targetY - _tolerance) {
-            setDebugState("Recovered to build Y");
-            return null;
-        }
+        // Reaching the target coordinate during the upward half of a jump is
+        // not recovery. Keep jumping and place feet.down at that apex; this is
+        // the exact moment the next pillar block can be inserted safely.
 
         if (_clearStallBlockTask != null
                 && !_clearStallBlockTask.stopped()
@@ -120,11 +151,6 @@ public class RecoverToYLevelTask extends Task {
             }
         }
 
-        if (_noRiseTicks < 10 && !mod.getPlayer().isOnGround()) {
-            setDebugState("Swimming/jumping toward build Y before pillaring");
-            return null;
-        }
-
         Item item = firstAvailableBlock(mod);
         if (item == null) {
             setDebugState("Need blocks to recover to build Y");
@@ -134,16 +160,16 @@ public class RecoverToYLevelTask extends Task {
             setDebugState("Equipping recovery block " + item);
             return null;
         }
-        if (_ticks % 4 == 0) {
+        if (_ticks % 2 == 0) {
             _placeAttempts++;
-            tryPlaceAt(mod, feet.down(), Direction.UP);
-            tryPlaceAt(mod, feet, Direction.UP);
+            ActionResult belowAction = tryPlaceAt(mod, feet.down(), Direction.UP);
             DebugLogger.getInstance().log("Y-RECOVERY",
                     "pillar tick=" + _ticks
                             + " attempt=" + _placeAttempts
                             + " feet=" + feet.toShortString()
                             + " targetY=" + _targetY
                             + " noRiseTicks=" + _noRiseTicks
+                            + " belowAction=" + belowAction
                             + " item=" + item);
         }
         setDebugState("Pillaring back to build Y " + _targetY);
@@ -153,7 +179,7 @@ public class RecoverToYLevelTask extends Task {
     @Override
     public boolean isFinished(Belfegor mod) {
         return mod.getPlayer() == null || mod.getWorld() == null
-                || mod.getPlayer().getBlockY() >= _targetY - _tolerance;
+                || _groundedSupportTicks >= 5;
     }
 
     @Override
@@ -161,10 +187,19 @@ public class RecoverToYLevelTask extends Task {
         if (mod.getInputControls() != null) {
             mod.getInputControls().release(Input.JUMP);
         }
+        mod.getClientBaritone().getInputOverrideHandler()
+                .setInputForceState(Input.CLICK_LEFT, false);
+        if (mod.getController() != null) {
+            mod.getController().cancelBlockBreaking();
+        }
         DebugLogger.getInstance().logImmediate("Y-RECOVERY",
                 "stop targetY=" + _targetY
                         + " ticks=" + _ticks
                         + " attempts=" + _placeAttempts
+                        + " stableTicks=" + _stableSupportTicks
+                        + " groundedTicks=" + _groundedSupportTicks
+                        + " player=" + (mod.getPlayer() == null
+                        ? "null" : mod.getPlayer().getBlockPos().toShortString())
                         + " interruptedBy=" + (interruptTask == null ? "clean" : interruptTask.toString()));
     }
 
@@ -185,6 +220,15 @@ public class RecoverToYLevelTask extends Task {
                 .filter(item -> mod.getItemStorage().hasItem(item))
                 .findFirst()
                 .orElse(null);
+    }
+
+    private boolean hasStableTargetSupport(Belfegor mod, BlockPos feet) {
+        if (feet.getY() < _targetY - _tolerance) return false;
+        BlockPos support = feet.down();
+        Block block = mod.getWorld().getBlockState(support).getBlock();
+        return WorldHelper.isSolid(mod, support)
+                && block != Blocks.WATER
+                && block != Blocks.LAVA;
     }
 
     private ActionResult tryPlaceAt(Belfegor mod, BlockPos pos, Direction face) {

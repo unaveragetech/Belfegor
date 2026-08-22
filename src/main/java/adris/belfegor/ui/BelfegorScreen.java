@@ -13,6 +13,7 @@ import adris.belfegor.tasksystem.Task;
 import adris.belfegor.tasksystem.TaskChain;
 import adris.belfegor.tasksystem.TaskRunner;
 import adris.belfegor.commandsystem.CommandDocumentation;
+import adris.belfegor.llm.LlmAdvisor;
 import com.google.gson.*;
 import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.font.TextRenderer;
@@ -28,7 +29,7 @@ import java.util.*;
 public class BelfegorScreen extends Screen {
     private final Belfegor mod;
     private int selectedTab = 0;
-    private static final String[] TAB_NAMES = {"Tasks", "Macros", "Commands", "Settings", "Storage", "Shulkers", "Schematics", "Log"};
+    private static final String[] TAB_NAMES = {"Tasks", "Macros", "Commands", "Settings", "Storage", "Shulkers", "Schematics", "Log", "AI"};
 
     // Colors - modern dark theme
     private static final int BG = 0xFF0D1117;
@@ -73,6 +74,7 @@ public class BelfegorScreen extends Screen {
     private int logScrollOffset = 0;
     private int shulkerScrollOffset = 0;
     private int schematicScrollOffset = 0;
+    private int aiScrollOffset = 0;
     private int commandScrollOffset = 0;
     private int selectedCommandIndex = 0;
     private final List<CommandExampleHitbox> commandExampleHitboxes = new ArrayList<>();
@@ -324,6 +326,7 @@ public class BelfegorScreen extends Screen {
             case 5 -> renderShulkersTab(ctx, mouseX, mouseY, y);
             case 6 -> renderSchematicsTab(ctx, mouseX, mouseY, y);
             case 7 -> renderLogTab(ctx, mouseX, mouseY, y);
+            case 8 -> renderAiTab(ctx, mouseX, mouseY, y);
         }
     }
 
@@ -1100,6 +1103,55 @@ public class BelfegorScreen extends Screen {
         if (entries.isEmpty()) drawText(ctx, "No log entries.", 14, y, TEXT_DIM);
     }
 
+    // ======================== AI TAB ========================
+
+    private void renderAiTab(DrawContext ctx, int mouseX, int mouseY, int y) {
+        drawText(ctx, "AI Advisor", 14, y + 4, TEXT_BRIGHT);
+        y += 20;
+        var exchanges = LlmAdvisor.getInstance().getExchanges();
+        int maxVisible = (this.height - 70) / 12;
+        int startIdx = Math.max(0, aiScrollOffset);
+        int drawn = 0;
+        for (int i = startIdx; i < exchanges.size() && drawn < maxVisible; i++) {
+            var ex = exchanges.get(i);
+            drawText(ctx, String.format("[%tT] %s%s", ex.timestamp(), ex.mode(),
+                    ex.valid() ? "" : " (invalid)"), 10, y,
+                    ex.valid() ? ACCENT : ERROR);
+            y += 11;
+            drawText(ctx, "> " + truncate(ex.prompt(), this.width - 30), 12, y, TEXT_DIM);
+            y += 11;
+            if (!ex.chat().isBlank()) {
+                drawText(ctx, "AI: " + truncate(ex.chat(), this.width - 30), 12, y, TEXT);
+                y += 11;
+            }
+            if (!ex.command().isBlank()) {
+                drawText(ctx, "CMD: " + truncate(ex.command(), this.width - 30), 12, y, SUCCESS);
+                y += 11;
+            }
+            if (!ex.reason().isBlank()) {
+                drawText(ctx, "why: " + truncate(ex.reason(), this.width - 30), 12, y, TEXT_DIM);
+                y += 11;
+            }
+            y += 4;
+            drawn++;
+        }
+        if (exchanges.isEmpty()) {
+            drawText(ctx, "No AI exchanges yet. Run @ai \"question\" to ask the advisor.",
+                    14, y, TEXT_DIM);
+        }
+    }
+
+    private String truncate(String value, int maxWidth) {
+        if (value == null) return "";
+        if (textRenderer.getWidth(value) <= maxWidth) return value;
+        String suffix = "...";
+        int cut = value.length();
+        while (cut > 0 && textRenderer.getWidth(value.substring(0, cut) + suffix) > maxWidth) {
+            cut--;
+        }
+        return cut <= 0 ? suffix : value.substring(0, cut) + suffix;
+    }
+
     // ======================== STATUS BAR ========================
 
     private void renderStatusBar(DrawContext ctx) {
@@ -1468,6 +1520,7 @@ public class BelfegorScreen extends Screen {
         if (selectedTab == 5) { shulkerScrollOffset = Math.max(0, shulkerScrollOffset - (int) v); return true; }
         if (selectedTab == 6) { schematicScrollOffset = Math.max(0, schematicScrollOffset - (int) v); return true; }
         if (selectedTab == 7) { logScrollOffset = Math.max(0, logScrollOffset - (int) v); return true; }
+        if (selectedTab == 8) { aiScrollOffset = Math.max(0, aiScrollOffset - (int) v); return true; }
         return super.mouseScrolled(mouseX, mouseY, h, v);
     }
 

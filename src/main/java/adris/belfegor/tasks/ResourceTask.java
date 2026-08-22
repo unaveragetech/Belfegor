@@ -1,8 +1,10 @@
 package adris.belfegor.tasks;
 
 import adris.belfegor.Belfegor;
+import adris.belfegor.memory.ErrandMemory;
 import adris.belfegor.tasks.container.PickupFromContainerTask;
 import adris.belfegor.tasks.container.OverflowInventoryTask;
+import adris.belfegor.tasks.container.RetrieveFromStashTask;
 import adris.belfegor.tasks.container.ShulkerInteractionTask;
 import adris.belfegor.tasks.movement.DefaultGoToDimensionTask;
 import adris.belfegor.tasks.movement.PickupDroppedItemTask;
@@ -53,6 +55,7 @@ public abstract class ResourceTask extends Task implements ITaskCanForce {
     private BlockPos _mineLastClosest = null;
     private MineAndCollectTask _mineIfPresentTask = null;
     private ShulkerInteractionTask _shulkerRetrieveTask = null;
+    private RetrieveFromStashTask _stashRetrieveTask = null;
     private OverflowInventoryTask _overflowTask = null;
 
     public ResourceTask(ItemTarget[] itemTargets) {
@@ -85,6 +88,7 @@ public abstract class ResourceTask extends Task implements ITaskCanForce {
     protected void onStart(Belfegor mod) {
         _mineIfPresentTask = null;
         _shulkerRetrieveTask = null;
+        _stashRetrieveTask = null;
         mod.getBehaviour().push();
         mod.getBehaviour().addProtectedItems(ItemTarget.getMatches(_itemTargets));
         //removeThrowawayItems(_itemTargets);
@@ -231,6 +235,35 @@ public abstract class ResourceTask extends Task implements ITaskCanForce {
                 }
             } else {
                 _currentContainer = null;
+            }
+        }
+
+        // Before gathering new resources, check whether a previous task stashed
+        // the item at a remembered chest (base storage or a stash chest). If
+        // so, walk back and withdraw it instead of re-gathering from the world.
+        if (_stashRetrieveTask != null
+                && (_stashRetrieveTask.isFinished(mod) || _stashRetrieveTask.stopped())) {
+            _stashRetrieveTask = null;
+        }
+        if (_stashRetrieveTask != null
+                && !_stashRetrieveTask.isFinished(mod)
+                && !_stashRetrieveTask.stopped()) {
+            setDebugState("Continuing base stash withdrawal");
+            return _stashRetrieveTask;
+        }
+        BlockPos home = mod.getModSettings().getHomeBasePosition();
+        if (home != null) {
+            ItemTarget[] stashMissing = Arrays.stream(_itemTargets)
+                    .filter(target -> mod.getItemStorage().getItemCountInventoryOnly(target.getMatches())
+                            < target.getTargetCount())
+                    .filter(target -> Arrays.stream(target.getMatches())
+                            .anyMatch(item -> ErrandMemory.getInstance()
+                                    .hasStash(home, WorldHelper.getCurrentDimension().name(), item)))
+                    .toArray(ItemTarget[]::new);
+            if (stashMissing.length > 0) {
+                _stashRetrieveTask = new RetrieveFromStashTask(home, stashMissing);
+                setDebugState("Withdrawing from remembered base stash");
+                return _stashRetrieveTask;
             }
         }
 

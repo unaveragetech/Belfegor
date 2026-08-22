@@ -5,12 +5,17 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import net.minecraft.util.math.BlockPos;
 
 import java.io.File;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.Deque;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
-import java.util.Optional;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Structured persistent memory for @player home bases.
@@ -47,6 +52,8 @@ public class BaseMemory {
         public String status = "planned";
         public List<BaseModule> modules = new ArrayList<>();
         public List<BaseInspection> inspections = new ArrayList<>();
+        /** Per-build-task phase bookkeeping so interrupted construction can resume. */
+        public Map<String, String> buildPhases = new HashMap<>();
 
         public BaseRecord() {}
 
@@ -332,7 +339,6 @@ public class BaseMemory {
         if (module == null) return false;
         String status = normalize(module.status);
         return status.equals("complete")
-                || status.endsWith("_complete")
                 || status.equals("reachable");
     }
 
@@ -344,7 +350,7 @@ public class BaseMemory {
             for (BaseModule module : base.modules) {
                 if (module == null) continue;
                 if (!isProtectedFixture(module)) continue;
-                if (module.x == pos.getX() && module.y == pos.getY() && module.z == pos.getZ()) {
+                if (moduleContains(module, pos)) {
                     return true;
                 }
             }
@@ -358,8 +364,175 @@ public class BaseMemory {
                 .filter(base -> dimension == null || dimension.isBlank() || dimension.equals(base.dimension))
                 .flatMap(base -> base.modules.stream())
                 .filter(this::isProtectedFixture)
-                .filter(module -> module.x == pos.getX() && module.y == pos.getY() && module.z == pos.getZ())
+                .filter(module -> moduleContains(module, pos))
                 .findFirst();
+    }
+
+    /**
+     * Remembers which phase a named build task reached for a base, so an
+     * interrupted {@code @camp} / {@code @build} run can resume instead of
+     * treating the base as freshly started.
+     */
+    public void rememberBuildPhase(BlockPos baseCenter, String dimension, String task, String phase) {
+        if (baseCenter == null || phase == null || phase.isBlank()) return;
+        BaseRecord base = rememberBase(baseCenter, dimension, 4, 3, 5, "building");
+        base.buildPhases.put(normalize(task), phase.trim());
+        base.lastUpdated = System.currentTimeMillis();
+        _dirty = true;
+    }
+
+    public Optional<String> loadBuildPhase(BlockPos baseCenter, String dimension, String task) {
+        if (baseCenter == null) return Optional.empty();
+        return baseAt(baseCenter, dimension)
+                .or(() -> nearestBase(baseCenter, dimension))
+                .map(base -> base.buildPhases.get(normalize(task)))
+                .filter(phase -> phase != null && !phase.isBlank());
+    }
+
+    public void clearBuildPhase(BlockPos baseCenter, String dimension, String task) {
+        if (baseCenter == null) return;
+        baseAt(baseCenter, dimension).ifPresent(base -> {
+            if (base.buildPhases.remove(normalize(task)) != null) {
+                _dirty = true;
+            }
+        });
+    }
+
+    /**
+     * True when the position is inside one of the remembered base footprints
+     * (with a small margin). Navigation inside a base should avoid breaking
+     * its own walls/doors and prefer the remembered doorways and halls.
+     */
+    public boolean isInsideBase(BlockPos pos, String dimension, int margin) {
+        if (pos == null) return false;
+        int m = Math.max(0, margin);
+        return _bases.values().stream()
+                .filter(base -> dimension == null || dimension.isBlank() || dimension.equals(base.dimension))
+                .anyMatch(base -> Math.abs(pos.getX() - base.x) <= base.radius + m
+                        && Math.abs(pos.getZ() - base.z) <= base.radius + m
+                        && Math.abs(pos.getY() - base.y) <= Math.max(6, base.wallHeight + 2) + m);
+    }
+
+    public Optional<BaseRecord> baseContaining(BlockPos pos, String dimension) {
+        if (pos == null) return Optional.empty();
+        return _bases.values().stream()
+                .filter(base -> dimension == null || dimension.isBlank() || dimension.equals(base.dimension))
+                .filter(base -> Math.abs(pos.getX() - base.x) <= base.radius + 2
+                        && Math.abs(pos.getZ() - base.z) <= base.radius + 2)
+                .min(Comparator.comparingDouble(base -> base.distanceSq(pos)));
+    }
+
+    public Optional<BaseModule> moduleContaining(BlockPos pos, String dimension) {
+        if (pos == null) return Optional.empty();
+        return _bases.values().stream()
+                .filter(base -> dimension == null || dimension.isBlank() || dimension.equals(base.dimension))
+                .flatMap(base -> base.modules.stream())
+                .filter(module -> module != null && moduleContains(module, pos))
+                .min(Comparator.comparingInt(this::moduleVolume));
+    }
+
+    private int moduleVolume(BaseModule module) {
+        return Math.max(1, module.width) * Math.max(1, module.depth) * Math.max(1, module.height);
+    }
+
+    /**
+     * Computes a rough waypoint route between two positions inside a base by
+     * walking the remembered room graph (rooms connected through halls and
+     * parent/child relationships). Returns an empty list when no base/module
+     * graph applies, meaning the caller should just path directly.
+     */
+    public List<BlockPos> routeWaypoints(BlockPos from, BlockPos to, String dimension) {
+        List<BlockPos> result = new ArrayList<>();
+        if (from == null || to == null || from.equals(to)) return result;
+        BaseRecord base = baseContaining(from, dimension).orElse(null);
+        if (base == null) base = baseContaining(to, dimension).orElse(null);
+        if (base == null) return result;
+
+        Optional<BaseModule> start = moduleContaining(from, dimension);
+        Optional<BaseModule> end = moduleContaining(to, dimension);
+        if (start.isEmpty() || end.isEmpty()) return result;
+
+        String startKey = normalize(start.get().name);
+        String endKey = normalize(end.get().name);
+        if (startKey.equals(endKey)) return result;
+
+        Map<String, String> parent = new HashMap<>();
+        Set<String> visited = new HashSet<>();
+        Deque<BaseModule> queue = new ArrayDeque<>();
+        queue.add(start.get());
+        visited.add(startKey);
+        BaseModule found = null;
+        while (!queue.isEmpty() && found == null) {
+            BaseModule current = queue.poll();
+            for (BaseModule neighbor : base.modules) {
+                if (neighbor == null) continue;
+                String key = normalize(neighbor.name);
+                if (visited.contains(key)) continue;
+                if (!modulesConnected(current, neighbor)) continue;
+                visited.add(key);
+                parent.put(key, normalize(current.name));
+                queue.add(neighbor);
+                if (key.equals(endKey)) {
+                    found = neighbor;
+                    break;
+                }
+            }
+        }
+        if (found == null) return result;
+
+        List<BaseModule> path = new ArrayList<>();
+        String cursor = endKey;
+        int guard = 0;
+        while (cursor != null && !cursor.equals(startKey) && guard++ < 64) {
+            final String key = cursor;
+            Optional<BaseModule> node = base.modules.stream()
+                    .filter(module -> module != null && normalize(module.name).equals(key))
+                    .findFirst();
+            if (node.isEmpty()) break;
+            path.add(0, node.get());
+            cursor = parent.get(key);
+        }
+        for (BaseModule module : path) {
+            BlockPos center = module.center();
+            if (!center.equals(from) && !center.equals(to)) {
+                result.add(center);
+            }
+        }
+        return result;
+    }
+
+    private boolean modulesConnected(BaseModule a, BaseModule b) {
+        if (a == null || b == null) return false;
+        String aName = normalize(a.name);
+        String bName = normalize(b.name);
+        if (!normalize(a.parent).isBlank() && normalize(a.parent).equals(bName)) return true;
+        if (!normalize(b.parent).isBlank() && normalize(b.parent).equals(aName)) return true;
+        if (aName.equals("core") || bName.equals("core")) {
+            return boundingBoxesNear(a, b, 6);
+        }
+        return boundingBoxesNear(a, b, 6);
+    }
+
+    private boolean boundingBoxesNear(BaseModule a, BaseModule b, int gap) {
+        int aMinX = Math.min(a.x, a.x + Math.max(1, a.width) - 1) - gap;
+        int aMaxX = Math.max(a.x, a.x + Math.max(1, a.width) - 1) + gap;
+        int aMinZ = Math.min(a.z, a.z + Math.max(1, a.depth) - 1) - gap;
+        int aMaxZ = Math.max(a.z, a.z + Math.max(1, a.depth) - 1) + gap;
+        int bMinX = Math.min(b.x, b.x + Math.max(1, b.width) - 1) - gap;
+        int bMaxX = Math.max(b.x, b.x + Math.max(1, b.width) - 1) + gap;
+        int bMinZ = Math.min(b.z, b.z + Math.max(1, b.depth) - 1) - gap;
+        int bMaxZ = Math.max(b.z, b.z + Math.max(1, b.depth) - 1) + gap;
+        return aMinX <= bMaxX && aMaxX >= bMinX && aMinZ <= bMaxZ && aMaxZ >= bMinZ;
+    }
+
+    private boolean moduleContains(BaseModule module, BlockPos pos) {
+        if (module == null || pos == null) return false;
+        int width = Math.max(1, module.width);
+        int depth = Math.max(1, module.depth);
+        int height = Math.max(1, module.height);
+        return pos.getX() >= module.x && pos.getX() < module.x + width
+                && pos.getY() >= module.y && pos.getY() < module.y + height
+                && pos.getZ() >= module.z && pos.getZ() < module.z + depth;
     }
 
     private boolean isProtectedFixture(BaseModule module) {
@@ -405,6 +578,22 @@ public class BaseMemory {
         });
         boolean removed = before != _bases.size();
         if (removed) _dirty = true;
+        return removed;
+    }
+
+    /** Removes every remembered base within a radius of the given position. */
+    public int forgetBasesNear(BlockPos center, String dimension, double radius) {
+        if (center == null) return 0;
+        double radiusSq = Math.max(0, radius) * Math.max(0, radius);
+        int before = _bases.size();
+        _bases.entrySet().removeIf(entry -> {
+            BaseRecord base = entry.getValue();
+            if (base == null) return true;
+            if (dimension != null && !dimension.isBlank() && !dimension.equals(base.dimension)) return false;
+            return base.distanceSq(center) <= radiusSq;
+        });
+        int removed = before - _bases.size();
+        if (removed > 0) _dirty = true;
         return removed;
     }
 

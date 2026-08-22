@@ -16,7 +16,9 @@ import net.minecraft.client.MinecraftClient;
 import net.minecraft.client.gui.screen.ingame.HandledScreen;
 
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
@@ -27,9 +29,14 @@ public class StoreInContainerTask extends AbstractDoToStorageContainerTask imple
     private final BlockPos _targetContainer;
     private final boolean _getIfNotPresent;
     private final ItemTarget[] _toStore;
+    private static final Map<String, Integer> NO_PROGRESS_ATTEMPTS = new HashMap<>();
 
     private ContainerStoredTracker _storedItems;
     private boolean _recordedStorageMemory;
+    private boolean _containerFull;
+    private int _openNoProgressTicks;
+    private int _lastStoredRequestedCount;
+    private int _requestedTransferCount;
 
     public StoreInContainerTask(BlockPos targetContainer, boolean getIfNotPresent, ItemTarget... toStore) {
         _targetContainer = targetContainer;
@@ -54,6 +61,10 @@ public class StoreInContainerTask extends AbstractDoToStorageContainerTask imple
         }
         _storedItems.startTracking();
         _recordedStorageMemory = false;
+        _containerFull = false;
+        _openNoProgressTicks = 0;
+        _lastStoredRequestedCount = 0;
+        _requestedTransferCount = requestedTransferCount();
     }
 
     @Override
@@ -89,6 +100,14 @@ public class StoreInContainerTask extends AbstractDoToStorageContainerTask imple
         if (isFinished(mod)) {
             recordStorageMemory(mod);
         }
+        if (_requestedTransferCount > 0
+                && stillCarryingRequestedItems(mod)
+                && storedNothingRequested()
+                && !_recordedStorageMemory) {
+            NO_PROGRESS_ATTEMPTS.merge(noProgressKey(_targetContainer, _toStore), 1, Integer::sum);
+        } else {
+            NO_PROGRESS_ATTEMPTS.remove(noProgressKey(_targetContainer, _toStore));
+        }
         if (_storedItems != null) {
             _storedItems.stopTracking();
         }
@@ -96,6 +115,24 @@ public class StoreInContainerTask extends AbstractDoToStorageContainerTask imple
 
     @Override
     protected Task onContainerOpenSubtask(Belfegor mod, ContainerCache containerCache) {
+        int storedRequested = requestedStoredCount();
+        if (storedRequested > _lastStoredRequestedCount) {
+            _lastStoredRequestedCount = storedRequested;
+            _openNoProgressTicks = 0;
+        } else if (_requestedTransferCount > 0
+                && stillCarryingRequestedItems(mod)
+                && StorageHelper.getItemStackInCursorSlot().isEmpty()) {
+            _openNoProgressTicks++;
+            if (_openNoProgressTicks >= 100) {
+                setDebugState("Open container made no progress for 5 seconds; releasing this chest.");
+                _containerFull = true;
+                StorageHelper.closeScreen();
+                return null;
+            }
+        } else {
+            _openNoProgressTicks = 0;
+        }
+
         // Move all items that aren't in the container
         for (ItemTarget target : _storedItems.getUnstoredItemTargetsYouCanStore(mod, _toStore)) {
             setDebugState("Dumping " + target);
@@ -114,6 +151,8 @@ public class StoreInContainerTask extends AbstractDoToStorageContainerTask imple
                 Optional<Slot> toMoveTo = mod.getItemStorage().getSlotThatCanFitInOpenContainer(stackIn, false);
                 if (toMoveTo.isEmpty()) {
                     setDebugState("CONTAINER FULL!");
+                    _containerFull = true;
+                    StorageHelper.closeScreen();
                     return null;
                 }
                 ItemStack destinationStack = StorageHelper.getItemStackInSlot(toMoveTo.get());
@@ -127,6 +166,8 @@ public class StoreInContainerTask extends AbstractDoToStorageContainerTask imple
                 }
                 if (destinationSpace <= 0) {
                     setDebugState("CONTAINER SLOT FULL!");
+                    _containerFull = true;
+                    StorageHelper.closeScreen();
                     return null;
                 }
                 int moveCount = Math.min(target.getTargetCount(), Math.min(stackIn.getCount(), destinationSpace));
@@ -146,11 +187,18 @@ public class StoreInContainerTask extends AbstractDoToStorageContainerTask imple
 
     @Override
     public boolean isFinished(Belfegor mod) {
-        // We've stored all items
-        return StorageHelper.getItemStackInCursorSlot().isEmpty()
-                && (_toStore.length == 0
+        if (!StorageHelper.getItemStackInCursorSlot().isEmpty()) {
+            return false;
+        }
+        if (_containerFull) return true;
+        if (_requestedTransferCount > 0
+                && storedNothingRequested()
+                && stillCarryingRequestedItems(mod)) {
+            return false;
+        }
+        return _toStore.length == 0
                 || (_storedItems != null
-                && _storedItems.getUnstoredItemTargetsYouCanStore(mod, _toStore).length == 0));
+                && _storedItems.getUnstoredItemTargetsYouCanStore(mod, _toStore).length == 0);
     }
 
     @Override
@@ -167,14 +215,78 @@ public class StoreInContainerTask extends AbstractDoToStorageContainerTask imple
     }
 
     private void recordStorageMemory(Belfegor mod) {
-        if (_recordedStorageMemory || _toStore.length == 0 || mod == null) return;
+        if (_containerFull || _recordedStorageMemory || _toStore.length == 0 || mod == null) return;
+        java.util.List<ItemTarget> actuallyStored = new java.util.ArrayList<>();
+        for (ItemTarget target : _toStore) {
+            if (target == null) continue;
+            int stored = Math.min(target.getTargetCount(),
+                    _storedItems == null ? 0 : _storedItems.getStoredCount(target.getMatches()));
+            if (stored > 0) {
+                actuallyStored.add(new ItemTarget(target, stored));
+            }
+        }
+        if (actuallyStored.isEmpty()) return;
         BlockPos home = mod.getModSettings().getHomeBasePosition();
         if (home == null) return;
         String dimension = adris.belfegor.util.helpers.WorldHelper.getCurrentDimension().name();
         BaseStorageMemory.getInstance().rememberChest(home, dimension, _targetContainer,
                 "storage", false, "completed StoreInContainerTask");
-        BaseStorageMemory.getInstance().recordStored(home, dimension, _targetContainer, _toStore);
+        BaseStorageMemory.getInstance().recordStored(home, dimension, _targetContainer,
+                actuallyStored.toArray(ItemTarget[]::new));
         BaseStorageMemory.getInstance().save();
         _recordedStorageMemory = true;
+    }
+
+    public boolean wasContainerFull() {
+        return _containerFull;
+    }
+
+    public static boolean hadRepeatedNoProgress(BlockPos targetContainer, ItemTarget... toStore) {
+        return NO_PROGRESS_ATTEMPTS.getOrDefault(noProgressKey(targetContainer, toStore), 0) >= 3;
+    }
+
+    private boolean stillCarryingRequestedItems(Belfegor mod) {
+        if (mod == null || _toStore.length == 0) return false;
+        for (ItemTarget target : _toStore) {
+            if (target != null && mod.getItemStorage().getItemCountInventoryOnly(target.getMatches()) > 0) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean storedNothingRequested() {
+        if (_storedItems == null) return true;
+        for (ItemTarget target : _toStore) {
+            if (target != null && _storedItems.getStoredCount(target.getMatches()) > 0) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private int requestedStoredCount() {
+        if (_storedItems == null) return 0;
+        int result = 0;
+        for (ItemTarget target : _toStore) {
+            if (target != null) {
+                result += Math.min(target.getTargetCount(),
+                        _storedItems.getStoredCount(target.getMatches()));
+            }
+        }
+        return result;
+    }
+
+    private int requestedTransferCount() {
+        int result = 0;
+        for (ItemTarget target : _toStore) {
+            if (target != null) result += Math.max(0, target.getTargetCount());
+        }
+        return result;
+    }
+
+    private static String noProgressKey(BlockPos targetContainer, ItemTarget[] toStore) {
+        return (targetContainer == null ? "unknown" : targetContainer.toShortString())
+                + "|" + Arrays.toString(toStore);
     }
 }

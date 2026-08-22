@@ -34,12 +34,17 @@ The current `BuildRegionSchematicTask` is Belfegor's bridge layer:
 - it builds with Baritone's builder process when that is productive;
 - it counts missing exact blocks instead of accepting dirt as a generic construction material;
 - it destroys wrong target blocks before replacing them;
-- it now looks for a remembered construction staging chest and withdraws working batches before building;
-- it logs missing/staged supply state so build failures can be diagnosed from `belfegor_debug.log`.
+- it refreshes mismatch/material scans on a bounded interval instead of rescanning the whole map from both `onTick` and `isFinished`;
+- it pauses Baritone while a supply subtask owns control;
+- it looks for a remembered construction staging chest and withdraws at most 128 blocks per working batch;
+- when staging is empty, it gathers at most a 64-block working batch and keeps the builder paused until material is actually available;
+- it throttles missing/staged supply logs by state so build failures remain diagnosable without flooding `belfegor_debug.log`.
 
-The current `BuildBaseValidationTask` now loads an authoritative saved blueprint before checking the world. Memory alone is not enough to mark a room complete. If dirt or air exists where the campsite blueprint expects cobblestone, validation reruns repair.
+The current `BuildBaseValidationTask` walks to the locked home before scanning and loads the authoritative blueprint exported for that exact home/dimension. Memory alone is not enough to mark a room complete. If air or a wrong block exists where the home blueprint expects cobblestone, validation schedules one repair phase and rechecks before advancing.
 
-If `.minecraft/schematics/test/camp.litematic` exists, `@build validate` imports that Litematica v7 file first and treats it as the authoritative camp blueprint. The loader reads:
+`@build validate` intentionally does **not** treat `.minecraft/schematics/test/camp.litematic` as a universal camp blueprint. A Litematica file has its own dimensions and origin; applying it at every procedural camp caused validation to render and repair a large region beside the actual base. External `.litematic` files enter the printer through the explicit import/build flow, while procedural camps use their per-home internal blueprint.
+
+The Litematica v7 loader used by explicit imports reads:
 
 - `Metadata` for name/size information;
 - each entry in `Regions`;
@@ -47,7 +52,7 @@ If `.minecraft/schematics/test/camp.litematic` exists, `@build validate` imports
 - `BlockStatePalette` entries, including block-state properties;
 - packed `BlockStates` long arrays.
 
-Non-air palette entries are converted into world-space expected blocks at the remembered base origin. The converted blueprint is also saved into Belfegor's readable JSON schematic format for debugging.
+Non-air palette entries are converted into world-space expected blocks at the selected import origin. The converted blueprint is also saved into Belfegor's readable JSON schematic format for debugging and later repair.
 
 Repo-side schematic samples and fixtures are organized under:
 

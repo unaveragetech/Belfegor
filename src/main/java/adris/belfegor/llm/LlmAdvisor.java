@@ -6,6 +6,9 @@ import adris.belfegor.commandsystem.Command;
 import adris.belfegor.commandsystem.CommandDocumentation;
 import adris.belfegor.debug.DebugLogger;
 import adris.belfegor.memory.BaseMemory;
+import adris.belfegor.memory.BaseStorageMemory;
+import adris.belfegor.memory.ErrandMemory;
+import adris.belfegor.memory.GamePlanMemory;
 import adris.belfegor.memory.ShulkerMemory;
 import adris.belfegor.memory.SpatialAwareness;
 import adris.belfegor.util.helpers.WorldHelper;
@@ -13,6 +16,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import net.minecraft.item.ItemStack;
 import net.minecraft.registry.Registries;
+import net.minecraft.util.math.BlockPos;
 
 import java.io.BufferedWriter;
 import java.io.File;
@@ -28,6 +32,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -44,23 +50,46 @@ public class LlmAdvisor {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final String FOLDER = "belfegor";
     private static final long REPEATED_ACTION_LOG_COOLDOWN_MS = 5_000L;
+    private static final long FAILED_REQUEST_BACKOFF_MS = 15_000L;
+    private static final long TASK_COMPLETION_REQUEST_MIN_INTERVAL_MS = 10_000L;
+    private static final int MAX_RECENT_DECISIONS = 6;
+    private static final int MAX_EXCHANGES = 25;
 
     private File _dir = new File(FOLDER);
     private File _commandsFile;
+    private File _commandsJsonFile;
     private File _contextFile;
     private File _promptFile;
     private File _responseFile;
     private File _actionLogFile;
     private long _lastAutomaticRequestMs = 0;
+    private long _lastFailedRequestMs = 0;
     private CompletableFuture<AdvisorDecision> _pending;
     private String _lastAction = "none";
     private String _lastRecordedActionLine = "";
     private long _lastRecordedActionLineMs = 0;
     private String _plannedAction = "normal player-mode fallback";
     private String _goal = "survive, learn, gather, craft, improve tools, manage shulkers, and build home base";
+    private String _taskStatus = "unknown";
+    private String _lastExecutedCommand = "none";
+    private final List<String> _recentDecisions = new ArrayList<>();
+    private final List<AiExchange> _exchanges = new ArrayList<>();
+    private final ExecutorService _executor = Executors.newSingleThreadExecutor(r -> {
+        Thread thread = new Thread(r, "belfegor-llm-advisor");
+        thread.setDaemon(true);
+        return thread;
+    });
+    private String _lastRequestMode = "chat";
+    private String _lastRequestPrompt = "";
+    private String _status = "idle";
+    private String _lastError = "";
     private AdvisorDecision _lastDecision;
 
     public record AdvisorDecision(String command, String chat, String goal, String reason, boolean valid) {
+    }
+
+    public record AiExchange(String mode, String prompt, String chat, String command,
+                             String reason, boolean valid, long timestamp) {
     }
 
     public static LlmAdvisor getInstance() {
@@ -72,6 +101,7 @@ public class LlmAdvisor {
             _dir = new File(gameDir, FOLDER);
             _dir.mkdirs();
             _commandsFile = new File(_dir, "llm_commands.md");
+            _commandsJsonFile = new File(_dir, "llm_commands.json");
             _contextFile = new File(_dir, "llm_context.json");
             _promptFile = new File(_dir, "llm_prompt.txt");
             _responseFile = new File(_dir, "llm_response.json");
@@ -83,13 +113,21 @@ public class LlmAdvisor {
     }
 
     public synchronized void exportCommandCatalogue(Belfegor mod) {
-        if (_commandsFile == null || mod == null || mod.getCommandExecutor() == null) return;
+        if (mod == null || mod.getCommandExecutor() == null) return;
         try {
             String prefix = mod.getModSettings() == null ? "@" : mod.getModSettings().getCommandPrefix();
-            Files.writeString(_commandsFile.toPath(),
-                    CommandDocumentation.exportMarkdown(mod.getCommandExecutor().allCommands(), prefix),
-                    StandardCharsets.UTF_8);
-            record("COMMANDS", "Exported command catalogue to " + _commandsFile.getPath());
+            if (_commandsFile != null) {
+                Files.writeString(_commandsFile.toPath(),
+                        CommandDocumentation.exportMarkdown(mod.getCommandExecutor().allCommands(), prefix),
+                        StandardCharsets.UTF_8);
+            }
+            if (_commandsJsonFile != null) {
+                Files.writeString(_commandsJsonFile.toPath(),
+                        CommandDocumentation.exportJson(mod.getCommandExecutor().allCommands(), prefix),
+                        StandardCharsets.UTF_8);
+            }
+            record("COMMANDS", "Exported command catalogue to "
+                    + (_commandsJsonFile == null ? "" : _commandsJsonFile.getPath()));
         } catch (Exception e) {
             record("ERROR", "Failed to export commands: " + e.getMessage());
         }
@@ -114,6 +152,32 @@ public class LlmAdvisor {
         }
     }
 
+    /** Live status of whatever the bot is currently doing (used by @player). */
+    public synchronized void setTaskStatus(String status) {
+        if (status != null && !status.isBlank()) {
+            _taskStatus = status;
+        }
+    }
+
+    /**
+     * Called when a bot task finishes. Lets the advisor be asked again shortly
+     * after completion so the AI can chain the next goal command, but never
+     * more often than the minimum interval.
+     */
+    public synchronized void onTaskCompleted() {
+        long now = System.currentTimeMillis();
+        if (_lastAutomaticRequestMs != 0
+                && now - _lastAutomaticRequestMs >= TASK_COMPLETION_REQUEST_MIN_INTERVAL_MS) {
+            _lastAutomaticRequestMs = 0;
+        }
+    }
+
+    public synchronized void recordCommandExecuted(String command) {
+        if (command != null && !command.isBlank()) {
+            _lastExecutedCommand = command;
+        }
+    }
+
     public synchronized void setGoal(String goal) {
         if (goal != null && !goal.isBlank()) {
             _goal = goal;
@@ -122,10 +186,35 @@ public class LlmAdvisor {
 
     public synchronized Optional<AdvisorDecision> pollDecision() {
         if (_pending == null || !_pending.isDone()) return Optional.empty();
+        return pollCompleted();
+    }
+
+    /**
+     * Consumes a completed decision only when the pending request was a chat
+     * request (from @ai). Keeps @player from stealing the @ai answer.
+     */
+    public synchronized Optional<AdvisorDecision> pollChatDecision() {
+        if (_pending == null || !"chat".equals(_lastRequestMode)) return Optional.empty();
+        return pollCompleted();
+    }
+
+    /**
+     * Consumes a completed decision only when the pending request was an
+     * automatic @player-mode request.
+     */
+    public synchronized Optional<AdvisorDecision> pollPlayerDecision() {
+        if (_pending == null || !"player_mode".equals(_lastRequestMode)) return Optional.empty();
+        return pollCompleted();
+    }
+
+    private Optional<AdvisorDecision> pollCompleted() {
         try {
             _lastDecision = _pending.getNow(null);
             _pending = null;
             if (_lastDecision != null) {
+                rememberDecision(_lastDecision);
+                recordExchange(_lastRequestMode, _lastRequestPrompt, _lastDecision);
+                _status = "idle";
                 record("DECISION", "command=" + _lastDecision.command
                         + " chat=" + _lastDecision.chat
                         + " valid=" + _lastDecision.valid
@@ -134,9 +223,62 @@ public class LlmAdvisor {
             }
         } catch (Exception e) {
             record("ERROR", "Decision failed: " + e.getMessage());
+            _status = "idle";
+            _lastError = e.getMessage() == null ? "unknown" : e.getMessage();
             _pending = null;
         }
         return Optional.empty();
+    }
+
+    /** Advisor worker status: idle, running, done, or error. */
+    public synchronized String getStatus() {
+        return _status;
+    }
+
+    public synchronized String getLastError() {
+        return _lastError;
+    }
+
+    public synchronized void recordExchange(String mode, String prompt,
+                                            String chat, String command,
+                                            String reason, boolean valid) {
+        _exchanges.add(new AiExchange(
+                mode == null ? "chat" : mode,
+                prompt == null ? "" : prompt,
+                chat == null ? "" : chat,
+                command == null ? "" : command,
+                reason == null ? "" : reason,
+                valid,
+                System.currentTimeMillis()));
+        while (_exchanges.size() > MAX_EXCHANGES) {
+            _exchanges.remove(0);
+        }
+    }
+
+    public synchronized void recordExchange(String mode, String prompt, AdvisorDecision decision) {
+        if (decision == null) return;
+        recordExchange(mode, prompt, decision.chat(), decision.command(),
+                decision.reason(), decision.valid());
+    }
+
+    public synchronized List<AiExchange> getExchanges() {
+        return new ArrayList<>(_exchanges);
+    }
+
+    /** True when the most recent pending/queued request was a chat request. */
+    public synchronized boolean hasChatRequest() {
+        return _pending != null && "chat".equals(_lastRequestMode);
+    }
+
+    private void rememberDecision(AdvisorDecision decision) {
+        if (decision == null) return;
+        _recentDecisions.add("command=" + decision.command
+                + " chat=" + decision.chat
+                + " reason=" + decision.reason
+                + " valid=" + decision.valid);
+        while (_recentDecisions.size() > MAX_RECENT_DECISIONS) {
+            _recentDecisions.remove(0);
+        }
     }
 
     public synchronized boolean requestAutomaticPlayerDecision(Belfegor mod, String phase, String fallback) {
@@ -145,12 +287,25 @@ public class LlmAdvisor {
         }
         long now = System.currentTimeMillis();
         if (_pending != null && !_pending.isDone()) return false;
-        if (now - _lastAutomaticRequestMs < mod.getModSettings().getLlmAdvisorCooldownSeconds() * 1000L) {
+        if (_lastAutomaticRequestMs != 0
+                && now - _lastAutomaticRequestMs < mod.getModSettings().getLlmAdvisorCooldownSeconds() * 1000L) {
             return false;
         }
-        _lastAutomaticRequestMs = now;
+        // Failed requests (missing model/executable, timeout) retry on a short
+        // backoff instead of eating the full cooldown, but never hammer llama.
+        if (_lastFailedRequestMs != 0 && now - _lastFailedRequestMs < FAILED_REQUEST_BACKOFF_MS) {
+            return false;
+        }
         setPlannedAction(fallback);
-        return requestDecision(mod, "player_mode", "phase=" + phase + " fallback=" + fallback, true);
+        boolean requested = requestDecision(mod, "player_mode",
+                "phase=" + phase + " taskStatus=" + _taskStatus + " fallback=" + fallback, true);
+        if (requested) {
+            _lastAutomaticRequestMs = now;
+            _lastFailedRequestMs = 0;
+        } else {
+            _lastFailedRequestMs = now;
+        }
+        return requested;
     }
 
     public synchronized boolean requestChatDecision(Belfegor mod, String prompt) {
@@ -180,14 +335,21 @@ public class LlmAdvisor {
                 record("SKIP", "LLM advisor disabled or missing model path; " + availabilityReport(mod));
                 return false;
             }
+            _lastRequestMode = mode == null ? "chat" : mode;
+            _lastRequestPrompt = userPrompt == null ? "" : userPrompt;
             exportCommandCatalogue(mod);
             writeContext(mod, mode, userPrompt, commandRequired);
             writePrompt(mode, userPrompt, commandRequired);
             record("REQUEST", "mode=" + mode + " prompt=" + userPrompt);
-            _pending = CompletableFuture.supplyAsync(() -> runAdvisorProcess(mod, commandRequired));
+            _status = "running";
+            _lastError = "";
+            _pending = CompletableFuture.supplyAsync(
+                    () -> runAdvisorProcess(mod, commandRequired), _executor);
             return true;
         } catch (Exception e) {
             record("ERROR", "requestDecision failed: " + e.getMessage());
+            _status = "idle";
+            _lastError = e.getMessage() == null ? "unknown" : e.getMessage();
             return false;
         }
     }
@@ -219,20 +381,32 @@ public class LlmAdvisor {
                     "-t", String.valueOf(mod.getModSettings().getLlmMaxThreads()),
                     "-b", String.valueOf(mod.getModSettings().getLlmBatchSize()),
                     "--temp", "0.2",
+                    // Single turn: generate once and exit. Without this flag the
+                    // bundled llama.cpp build stays in its REPL waiting on stdin,
+                    // so the advisor always timed out and never returned output.
+                    "-st",
+                    // Qwen3-style models default to verbose chain-of-thought that
+                    // eats the token budget before any JSON is produced.
+                    "--reasoning", "off",
                     "-f", _promptFile.getAbsolutePath()
             );
             Process process = new ProcessBuilder(command)
                     .directory(_dir)
                     .redirectErrorStream(true)
                     .start();
+            // Close stdin so the single-turn run cannot block waiting for the
+            // next conversation input even if the flag set changes.
+            process.getOutputStream().close();
             boolean finished = process.waitFor(mod.getModSettings().getLlmAdvisorTimeoutSeconds(), TimeUnit.SECONDS);
             if (!finished) {
                 process.destroyForcibly();
+                _lastError = "llama.cpp timed out after "
+                        + mod.getModSettings().getLlmAdvisorTimeoutSeconds() + "s";
                 return new AdvisorDecision("", "", _goal, "llama.cpp timed out", false);
             }
             String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
             record("PROCESS", "exit=" + process.exitValue() + " output=" + output.replace('\n', ' ').trim());
-            String json = extractJsonObject(stripAnsi(output));
+            String json = extractJsonObject(output);
             Files.writeString(_responseFile.toPath(), json, StandardCharsets.UTF_8);
             @SuppressWarnings("unchecked")
             Map<String, Object> parsed = GSON.fromJson(json, Map.class);
@@ -247,24 +421,121 @@ public class LlmAdvisor {
             }
             return new AdvisorDecision(commandText, chat, goal, reason, valid);
         } catch (Exception e) {
+            _lastError = e.getMessage() == null ? "unknown" : e.getMessage();
             return new AdvisorDecision("", "", _goal, "advisor process error: " + e.getMessage(), false);
         }
     }
 
+    /**
+     * Robustly turns whatever the model returned into a JSON object. The model
+     * often wraps JSON in prose, markdown fences, or reasoning tags, so we:
+     *   1) strip ANSI and code fences,
+     *   2) extract the first balanced JSON object and validate it,
+     *   3) fall back to locating the "command" key region,
+     *   4) as a last resort rebuild JSON from loose key:value lines.
+     */
     private String extractJsonObject(String output) {
-        if (output == null || output.isBlank()) {
+        String cleaned = stripAnsi(output);
+        if (cleaned == null || cleaned.isBlank()) {
             return "{\"command\":\"\",\"chat\":\"\",\"goal\":\"\",\"reason\":\"empty llama.cpp output\"}";
         }
-        int commandKey = output.lastIndexOf("\"command\"");
+        cleaned = cleaned.replaceAll("(?s)```[a-zA-Z]*", "").replace("```", "");
+
+        // The CLI echoes the prompt (including any JSON examples) before the
+        // generation, so iterate every balanced JSON object and keep the LAST
+        // one that parses: that is the model's actual answer.
+        String best = null;
+        int searchFrom = 0;
+        while (searchFrom < cleaned.length()) {
+            int start = cleaned.indexOf('{', searchFrom);
+            if (start < 0) break;
+            String candidate = balancedJsonFrom(cleaned, start);
+            if (candidate != null) {
+                try {
+                    GSON.fromJson(candidate, Map.class);
+                    best = candidate;
+                } catch (Exception ignored) {
+                }
+            }
+            searchFrom = start + 1;
+        }
+        if (best != null) {
+            return best;
+        }
+
+        int commandKey = cleaned.lastIndexOf("\"command\"");
         if (commandKey < 0) {
-            commandKey = output.lastIndexOf("'command'");
+            commandKey = cleaned.lastIndexOf("'command'");
         }
-        int start = commandKey < 0 ? output.lastIndexOf('{') : output.lastIndexOf('{', commandKey);
-        int end = commandKey < 0 ? output.lastIndexOf('}') : output.indexOf('}', commandKey);
-        if (start < 0 || end <= start) {
-            return "{\"command\":\"\",\"chat\":\"\",\"goal\":\"\",\"reason\":\"model did not return JSON\"}";
+        int start = commandKey < 0 ? cleaned.indexOf('{') : cleaned.lastIndexOf('{', commandKey);
+        int end = commandKey < 0 ? cleaned.lastIndexOf('}') : cleaned.indexOf('}', commandKey);
+        if (start >= 0 && end > start) {
+            String candidate = cleaned.substring(start, end + 1);
+            try {
+                GSON.fromJson(candidate, Map.class);
+                return candidate;
+            } catch (Exception ignored) {
+            }
         }
-        return output.substring(start, end + 1);
+        return repairJsonFromLines(cleaned);
+    }
+
+    private String balancedJsonFrom(String text, int start) {
+        int depth = 0;
+        boolean inString = false;
+        boolean escaped = false;
+        for (int i = start; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (inString) {
+                if (escaped) {
+                    escaped = false;
+                } else if (c == '\\') {
+                    escaped = true;
+                } else if (c == '"') {
+                    inString = false;
+                }
+                continue;
+            }
+            if (c == '"') {
+                inString = true;
+            } else if (c == '{') {
+                depth++;
+            } else if (c == '}') {
+                depth--;
+                if (depth == 0) return text.substring(start, i + 1);
+            }
+        }
+        return null;
+    }
+
+    /** Builds a valid JSON object from loose "key: value" lines. */
+    private String repairJsonFromLines(String text) {
+        StringBuilder json = new StringBuilder("{");
+        boolean first = true;
+        for (String key : List.of("command", "chat", "goal", "reason")) {
+            String value = extractValue(text, key);
+            if (!first) json.append(",");
+            first = false;
+            json.append("\"").append(key).append("\":\"")
+                    .append(escapeJson(value)).append("\"");
+        }
+        json.append("}");
+        return json.toString();
+    }
+
+    private String extractValue(String text, String key) {
+        java.util.regex.Pattern pattern = java.util.regex.Pattern.compile(
+                "(?i)[\"']?" + key + "[\"']?\\s*[:=]\\s*[\"']?([^\"'\\n,}]+)[\"']?");
+        java.util.regex.Matcher matcher = pattern.matcher(text);
+        return matcher.find() ? matcher.group(1).trim() : "";
+    }
+
+    private String escapeJson(String value) {
+        return value.replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", " ")
+                .replace("\r", " ")
+                .replace("\t", " ");
     }
 
     private String stripAnsi(String value) {
@@ -292,10 +563,16 @@ public class LlmAdvisor {
         context.put("goal", _goal);
         context.put("last_action", _lastAction);
         context.put("planned_action", _plannedAction);
+        context.put("task_status", _taskStatus);
+        context.put("last_executed_command", _lastExecutedCommand);
+        context.put("recent_decisions", new ArrayList<>(_recentDecisions));
         context.put("user_prompt", prompt);
         context.put("command_required", commandRequired);
         context.put("player", buildPlayerContext(mod));
         context.put("inventory", buildInventoryContext(mod));
+        context.put("stored_at_base", buildStoredContext(mod));
+        context.put("errands", buildErrandContext(mod));
+        context.put("game_plan", buildGamePlanContext());
         context.put("shulkers", buildShulkerContext());
         context.put("base_memory", buildBaseContext());
         context.put("spatial_awareness", buildSpatialContext());
@@ -327,6 +604,54 @@ public class LlmAdvisor {
             inventory.merge(id, stack.getCount(), Integer::sum);
         }
         return inventory;
+    }
+
+    /** Known supplies stored in the home storage network (ledger, not live). */
+    private Map<String, Integer> buildStoredContext(Belfegor mod) {
+        Map<String, Integer> stored = new LinkedHashMap<>();
+        if (mod == null || mod.getModSettings() == null) return stored;
+        BlockPos home = mod.getModSettings().getHomeBasePosition();
+        if (home == null) return stored;
+        BaseStorageMemory.StorageNetwork network = BaseStorageMemory.getInstance()
+                .networkFor(home, WorldHelper.getCurrentDimension().name());
+        if (network != null && network.knownCounts != null) {
+            stored.putAll(network.knownCounts);
+        }
+        return stored;
+    }
+
+    /** Outstanding stash errands: supplies gathered earlier and stored at a chest. */
+    private List<Map<String, Object>> buildErrandContext(Belfegor mod) {
+        List<Map<String, Object>> errands = new ArrayList<>();
+        for (ErrandMemory.Errand errand : ErrandMemory.getInstance().getAll()) {
+            if (errand == null || errand.remaining <= 0) continue;
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("item", errand.item);
+            map.put("remaining", errand.remaining);
+            map.put("status", errand.status);
+            map.put("source", errand.source);
+            map.put("chest", errand.chestX + "," + errand.chestY + "," + errand.chestZ);
+            errands.add(map);
+        }
+        return errands;
+    }
+
+    /** Persistent long-term game plan stages and their status. */
+    private List<Map<String, Object>> buildGamePlanContext() {
+        GamePlanMemory memory = GamePlanMemory.getInstance();
+        memory.ensureStages();
+        List<Map<String, Object>> stages = new ArrayList<>();
+        for (GamePlanMemory.GameStage stage : memory.getStages()) {
+            if (stage == null) continue;
+            Map<String, Object> map = new LinkedHashMap<>();
+            map.put("id", stage.id);
+            map.put("name", stage.name);
+            map.put("status", stage.status);
+            map.put("description", stage.description);
+            map.put("note", stage.note);
+            stages.add(map);
+        }
+        return stages;
     }
 
     private List<Map<String, Object>> buildShulkerContext() {
@@ -430,17 +755,43 @@ public class LlmAdvisor {
 
     private void writePrompt(String mode, String userPrompt, boolean commandRequired) throws Exception {
         StringBuilder prompt = new StringBuilder();
-        prompt.append("You are Belfegor's local Minecraft planning advisor running through bundled llama.cpp.\n");
-        prompt.append("You must reason from the JSON context and command catalogue files.\n");
-        prompt.append("Return ONLY compact JSON with keys: command, chat, goal, reason.\n");
+        prompt.append("You are the planning advisor for Belfegor, an autonomous Minecraft bot. "
+                + "You do NOT play the game yourself; you choose the next Belfegor command.\n");
+        prompt.append("You are consulted ONE command at a time in a loop: after each command finishes or fails, "
+                + "you are asked again. Therefore return exactly ONE next command per response, and chain long "
+                + "goals across responses (e.g. @get gold_ingot -> @get apple -> @get golden_apple -> "
+                + "@shulker store [golden_apple 2]).\n");
+        prompt.append("Read the command catalogue JSON to see every legal command, its arguments, and examples. "
+                + "Never invent commands. Never return a command that is not in that catalogue.\n");
+        prompt.append("Use task_status, last_action, last_executed_command, inventory, stored_at_base, errands, "
+                + "game_plan, and recent_decisions to decide the next step. If the bot is busy "
+                + "(task_status is not idle), prefer a matching continuation or an empty command instead of "
+                + "interrupting.\n");
+        prompt.append("Prefer commands that advance the active game_plan stage "
+                + "(wood_tools -> stone_tools -> iron_tools -> diamond_tools -> food_supply -> base_camp -> "
+                + "base_expansion -> nether_resources -> stronghold -> end_dragon).\n");
+        prompt.append("You MUST answer with exactly ONE JSON object and nothing else: no markdown fences, "
+                + "no code blocks, no explanations before or after, no thinking.\n");
         if (commandRequired) {
-            prompt.append("The command must be one legal Belfegor command from llm_commands.md and must start with @.\n");
+            prompt.append("Schema (command is required and must start with @):\n");
         } else {
-            prompt.append("If no command is needed, command may be empty and chat should answer the user.\n");
+            prompt.append("Schema (command may be empty when just chatting):\n");
         }
-        prompt.append("Never invent unsupported commands. Prefer safe survival, inventory recovery, using known shulkers, and simple useful goals.\n\n");
+        prompt.append("{\"command\": \"<one Belfegor command starting with @, or empty>\", "
+                + "\"chat\": \"<short explanation to the player>\", "
+                + "\"goal\": \"<short current goal>\", "
+                + "\"reason\": \"<why this command now, citing context>\"}\n");
+        prompt.append("Example:\n");
+        prompt.append("{\"command\": \"@get golden_apple 1\", "
+                + "\"chat\": \"Crafting golden apples for regeneration food.\", "
+                + "\"goal\": \"prepare food and gear\", "
+                + "\"reason\": \"Inventory has 8 gold ingots and 4 apples; golden apple is craftable now.\"}\n");
+        prompt.append("Rules:\n- command must start with @ and match a command in the catalogue.\n"
+                + "- If no command is needed right now, set command to \"\" and explain in chat.\n"
+                + "- chat, goal, and reason should be concise, concrete, and grounded in the context.\n\n");
         prompt.append("Context file: ").append(_contextFile.getAbsolutePath()).append("\n");
-        prompt.append("Command catalogue: ").append(_commandsFile.getAbsolutePath()).append("\n");
+        prompt.append("Command catalogue (JSON): ")
+                .append(_commandsJsonFile == null ? "" : _commandsJsonFile.getAbsolutePath()).append("\n");
         prompt.append("Mode: ").append(mode).append("\n");
         prompt.append("Prompt: ").append(userPrompt).append("\n");
         prompt.append("Recent action log: ").append(_actionLogFile.getAbsolutePath()).append("\n");

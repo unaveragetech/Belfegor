@@ -6,6 +6,7 @@ import adris.belfegor.tasks.entity.KillEntitiesTask;
 import adris.belfegor.tasks.speedrun.MarvionBeatMinecraftTask;
 import adris.belfegor.tasksystem.ITaskRequiresGrounded;
 import adris.belfegor.tasksystem.Task;
+import adris.belfegor.util.helpers.DoorHelper;
 import adris.belfegor.util.helpers.ItemHelper;
 import adris.belfegor.util.helpers.StorageHelper;
 import adris.belfegor.util.helpers.WorldHelper;
@@ -191,6 +192,12 @@ public class TimeoutWanderTask extends Task implements ITaskRequiresGrounded {
             }
             BlockPos blockStuck = stuckInBlock(mod);
             if (blockStuck != null) {
+                if (DoorHelper.tryOpenBlockedDoor(mod, blockStuck)) {
+                    setDebugState("Opening blocked door");
+                    _progressChecker.reset();
+                    stuckCheck.reset();
+                    return null;
+                }
                 _failCounter++;
                 _unstuckTask = getFenceUnstuckTask();
                 return _unstuckTask;

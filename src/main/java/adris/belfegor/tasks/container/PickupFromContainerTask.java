@@ -1,6 +1,7 @@
 package adris.belfegor.tasks.container;
 
 import adris.belfegor.Belfegor;
+import adris.belfegor.memory.BaseStorageMemory;
 import adris.belfegor.tasks.slot.EnsureFreeInventorySlotTask;
 import adris.belfegor.tasksystem.ITaskCanForce;
 import adris.belfegor.tasksystem.Task;
@@ -8,6 +9,7 @@ import adris.belfegor.trackers.storage.ContainerCache;
 import adris.belfegor.util.ItemTarget;
 import adris.belfegor.util.helpers.ItemHelper;
 import adris.belfegor.util.helpers.StorageHelper;
+import adris.belfegor.util.helpers.WorldHelper;
 import adris.belfegor.util.slots.FurnaceSlot;
 import adris.belfegor.util.slots.Slot;
 import net.minecraft.item.ItemStack;
@@ -30,6 +32,7 @@ public class PickupFromContainerTask extends AbstractDoToStorageContainerTask im
 
     private final EnsureFreeInventorySlotTask _freeInventoryTask = new EnsureFreeInventorySlotTask();
     private boolean _containerExhausted;
+    private int[] _startingInventoryCounts;
 
     public PickupFromContainerTask(BlockPos targetContainer, ItemTarget... targets) {
         _targets = targets;
@@ -92,7 +95,35 @@ public class PickupFromContainerTask extends AbstractDoToStorageContainerTask im
     @Override
     protected void onStart(Belfegor mod) {
         _containerExhausted = false;
+        _startingInventoryCounts = new int[_targets.length];
+        for (int i = 0; i < _targets.length; i++) {
+            _startingInventoryCounts[i] = mod.getItemStorage().getItemCountInventoryOnly(_targets[i].getMatches());
+        }
         super.onStart(mod);
+    }
+
+    @Override
+    protected void onStop(Belfegor mod, Task interruptTask) {
+        super.onStop(mod, interruptTask);
+        BlockPos home = mod.getModSettings().getHomeBasePosition();
+        if (home != null && (isFinished(mod) || _containerExhausted)) {
+            java.util.ArrayList<ItemTarget> withdrawn = new java.util.ArrayList<>();
+            for (int i = 0; i < _targets.length; i++) {
+                int before = _startingInventoryCounts == null || i >= _startingInventoryCounts.length
+                        ? 0 : _startingInventoryCounts[i];
+                int after = mod.getItemStorage().getItemCountInventoryOnly(_targets[i].getMatches());
+                int gained = Math.max(0, after - before);
+                if (gained > 0) withdrawn.add(new ItemTarget(_targets[i], gained));
+            }
+            if (!withdrawn.isEmpty()) {
+                BaseStorageMemory.getInstance().recordWithdrawn(home,
+                        WorldHelper.getCurrentDimension().name(), _targetContainer,
+                        withdrawn.toArray(ItemTarget[]::new));
+            }
+            BaseStorageMemory.getInstance().markChestAvailable(
+                    home, WorldHelper.getCurrentDimension().name(), _targetContainer);
+            BaseStorageMemory.getInstance().save();
+        }
     }
 
     @Override
