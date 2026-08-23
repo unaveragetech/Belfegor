@@ -12,9 +12,10 @@ The repo now keeps immutable jar copies under `releases/jars/` so the current be
 |---|---:|---|---|
 | `releases/jars/belfegor-1.21.4-beta1-341eae3.jar` | `341eae3` | `961e6b5994976312a84f0fbf9e588c5d55272072470e3a4e9ceb43c456c1f2ec` | Previous public beta jar. |
 | `releases/jars/belfegor-1.21.4-beta1-718e0b7.jar` | `718e0b7` | `27f4eaf257b0a3e67688ad9f984b137510e4b2912903bc17e929a8e137bcc2d4` | Current beta jar with base expansion floor/placement hardening. |
-| `releases/jars/belfegor-1.21.4-beta1-6050309.jar` | `6050309` | `12dbe3564b8586a2f2fd43aa7f02379df225b3452f0e5519d315e1a385488a41` | Current beta jar with the autonomy overhaul and cake milk-bucket fix. |
+| `releases/jars/belfegor-1.21.4-beta1-6050309.jar` | `6050309` | `12dbe3564b8586a2f2fd43aa7f02379df225b3452f0e5519d315e1a385488a41` | Beta jar with the autonomy overhaul and cake milk-bucket fix. |
+| `releases/jars/belfegor-1.21.4-beta1-067bcdf.jar` | `067bcdf` | `8d664411632119a6482b22c2989ef9e712b2b68210fa1a38a8f0b3441acb141d` | Current beta jar with the full MLG clutch overhaul. |
 
-The moving install jar remains `releases/belfegor-1.21.4-beta1.jar` and currently matches the `6050309` archive copy.
+The moving install jar remains `releases/belfegor-1.21.4-beta1.jar` and currently matches the `067bcdf` archive copy.
 
 ### What changed from `341eae3` to `718e0b7`
 
@@ -31,6 +32,22 @@ The moving install jar remains `releases/belfegor-1.21.4-beta1.jar` and currentl
 - Milking no longer re-equips the bucket every tick and logs when it makes no progress.
 - `SatisfyMiningRequirementTask` returns immediately when the mining requirement is already met, preventing the repeated best-tool equip loop while mining.
 - This jar also includes the full autonomy overhaul: doors and door repair, base-aware navigation, resumable construction, the storage economy with stash errands, tool reserves, the persistent `@goal` game plan, the rebuilt llama.cpp advisor, and the new command set.
+
+### What changed from `6050309` to `067bcdf`
+
+- Clutch items now have real per-item usage modes: fluid placement (water,
+  powder snow), top-face block placement (hay, honey, slime, cobweb,
+  scaffolding, twisting vines), side-face placement with steering (ladder,
+  weeping vines), orientation-aware 2-block bed placement, offhand totems, and
+  ender-pearl throws at impact.
+- Beds place with the head in an empty cell and verify the placement; ladders
+  and vines are placed against a side and the bot steers into them and climbs.
+- Totem of undying is equipped in the offhand (combined with the best block
+  clutch when both exist), and the offhand-equip helper no longer strands items
+  in the cursor.
+- Ender pearls are thrown steeply downward 9-18 blocks above impact.
+- The best available item is chosen by effectiveness; sweet berries are ignored
+  with a warning; placement is verified/retried and never stacked.
 
 ## Download
 

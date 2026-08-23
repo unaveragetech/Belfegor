@@ -19,8 +19,9 @@ releases/jars/
 | Jar | Commit | Size | SHA256 | Role |
 |---|---:|---:|---|---|
 | `releases/jars/belfegor-1.21.4-beta1-341eae3.jar` | `341eae3` | 3,817,167 bytes | `961e6b5994976312a84f0fbf9e588c5d55272072470e3a4e9ceb43c456c1f2ec` | Previous public beta jar before the base-builder hardening pass. |
-| `releases/jars/belfegor-1.21.4-beta1-718e0b7.jar` | `718e0b7` | 3,886,205 bytes | `27f4eaf257b0a3e67688ad9f984b137510e4b2912903bc17e929a8e137bcc2d4` | Current beta jar with base expansion floor planning, water placement, and unsupported-footprint guards. |
-| `releases/jars/belfegor-1.21.4-beta1-6050309.jar` | `6050309` | 4,049,926 bytes | `12dbe3564b8586a2f2fd43aa7f02379df225b3452f0e5519d315e1a385488a41` | Current beta jar with the full autonomy overhaul and the cake milk-bucket fix. |
+| `releases/jars/belfegor-1.21.4-beta1-718e0b7.jar` | `718e0b7` | 3,886,205 bytes | `27f4eaf257b0a3e67688ad9f984b137510e4b2912903bc17e929a8e137bcc2d4` | Beta jar with base expansion floor planning, water placement, and unsupported-footprint guards. |
+| `releases/jars/belfegor-1.21.4-beta1-6050309.jar` | `6050309` | 4,049,926 bytes | `12dbe3564b8586a2f2fd43aa7f02379df225b3452f0e5519d315e1a385488a41` | Beta jar with the full autonomy overhaul and the cake milk-bucket fix. |
+| `releases/jars/belfegor-1.21.4-beta1-067bcdf.jar` | `067bcdf` | 4,056,350 bytes | `8d664411632119a6482b22c2989ef9e712b2b68210fa1a38a8f0b3441acb141d` | Current beta jar with the full MLG clutch overhaul. |
 
 ## What changed in the current jar
 
@@ -41,6 +42,34 @@ This jar includes the full autonomy overhaul (doors and door repair, base-aware 
 - Milking no longer re-equips the bucket every tick and logs when it makes no progress.
 - `SatisfyMiningRequirementTask` returns immediately when the mining requirement is already met, preventing the repeated best-tool equip loop while mining.
 
+## What changed from `6050309` to `067bcdf`
+
+This jar overhauls the MLG fall-clutch system so every configured clutch item
+is actually used the way a player would use it:
+
+- Clutch items are now classified into real usage modes instead of treating
+  everything like a water bucket: water/powder-snow fluid placement, top-face
+  block placement (hay, honey, slime, cobweb, scaffolding, twisting vines),
+  side-face placement with steering (ladder, weeping vines), orientation-aware
+  2-block bed placement, offhand totems, and ender-pearl throws at impact.
+- Beds pick a facing with an empty head block, aim the top face, and verify the
+  foot/head landed instead of failing silently.
+- Ladders and vines are placed against a side of the landing block; the bot
+  steers into the cell and holds jump to climb.
+- Totems are equipped to the offhand (with the best block clutch also used when
+  both are available), and `forceEquipItemToOffhand` no longer leaves the item
+  stuck in the cursor.
+- Ender pearls are thrown steeply down 9-18 blocks above the landing block.
+- Sweet berries are rejected as a fall clutch with a one-time warning.
+- The best available item is chosen by effectiveness, not config order.
+- Placement is verified and retried on a cooldown; once placed the bot stops
+  clicking so it no longer stacks blocks upward, and already-present clutch
+  blocks are not re-stacked after a bounce.
+- Water pickup bookkeeping only tracks water clutches, so the fall chain never
+  tries to recollect hay/bed blocks as water.
+- Fall-deadliness accounting now understands honey, beds, slime, cobweb and
+  powder snow landing modifiers.
+
 ## Runtime bundle note
 
 The runtime zip is tracked with Git LFS because it includes the bundled llama.cpp/model tree:
@@ -52,5 +81,5 @@ releases/belfegor-1.21.4-beta1-runtime.zip
 Current runtime bundle SHA256:
 
 ```text
-49708a06cda6295c18b966527abf272e2c203a79df1da3f4da3611c146eadcb9
+161c134e4e595f62d5b7b566dc94484dc9f387d15182909f6a26106d66abe4e5
 ```
