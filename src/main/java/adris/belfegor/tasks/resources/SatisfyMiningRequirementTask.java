@@ -25,6 +25,10 @@ public class SatisfyMiningRequirementTask extends Task {
 
     @Override
     protected Task onTick(Belfegor mod) {
+        // Never return a fresh tool task every tick once the requirement is
+        // already met; that is what produced the repeated `best-tool`
+        // equip loop while mining.
+        if (isFinished(mod)) return null;
         switch (_requirement) {
             case HAND:
                 break;
