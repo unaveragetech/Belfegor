@@ -12,8 +12,9 @@ The repo now keeps immutable jar copies under `releases/jars/` so the current be
 |---|---:|---|---|
 | `releases/jars/belfegor-1.21.4-beta1-341eae3.jar` | `341eae3` | `961e6b5994976312a84f0fbf9e588c5d55272072470e3a4e9ceb43c456c1f2ec` | Previous public beta jar. |
 | `releases/jars/belfegor-1.21.4-beta1-718e0b7.jar` | `718e0b7` | `27f4eaf257b0a3e67688ad9f984b137510e4b2912903bc17e929a8e137bcc2d4` | Current beta jar with base expansion floor/placement hardening. |
+| `releases/jars/belfegor-1.21.4-beta1-6050309.jar` | `6050309` | `12dbe3564b8586a2f2fd43aa7f02379df225b3452f0e5519d315e1a385488a41` | Current beta jar with the autonomy overhaul and cake milk-bucket fix. |
 
-The moving install jar remains `releases/belfegor-1.21.4-beta1.jar` and currently matches the `718e0b7` archive copy.
+The moving install jar remains `releases/belfegor-1.21.4-beta1.jar` and currently matches the `6050309` archive copy.
 
 ### What changed from `341eae3` to `718e0b7`
 
@@ -23,6 +24,13 @@ The moving install jar remains `releases/belfegor-1.21.4-beta1.jar` and currentl
 - Expansion placement rejects unsupported footprints before scheduling Baritone.
 - If every expansion candidate is unsupported or overlapping, the task logs `placement-blocked` and stops cleanly instead of falling back to a floating room.
 - The release jar and runtime bundle checksums were refreshed after rebuilding and installing the tested jar.
+
+### What changed from `718e0b7` to `6050309`
+
+- `@get cake` no longer misreads owned milk buckets: `CollectMilkTask` recognizes milk already in inventory or a carried shulker, finishes when the requirement is met, and only crafts the empty buckets still missing.
+- Milking no longer re-equips the bucket every tick and logs when it makes no progress.
+- `SatisfyMiningRequirementTask` returns immediately when the mining requirement is already met, preventing the repeated best-tool equip loop while mining.
+- This jar also includes the full autonomy overhaul: doors and door repair, base-aware navigation, resumable construction, the storage economy with stash errands, tool reserves, the persistent `@goal` game plan, the rebuilt llama.cpp advisor, and the new command set.
 
 ## Download
 

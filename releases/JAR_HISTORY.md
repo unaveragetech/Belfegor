@@ -20,6 +20,7 @@ releases/jars/
 |---|---:|---:|---|---|
 | `releases/jars/belfegor-1.21.4-beta1-341eae3.jar` | `341eae3` | 3,817,167 bytes | `961e6b5994976312a84f0fbf9e588c5d55272072470e3a4e9ceb43c456c1f2ec` | Previous public beta jar before the base-builder hardening pass. |
 | `releases/jars/belfegor-1.21.4-beta1-718e0b7.jar` | `718e0b7` | 3,886,205 bytes | `27f4eaf257b0a3e67688ad9f984b137510e4b2912903bc17e929a8e137bcc2d4` | Current beta jar with base expansion floor planning, water placement, and unsupported-footprint guards. |
+| `releases/jars/belfegor-1.21.4-beta1-6050309.jar` | `6050309` | 4,049,926 bytes | `12dbe3564b8586a2f2fd43aa7f02379df225b3452f0e5519d315e1a385488a41` | Current beta jar with the full autonomy overhaul and the cake milk-bucket fix. |
 
 ## What changed in the current jar
 
@@ -31,6 +32,14 @@ Compared with `341eae3`, the `718e0b7` jar focuses on base-builder reliability:
 - Expansion planning now rejects room footprints that are mostly unsupported air, water, or lava.
 - If every possible room placement is unsupported or overlapping, the expansion stops cleanly and logs `placement-blocked` instead of falling back to a far floating room.
 - The generic region schematic builder now treats natural solid non-farm floors as already valid, keeping Baritone from fighting the terrain.
+
+## What changed from `718e0b7` to `6050309`
+
+This jar includes the full autonomy overhaul (doors and door repair, base-aware navigation, resumable construction, the storage economy with stash errands, tool reserves, the persistent `@goal` game plan, the rebuilt llama.cpp advisor, and the new command set) plus:
+
+- `@get cake` no longer misreads owned milk buckets: `CollectMilkTask` recognizes milk already in inventory or a carried shulker, finishes when the requirement is met, and only crafts the empty buckets still missing.
+- Milking no longer re-equips the bucket every tick and logs when it makes no progress.
+- `SatisfyMiningRequirementTask` returns immediately when the mining requirement is already met, preventing the repeated best-tool equip loop while mining.
 
 ## Runtime bundle note
 

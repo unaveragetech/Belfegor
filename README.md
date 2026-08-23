@@ -34,8 +34,8 @@ Behind that small command surface is a task engine that can gather resources, mi
 | Runtime bundle | [`releases/belfegor-1.21.4-beta1-runtime.zip`](releases/belfegor-1.21.4-beta1-runtime.zip) |
 | Release notes | [`docs/RELEASE_v1.21.4-beta1.md`](docs/RELEASE_v1.21.4-beta1.md) |
 | Jar history | [`releases/JAR_HISTORY.md`](releases/JAR_HISTORY.md) |
-| Jar SHA256 | `27f4eaf257b0a3e67688ad9f984b137510e4b2912903bc17e929a8e137bcc2d4` |
-| Runtime bundle SHA256 | `49708a06cda6295c18b966527abf272e2c203a79df1da3f4da3611c146eadcb9` |
+| Jar SHA256 | `12dbe3564b8586a2f2fd43aa7f02379df225b3452f0e5519d315e1a385488a41` |
+| Runtime bundle SHA256 | `8da7fc5b22547e137e1af161e5a29ae16e1c2bdcf9437c778f9253d89e243360` |
 | Mod id | `belfegor` |
 | Command prefix | `@` |
 | In-game UI | `C` or `@ui` |
@@ -96,6 +96,7 @@ The current jar has been tested in the `1.21.4` MultiMC instance against the inv
 - proof videos and exact output logs are archived in [`docs/media/audit-proof-2026-07-02`](docs/media/audit-proof-2026-07-02/README.md).
 - the recipe registry now has targeted corrections for real 1.21.4 edge cases found during full audit work, including dyed wool/candles/concrete powder/stained glass/terracotta, dark prismarine, bamboo planks, and pale-oak wood-family recipes.
 - `@get cake` no longer creates the previous local-scan storm in the tested sample; loaded-block locality scanning is throttled/cached and the client stayed responsive while the task advanced into sugar cane and wheat dependencies.
+- `@get cake` also recognizes milk buckets already in inventory or a carried shulker and finishes instead of planning to craft more buckets, mine more iron, and milk more cows for a craftable cake.
 - home/camp memory is now intentionally locked: `@camp`, `@build full here`, expansions, stockpile, and `@player` reuse the configured home instead of silently switching to a nearby base. Use `@drop home` before deliberately establishing a new camp. The core camp records its two-wide doorway and places/clicks a bed inside so respawn/navigation memory has real anchors.
 - campsite construction now includes build-plane recovery: if the bot falls below the remembered home Y level during `@camp`/`@player`, it pauses construction, swims/jumps first, then pillars back only when needed before resuming utility or bed placement. This keeps water/pit accidents from turning into a wrong-Y base build.
 - bed/spawn anchoring no longer waits for a generic interaction task to report finished; a successful bed click attempt is remembered as the campsite spawn-anchor action so `@player` can advance past the bed phase.
