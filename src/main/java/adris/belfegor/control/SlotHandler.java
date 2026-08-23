@@ -224,19 +224,29 @@ private boolean isSameSlotStuck(int windowSlot, SlotActionType type) {
                 + ",slots=" + handler.slots.size() + "}";
     }
 
-    public void forceEquipItemToOffhand(Item toEquip) {
+    public boolean forceEquipItemToOffhand(Item toEquip) {
+        if (_mod.getPlayer() == null) return false;
         if (StorageHelper.getItemStackInSlot(PlayerSlot.OFFHAND_SLOT).getItem() == toEquip) {
-            return;
+            return true;
         }
-        List<Slot> currentItemSlot = _mod.getItemStorage().getSlotsWithItemPlayerInventory(false,
-                toEquip);
-        for (Slot CurrentItemSlot : currentItemSlot) {
-            if (!Slot.isCursor(CurrentItemSlot)) {
-                _mod.getSlotHandler().clickSlot(CurrentItemSlot, 0, SlotActionType.PICKUP);
-            } else {
-                _mod.getSlotHandler().clickSlot(PlayerSlot.OFFHAND_SLOT, 0, SlotActionType.PICKUP);
+        // If it's already in the cursor, just drop it into the offhand.
+        if (StorageHelper.getItemStackInCursorSlot().getItem() == toEquip) {
+            return clickSlotForce(PlayerSlot.OFFHAND_SLOT, 0, SlotActionType.PICKUP);
+        }
+        List<Slot> itemSlots = _mod.getItemStorage().getSlotsWithItemPlayerInventory(false, toEquip);
+        for (Slot itemSlot : itemSlots) {
+            if (itemSlot == null || Slot.isCursor(itemSlot)) continue;
+            if (clickSlotForce(itemSlot, 0, SlotActionType.PICKUP)) {
+                if (clickSlotForce(PlayerSlot.OFFHAND_SLOT, 0, SlotActionType.PICKUP)) {
+                    // Put whatever was in the offhand back into the original slot.
+                    clickSlotForce(itemSlot, 0, SlotActionType.PICKUP);
+                    return true;
+                }
+                // Offhand click failed; put the item back where it came from.
+                clickSlotForce(itemSlot, 0, SlotActionType.PICKUP);
             }
         }
+        return false;
     }
 
     public boolean forceEquipItem(Item toEquip) {
