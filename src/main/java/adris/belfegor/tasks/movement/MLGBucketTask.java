@@ -194,7 +194,6 @@ public class MLGBucketTask extends Task {
         if (item == Items.WEEPING_VINES) return ClutchMode.PLACE_SIDE;
         if (item == Items.TOTEM_OF_UNDYING) return ClutchMode.EQUIP_OFFHAND;
         if (item == Items.ENDER_PEARL) return ClutchMode.THROW_PEARL;
-        if (item == Items.SWEET_BERRIES) return ClutchMode.NONE;
         if (item instanceof BedItem) return ClutchMode.PLACE_BED;
         if (item instanceof BlockItem) return ClutchMode.PLACE_TOP;
         return ClutchMode.NONE;
@@ -211,15 +210,17 @@ public class MLGBucketTask extends Task {
             case FLUID_BLOCK:
                 return 90;
             case PLACE_TOP:
+                if (item == Items.SWEET_BERRIES) return 88;
                 if (item == Items.SLIME_BLOCK) return 85;
                 if (item == Items.COBWEB) return 80;
                 if (item == Items.HONEY_BLOCK) return 75;
                 if (item == Items.HAY_BLOCK) return 70;
                 if (item == Items.SCAFFOLDING) return 60;
-                if (item == Items.TWISTING_VINES) return 55;
+                if (item == Items.TWISTING_VINES) return 60;
                 // Unknown block item: we'll still try, but it probably isn't a real clutch.
                 return 5;
             case PLACE_SIDE:
+                if (item == Items.WEEPING_VINES) return 58;
                 return 50;
             case PLACE_BED:
                 return 40;
@@ -557,8 +558,9 @@ public class MLGBucketTask extends Task {
             mod.getInputControls().hold(Input.JUMP);
             return;
         }
-        // No point in jumping into fluids or powder snow; we just fall safely.
-        if (!s.getFluidState().isEmpty() || s.getBlock() == Blocks.POWDER_SNOW) {
+        // No point in jumping into fluids, powder snow, or a sweet berry bush;
+        // we just fall in and the block cancels the fall.
+        if (!s.getFluidState().isEmpty() || s.getBlock() == Blocks.POWDER_SNOW || s.getBlock() == Blocks.SWEET_BERRY_BUSH) {
             mod.getInputControls().release(Input.JUMP);
             return;
         }
