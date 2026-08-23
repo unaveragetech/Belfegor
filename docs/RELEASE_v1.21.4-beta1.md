@@ -13,9 +13,10 @@ The repo now keeps immutable jar copies under `releases/jars/` so the current be
 | `releases/jars/belfegor-1.21.4-beta1-341eae3.jar` | `341eae3` | `961e6b5994976312a84f0fbf9e588c5d55272072470e3a4e9ceb43c456c1f2ec` | Previous public beta jar. |
 | `releases/jars/belfegor-1.21.4-beta1-718e0b7.jar` | `718e0b7` | `27f4eaf257b0a3e67688ad9f984b137510e4b2912903bc17e929a8e137bcc2d4` | Current beta jar with base expansion floor/placement hardening. |
 | `releases/jars/belfegor-1.21.4-beta1-6050309.jar` | `6050309` | `12dbe3564b8586a2f2fd43aa7f02379df225b3452f0e5519d315e1a385488a41` | Beta jar with the autonomy overhaul and cake milk-bucket fix. |
-| `releases/jars/belfegor-1.21.4-beta1-067bcdf.jar` | `067bcdf` | `8d664411632119a6482b22c2989ef9e712b2b68210fa1a38a8f0b3441acb141d` | Current beta jar with the full MLG clutch overhaul. |
+| `releases/jars/belfegor-1.21.4-beta1-067bcdf.jar` | `067bcdf` | `8d664411632119a6482b22c2989ef9e712b2b68210fa1a38a8f0b3441acb141d` | Beta jar with the full MLG clutch overhaul. |
+| `releases/jars/belfegor-1.21.4-beta1-dbad9b5.jar` | `dbad9b5` | `a5da77272904851159d9901bb091354afd5bc9dd0d5a371a20d8f4018cd35922` | Current beta jar with sweet-berry-bush and vine fall clutches. |
 
-The moving install jar remains `releases/belfegor-1.21.4-beta1.jar` and currently matches the `067bcdf` archive copy.
+The moving install jar remains `releases/belfegor-1.21.4-beta1.jar` and currently matches the `dbad9b5` archive copy.
 
 ### What changed from `341eae3` to `718e0b7`
 
@@ -48,6 +49,13 @@ The moving install jar remains `releases/belfegor-1.21.4-beta1.jar` and currentl
 - Ender pearls are thrown steeply downward 9-18 blocks above impact.
 - The best available item is chosen by effectiveness; sweet berries are ignored
   with a warning; placement is verified/retried and never stacked.
+
+### What changed from `067bcdf` to `dbad9b5`
+
+- Sweet berry bushes are planted into the fall column as a full fall clutch
+  (they slow the fall like water), and the bot no longer jumps inside them.
+- Twisting and weeping vines are scored as full fall protectors; grabbing a
+  vine cancels the fall because climbing resets fall distance every tick.
 
 ## Download
 

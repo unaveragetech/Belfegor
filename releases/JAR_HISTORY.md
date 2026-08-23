@@ -21,7 +21,8 @@ releases/jars/
 | `releases/jars/belfegor-1.21.4-beta1-341eae3.jar` | `341eae3` | 3,817,167 bytes | `961e6b5994976312a84f0fbf9e588c5d55272072470e3a4e9ceb43c456c1f2ec` | Previous public beta jar before the base-builder hardening pass. |
 | `releases/jars/belfegor-1.21.4-beta1-718e0b7.jar` | `718e0b7` | 3,886,205 bytes | `27f4eaf257b0a3e67688ad9f984b137510e4b2912903bc17e929a8e137bcc2d4` | Beta jar with base expansion floor planning, water placement, and unsupported-footprint guards. |
 | `releases/jars/belfegor-1.21.4-beta1-6050309.jar` | `6050309` | 4,049,926 bytes | `12dbe3564b8586a2f2fd43aa7f02379df225b3452f0e5519d315e1a385488a41` | Beta jar with the full autonomy overhaul and the cake milk-bucket fix. |
-| `releases/jars/belfegor-1.21.4-beta1-067bcdf.jar` | `067bcdf` | 4,056,350 bytes | `8d664411632119a6482b22c2989ef9e712b2b68210fa1a38a8f0b3441acb141d` | Current beta jar with the full MLG clutch overhaul. |
+| `releases/jars/belfegor-1.21.4-beta1-067bcdf.jar` | `067bcdf` | 4,056,350 bytes | `8d664411632119a6482b22c2989ef9e712b2b68210fa1a38a8f0b3441acb141d` | Beta jar with the full MLG clutch overhaul. |
+| `releases/jars/belfegor-1.21.4-beta1-dbad9b5.jar` | `dbad9b5` | 4056365 bytes | `a5da77272904851159d9901bb091354afd5bc9dd0d5a371a20d8f4018cd35922` | Current beta jar with sweet-berry-bush and vine fall clutches. |
 
 ## What changed in the current jar
 
@@ -70,6 +71,15 @@ is actually used the way a player would use it:
 - Fall-deadliness accounting now understands honey, beds, slime, cobweb and
   powder snow landing modifiers.
 
+## What changed from `067bcdf` to `dbad9b5`
+
+- Sweet berry bushes are now a real clutch: the bot plants the bush into the
+  fall column so it slows and cancels the fall like water, and it no longer
+  tries to jump inside the bush.
+- Twisting and weeping vines are scored as full fall protectors: once the bot
+  is inside the vine (or grabs it against the landing block), climbing resets
+  fall distance every tick, cancelling the fall.
+
 ## Runtime bundle note
 
 The runtime zip is tracked with Git LFS because it includes the bundled llama.cpp/model tree:
@@ -81,5 +91,5 @@ releases/belfegor-1.21.4-beta1-runtime.zip
 Current runtime bundle SHA256:
 
 ```text
-161c134e4e595f62d5b7b566dc94484dc9f387d15182909f6a26106d66abe4e5
+a8536fe88f6f5cfe1972893e0c1e6573f7bd97cad765f09018aedd2710e4a5fb
 ```

@@ -42,12 +42,12 @@ Example:
 | `scaffolding` | Place on the landing block and hold jump to grab/climb it. |
 | `cobweb` | Place into your fall column; the cobweb stops your fall. |
 | `ladder` | Place against a side of the landing block, steer into it, and hold jump to climb. |
-| `twisting_vines` | Place on the landing block and hold jump to climb. |
-| `weeping_vines` | Place against a side of the landing block, steer into it, and hold jump to climb. |
+| `twisting_vines` | Place into your fall column and hold jump to climb; climbing resets fall damage. |
+| `weeping_vines` | Place against a side of the landing block, steer into it, and hold jump to climb; climbing resets fall damage. |
 | `totem_of_undying` | Equipped into the offhand; it activates automatically on a lethal fall. When a block clutch is also available, both are used. |
 | `ender_pearl` | Thrown steeply downward 9-18 blocks above impact; the teleport cancels the fall. |
 | beds (all 16 colors) | Placed as a 2-block bed with the head in an empty cell; beds cut fall damage in half and bounce you. |
-| `sweet_berries` | Not a fall clutch; ignored with a one-time warning. |
+| `sweet_berries` | Plant the sweet berry bush into your fall column; it slows the fall and cancels it like water. |
 
 ## Selection order
 
@@ -55,8 +55,8 @@ When several configured items are available, the bot uses the most effective
 one rather than the first item in the config list:
 
 ```text
-water > powder snow > slime > cobweb > honey/hay > scaffolding >
-vines/ladder > bed > totem > ender pearl
+water > powder snow > sweet berries > slime > cobweb > honey/hay >
+scaffolding > vines > ladder > bed > totem > ender pearl
 ```
 
 Clutches are verified after placement and retried on a short cooldown; once the
