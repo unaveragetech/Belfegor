@@ -23,7 +23,8 @@ releases/jars/
 | `releases/jars/belfegor-1.21.4-beta1-6050309.jar` | `6050309` | 4,049,926 bytes | `12dbe3564b8586a2f2fd43aa7f02379df225b3452f0e5519d315e1a385488a41` | Beta jar with the full autonomy overhaul and the cake milk-bucket fix. |
 | `releases/jars/belfegor-1.21.4-beta1-067bcdf.jar` | `067bcdf` | 4,056,350 bytes | `8d664411632119a6482b22c2989ef9e712b2b68210fa1a38a8f0b3441acb141d` | Beta jar with the full MLG clutch overhaul. |
 | `releases/jars/belfegor-1.21.4-beta1-dbad9b5.jar` | `dbad9b5` | 4056365 bytes | `a5da77272904851159d9901bb091354afd5bc9dd0d5a371a20d8f4018cd35922` | Beta jar with sweet-berry-bush and vine fall clutches. |
-| `releases/jars/belfegor-1.21.4-beta1-262a855.jar` | `262a855` | 4062997 bytes | `c867f1482b5ed760bd25926ce4fd50bd3fcda797b1c96a00c0895a478685904b` | Current beta jar with @armor and @equipment loadout commands. |
+| `releases/jars/belfegor-1.21.4-beta1-262a855.jar` | `262a855` | 4062997 bytes | `c867f1482b5ed760bd25926ce4fd50bd3fcda797b1c96a00c0895a478685904b` | Beta jar with @armor and @equipment loadout commands. |
+| `releases/jars/belfegor-1.21.4-beta1-ab907a5.jar` | `ab907a5` | 4063089 bytes | `3df8e1f289e2c741ce067fd459e8887fc654b5c4624f838543a7967607d81941` | Current beta jar with the crafting screen-storm hang fix. |
 
 ## What changed in the current jar
 
@@ -92,6 +93,18 @@ is actually used the way a player would use it:
   craft both (gold and netherite tools are gathered through the recipe
   catalogue).
 
+## What changed from `262a855` to `ab907a5`
+
+- Fixed the inventory screen open/close storm that hung crafting builds.
+  PlaceBlockNearbyTask and PlaceBlockTask closed any open screen at the top of
+  every tick, so when their own crafting child opened the inventory screen to
+  craft planks the parent yanked it shut, the forced crafting child reopened
+  it, and the two fought forever with no progress.
+- PlaceBlockNearbyTask now clears the cursor/screen only right before an
+  actual placement; PlaceBlockTask only closes a leftover screen while it is
+  not collecting materials, so the crafting child keeps ownership of the
+  screen until its transaction completes.
+
 ## Runtime bundle note
 
 The runtime zip is tracked with Git LFS because it includes the bundled llama.cpp/model tree:
@@ -103,5 +116,5 @@ releases/belfegor-1.21.4-beta1-runtime.zip
 Current runtime bundle SHA256:
 
 ```text
-497a944f4961df84104f64969be6d752125754095ceb5352b483a5e9489a2bcc
+47f357bc3885727180fd1261b8a37430c18f19414dab4e84c40e3c86beea9d5e
 ```
