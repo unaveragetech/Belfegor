@@ -24,7 +24,8 @@ releases/jars/
 | `releases/jars/belfegor-1.21.4-beta1-067bcdf.jar` | `067bcdf` | 4,056,350 bytes | `8d664411632119a6482b22c2989ef9e712b2b68210fa1a38a8f0b3441acb141d` | Beta jar with the full MLG clutch overhaul. |
 | `releases/jars/belfegor-1.21.4-beta1-dbad9b5.jar` | `dbad9b5` | 4056365 bytes | `a5da77272904851159d9901bb091354afd5bc9dd0d5a371a20d8f4018cd35922` | Beta jar with sweet-berry-bush and vine fall clutches. |
 | `releases/jars/belfegor-1.21.4-beta1-262a855.jar` | `262a855` | 4062997 bytes | `c867f1482b5ed760bd25926ce4fd50bd3fcda797b1c96a00c0895a478685904b` | Beta jar with @armor and @equipment loadout commands. |
-| `releases/jars/belfegor-1.21.4-beta1-ab907a5.jar` | `ab907a5` | 4063089 bytes | `3df8e1f289e2c741ce067fd459e8887fc654b5c4624f838543a7967607d81941` | Current beta jar with the crafting screen-storm hang fix. |
+| `releases/jars/belfegor-1.21.4-beta1-ab907a5.jar` | `ab907a5` | 4063089 bytes | `3df8e1f289e2c741ce067fd459e8887fc654b5c4624f838543a7967607d81941` | Beta jar with the crafting screen-storm hang fix. |
+| `releases/jars/belfegor-1.21.4-beta1-9af2ea7.jar` | `9af2ea7` | 4066189 bytes | `ba559945ca7667a812408f5f9fa12804f1f5403d45c77f3cf68615701ccb3751` | Current beta jar with forced axe requirements for wood gathering. |
 
 ## What changed in the current jar
 
@@ -105,6 +106,21 @@ is actually used the way a player would use it:
   not collecting materials, so the crafting child keeps ownership of the
   screen until its transaction completes.
 
+## What changed from `ab907a5` to `9af2ea7`
+
+- Wood/log blocks are no longer silently treated as hand-mining with no tool
+  evaluation. MineAndCollectTask now demands an axe for axe-suitable blocks
+  (logs, planks, wood, bamboo) through the new SatisfyAxeRequirementTask.
+- The axe requirement targets the bot's current tool tier, so once the bot has
+  a stone pickaxe it is forced to carry a stone-or-better axe, then iron, then
+  diamond as the pickaxe tier rises. Axes upgrade tier-by-tier so the
+  upgrade's own wood gathering always has a working axe.
+- The very first chop is still allowed by hand so the first wooden axe can be
+  crafted (no bootstrap loop).
+- MiningRequirement.getMinimumRequirementForBlock no longer reports a bogus
+  DIAMOND requirement for blocks no pickaxe can break (logs, dirt); it now
+  correctly reports HAND.
+
 ## Runtime bundle note
 
 The runtime zip is tracked with Git LFS because it includes the bundled llama.cpp/model tree:
@@ -116,5 +132,5 @@ releases/belfegor-1.21.4-beta1-runtime.zip
 Current runtime bundle SHA256:
 
 ```text
-47f357bc3885727180fd1261b8a37430c18f19414dab4e84c40e3c86beea9d5e
+16a44782b8bd3726a57be09800b14c95870ba5f4ff3475716dd7430e7357c270
 ```
