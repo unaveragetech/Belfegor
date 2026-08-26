@@ -58,6 +58,8 @@ public class BelfegorCommands {
                 new DropCommand(),
                 new BaritoneCommand(),
                 new ToolSetCommand(),
+                new ArmorSetCommand(),
+                new EquipmentCommand(),
                 new StockpileCommand(),
                 new StoreCommand(),
                 new RetrieveCommand(),

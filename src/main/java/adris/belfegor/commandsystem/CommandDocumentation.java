@@ -53,6 +53,8 @@ public final class CommandDocumentation {
             Map.entry("baritone", List.of("@baritone proc", "@baritone help sel", "@baritone sel clear",
                     "@baritone surface", "@baritone forcecancel")),
             Map.entry("toolset", List.of("@toolset iron", "@toolset diamond")),
+            Map.entry("armor", List.of("@armor iron", "@armor diamond", "@armor netherite")),
+            Map.entry("equipment", List.of("@equipment iron", "@equipment diamond", "@equipment leather")),
             Map.entry("stockpile", List.of("@stockpile", "@stockpile stone starter",
                     "@stockpile cobblestone 512", "@stockpile iron_ingot 32 iron",
                     "@stockpile wood starter", "@stockpile stone build")),
@@ -80,6 +82,8 @@ public final class CommandDocumentation {
             Map.entry("food", "Resources"),
             Map.entry("meat", "Resources"),
             Map.entry("toolset", "Crafting"),
+            Map.entry("armor", "Crafting"),
+            Map.entry("equipment", "Crafting"),
             Map.entry("stockpile", "Base"),
             Map.entry("craftaudit", "Development"),
             Map.entry("test", "Development"),
@@ -152,6 +156,8 @@ public final class CommandDocumentation {
             case "drop" -> "Clears the locked home/base/camp memory so the next @camp or @build full here can establish a new base deliberately. Example: @drop home.";
             case "baritone" -> "Controlled bridge to native Baritone diagnostics and area/build commands. Supported examples include @baritone proc, @baritone help sel, @baritone sel clear, @baritone surface, @baritone forcecancel, @baritone build <schematic> [x y z], and @baritone litematica. Belfegor's own construction tasks use native builder/selection APIs internally, while this command is for testing, recovery, and command reference.";
             case "toolset" -> "Crafts one pickaxe, axe, shovel, and sword at the requested material tier.";
+            case "armor" -> "Crafts and equips a full armor set (helmet, chestplate, leggings, boots) for the requested material: leather, chainmail, iron, gold, diamond, or netherite. Already-owned or already-equipped pieces are skipped.";
+            case "equipment" -> "Prepares a full loadout for the requested material: a complete tool set plus a full armor set, equipping the armor once crafted. wood/stone craft tools only, leather/chainmail craft armor only, and iron/gold/diamond/netherite craft both.";
             case "stockpile" -> "Returns to the locked remembered camp, ensures the storage-room chest exists, prepares a wood/stone/iron/diamond toolset through the same toolset task, gathers practical base resources, and deposits them into the camp storage chest. Use @stockpile stone starter for a small reserve, @stockpile stone build before larger @build work, or point at one resource such as @stockpile cobblestone 512 / @stockpile iron_ingot 32 iron.";
             case "locate_structure" -> "Uses Minecraft structure location support to find a generated structure, then reports or navigates according to the command behavior.";
             case "coverwithsand" -> "Nether utility that covers dangerous lava using sand-style falling blocks.";

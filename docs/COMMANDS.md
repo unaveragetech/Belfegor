@@ -41,6 +41,8 @@ nether
 |---|---|---|---|
 | `get` | `@get [items]` | Gets requested items using inventory, dropped items, containers, shulkers, gathering, crafting, mining, and smelting. | `@get diamond 3`, `@get diamond_shovel`, `@get [crafting_table, stick 8]` |
 | `toolset` | `@toolset [tier]` | Crafts a full tool set (pickaxe, axe, shovel, sword, hoe) for `wood`, `stone`, `iron`, or `diamond`. | `@toolset iron`, `@toolset diamond` |
+| `armor` | `@armor <material>` | Crafts and equips a full armor set (helmet, chestplate, leggings, boots) for `leather`, `chainmail`, `iron`, `gold`, `diamond`, or `netherite`. Already-owned or already-equipped pieces are skipped. | `@armor iron`, `@armor diamond` |
+| `equipment` | `@equipment <material>` | Prepares a full loadout: complete tool set plus full armor set for the material. `wood`/`stone` craft tools only, `leather`/`chainmail` craft armor only, and `iron`/`gold`/`diamond`/`netherite` craft both (armor is equipped). | `@equipment iron`, `@equipment diamond` |
 | `stockpile` | `@stockpile [tier=stone] [starter/build]` or `@stockpile <item> [count] [tier]` | Returns to the locked remembered camp, prepares a toolset, gathers practical base supplies or one targeted resource, deposits them into the camp storage-room chest, and updates the base storage ledger. Run `@camp` or `@build full here` first. | `@stockpile`, `@stockpile stone starter`, `@stockpile cobblestone 512`, `@stockpile iron_ingot 32 iron`, `@stockpile stone build` |
 | `stacked` | `@stacked` | Gets a PvP loadout: diamond armor, diamond sword, shield, cooked beef, golden apples, planks, and ender pearls. | `@stacked` |
 | `equip` | `@equip [armors]` | Gets and equips armor items. | `@equip diamond_helmet`, `@equip [diamond_helmet, diamond_chestplate]` |
