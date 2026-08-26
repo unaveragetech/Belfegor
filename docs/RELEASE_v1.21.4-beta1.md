@@ -18,9 +18,10 @@ The repo now keeps immutable jar copies under `releases/jars/` so the current be
 | `releases/jars/belfegor-1.21.4-beta1-262a855.jar` | `262a855` | `c867f1482b5ed760bd25926ce4fd50bd3fcda797b1c96a00c0895a478685904b` | Beta jar with @armor and @equipment loadout commands. |
 | `releases/jars/belfegor-1.21.4-beta1-ab907a5.jar` | `ab907a5` | `3df8e1f289e2c741ce067fd459e8887fc654b5c4624f838543a7967607d81941` | Beta jar with the crafting screen-storm hang fix. |
 | `releases/jars/belfegor-1.21.4-beta1-9af2ea7.jar` | `9af2ea7` | `ba559945ca7667a812408f5f9fa12804f1f5403d45c77f3cf68615701ccb3751` | Beta jar with forced axe requirements for wood gathering. |
-| `releases/jars/belfegor-1.21.4-beta1-234a743.jar` | `234a743` | `ff1b4a8628e9c52d14463c1308badf53b602f9d3b29979060817c70f2342d314` | Current beta jar that uses nearby crafting tables instead of crafting/placing new ones. |
+| `releases/jars/belfegor-1.21.4-beta1-234a743.jar` | `234a743` | `ff1b4a8628e9c52d14463c1308badf53b602f9d3b29979060817c70f2342d314` | Beta jar that uses nearby crafting tables instead of crafting/placing new ones. |
+| `releases/jars/belfegor-1.21.4-beta1-c774be5.jar` | `c774be5` | `1881c30577f0c4e7ce90ea92f6a78e17fd32cb6bd6b49c8bf923db0f03052e8c` | Current beta jar whose @pillar breaks overhead blocks to work underground. |
 
-The moving install jar remains `releases/belfegor-1.21.4-beta1.jar` and currently matches the `234a743` archive copy.
+The moving install jar remains `releases/belfegor-1.21.4-beta1.jar` and currently matches the `c774be5` archive copy.
 
 ### What changed from `341eae3` to `718e0b7`
 
@@ -89,6 +90,11 @@ The moving install jar remains `releases/belfegor-1.21.4-beta1.jar` and currentl
   instead of crafting and placing a new one, fixing the @equipment iron
   2x2/3x3 crafting restart storm caused by trying to make/place a table while
   tables were already in proximity.
+
+### What changed from `234a743` to `c774be5`
+
+- `@pillar` breaks up to three overhead blocks before each jump, so it can
+  pillar out of caves and underground instead of bumping its head forever.
 
 ## Download
 

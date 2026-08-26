@@ -26,7 +26,8 @@ releases/jars/
 | `releases/jars/belfegor-1.21.4-beta1-262a855.jar` | `262a855` | 4062997 bytes | `c867f1482b5ed760bd25926ce4fd50bd3fcda797b1c96a00c0895a478685904b` | Beta jar with @armor and @equipment loadout commands. |
 | `releases/jars/belfegor-1.21.4-beta1-ab907a5.jar` | `ab907a5` | 4063089 bytes | `3df8e1f289e2c741ce067fd459e8887fc654b5c4624f838543a7967607d81941` | Beta jar with the crafting screen-storm hang fix. |
 | `releases/jars/belfegor-1.21.4-beta1-9af2ea7.jar` | `9af2ea7` | 4066189 bytes | `ba559945ca7667a812408f5f9fa12804f1f5403d45c77f3cf68615701ccb3751` | Beta jar with forced axe requirements for wood gathering. |
-| `releases/jars/belfegor-1.21.4-beta1-234a743.jar` | `234a743` | 4067128 bytes | `ff1b4a8628e9c52d14463c1308badf53b602f9d3b29979060817c70f2342d314` | Current beta jar that uses nearby crafting tables instead of crafting/placing new ones. |
+| `releases/jars/belfegor-1.21.4-beta1-234a743.jar` | `234a743` | 4067128 bytes | `ff1b4a8628e9c52d14463c1308badf53b602f9d3b29979060817c70f2342d314` | Beta jar that uses nearby crafting tables instead of crafting/placing new ones. |
+| `releases/jars/belfegor-1.21.4-beta1-c774be5.jar` | `c774be5` | 4067423 bytes | `1881c30577f0c4e7ce90ea92f6a78e17fd32cb6bd6b49c8bf923db0f03052e8c` | Current beta jar whose @pillar breaks overhead blocks to work underground. |
 
 ## What changed in the current jar
 
@@ -133,6 +134,13 @@ is actually used the way a player would use it:
   screen and uses it for 2x2 crafts, which stops the 2x2/3x3 crafting
   restart storm that hit @equipment iron.
 
+## What changed from `234a743` to `c774be5`
+
+- `@pillar` now works underground: before every jump it looks up and breaks
+  the first solid block in the three cells above the player's head, then
+  resumes the normal jump-place-land loop. When the ceiling closes in again
+  it repeats the break-and-pillar cycle until the target height is reached.
+
 ## Runtime bundle note
 
 The runtime zip is tracked with Git LFS because it includes the bundled llama.cpp/model tree:
@@ -144,5 +152,5 @@ releases/belfegor-1.21.4-beta1-runtime.zip
 Current runtime bundle SHA256:
 
 ```text
-b79daaf3c65b275bcd693d427872f24f4042d5c2a458a46bb98af882d2791898
+5707e7137687b99acb70e4cfe1112d5173d58fb90376947a41c6e5704fe1478e
 ```

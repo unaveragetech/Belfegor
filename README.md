@@ -34,8 +34,8 @@ Behind that small command surface is a task engine that can gather resources, mi
 | Runtime bundle | [`releases/belfegor-1.21.4-beta1-runtime.zip`](releases/belfegor-1.21.4-beta1-runtime.zip) |
 | Release notes | [`docs/RELEASE_v1.21.4-beta1.md`](docs/RELEASE_v1.21.4-beta1.md) |
 | Jar history | [`releases/JAR_HISTORY.md`](releases/JAR_HISTORY.md) |
-| Jar SHA256 | `ff1b4a8628e9c52d14463c1308badf53b602f9d3b29979060817c70f2342d314` |
-| Runtime bundle SHA256 | `b79daaf3c65b275bcd693d427872f24f4042d5c2a458a46bb98af882d2791898` |
+| Jar SHA256 | `1881c30577f0c4e7ce90ea92f6a78e17fd32cb6bd6b49c8bf923db0f03052e8c` |
+| Runtime bundle SHA256 | `5707e7137687b99acb70e4cfe1112d5173d58fb90376947a41c6e5704fe1478e` |
 | Mod id | `belfegor` |
 | Command prefix | `@` |
 | In-game UI | `C` or `@ui` |
@@ -43,7 +43,7 @@ Behind that small command surface is a task engine that can gather resources, mi
 
 The runtime bundle includes the current Belfegor jar, the Fabric API jar from the working `1.21.4` instance, the Baritone API jar from the working instance, release notes, checksums, and documentation.
 
-The repo also keeps immutable jar copies under [`releases/jars/`](releases/jars/) so the previous public jar can be compared with the current one. The current jar is `belfegor-1.21.4-beta1-234a743.jar`; the previous public jar is `belfegor-1.21.4-beta1-341eae3.jar`. Fall-clutch configuration is documented in [`docs/MLG_CLUTCHES.md`](docs/MLG_CLUTCHES.md).
+The repo also keeps immutable jar copies under [`releases/jars/`](releases/jars/) so the previous public jar can be compared with the current one. The current jar is `belfegor-1.21.4-beta1-c774be5.jar`; the previous public jar is `belfegor-1.21.4-beta1-341eae3.jar`. Fall-clutch configuration is documented in [`docs/MLG_CLUTCHES.md`](docs/MLG_CLUTCHES.md).
 
 ## What Belfegor is trying to be
 
