@@ -18,6 +18,7 @@ import net.minecraft.client.gui.screen.ChatScreen;
 import net.minecraft.client.gui.screen.DeathScreen;
 import net.minecraft.client.gui.screen.GameMenuScreen;
 import net.minecraft.client.gui.screen.Screen;
+import net.minecraft.client.gui.screen.ingame.CraftingScreen;
 import net.minecraft.client.gui.screen.ingame.InventoryScreen;
 import net.minecraft.item.Item;
 import net.minecraft.item.ItemStack;
@@ -141,7 +142,13 @@ public class CraftInInventoryTask extends ResourceTask implements adris.belfegor
         // server container handler is still CraftingScreenHandler. The visible
         // inventory owns this 2x2 craft; do not close it because of that stale
         // handler or it will enter an open/close storm.
-        if (StorageHelper.isBigCraftingOpen() && !(client.currentScreen instanceof InventoryScreen)) {
+        // A real CraftingScreen (crafting table opened by a parent 3x3 craft or
+        // a nearby table) is NOT stale: closing it yanks the screen out from
+        // under the parent and produces an endless 2x2/3x3 restart storm. Only
+        // close when the visible screen is some unrelated container.
+        if (StorageHelper.isBigCraftingOpen()
+                && !(client.currentScreen instanceof InventoryScreen)
+                && !(client.currentScreen instanceof CraftingScreen)) {
             StorageHelper.closeScreen();
         }
         ItemTarget toGet = _itemTargets[0];
@@ -179,8 +186,11 @@ public class CraftInInventoryTask extends ResourceTask implements adris.belfegor
             }
         }
 
-        // Materials ready — open inventory if not already open
-        if (!StorageHelper.isPlayerInventoryOpen()) {
+        // Materials ready — open inventory if neither screen is open. When a
+        // crafting table screen is already open (parent 3x3 craft or a nearby
+        // table), keep using it: opening the inventory over it would close the
+        // table and restart the whole craft.
+        if (!StorageHelper.isPlayerInventoryOpen() && !StorageHelper.isBigCraftingOpen()) {
             _inventoryStableTicks = 0;
             if (_screenStormBackoffTicks > 0) {
                 _screenStormBackoffTicks--;
