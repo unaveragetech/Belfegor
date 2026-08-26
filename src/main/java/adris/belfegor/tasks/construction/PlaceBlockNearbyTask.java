@@ -88,29 +88,6 @@ public class PlaceBlockNearbyTask extends Task {
         // - Prefer flat areas (open space, block below) closest to player
         // -
 
-        // Close screen first
-        ItemStack cursorStack = StorageHelper.getItemStackInCursorSlot();
-        if (!cursorStack.isEmpty()) {
-            Optional<Slot> moveTo = mod.getItemStorage().getSlotThatCanFitInPlayerInventory(cursorStack, false);
-            if (moveTo.isPresent()) {
-                mod.getSlotHandler().clickSlot(moveTo.get(), 0, SlotActionType.PICKUP);
-                return null;
-            }
-            if (ItemHelper.canThrowAwayStack(mod, cursorStack)) {
-                mod.getSlotHandler().clickSlot(Slot.UNDEFINED, 0, SlotActionType.PICKUP);
-                return null;
-            }
-            Optional<Slot> garbage = StorageHelper.getGarbageSlot(mod);
-            // Try throwing away cursor slot if it's garbage
-            if (garbage.isPresent()) {
-                mod.getSlotHandler().clickSlot(garbage.get(), 0, SlotActionType.PICKUP);
-                return null;
-            }
-            mod.getSlotHandler().clickSlot(Slot.UNDEFINED, 0, SlotActionType.PICKUP);
-        } else {
-            StorageHelper.closeScreen();
-        }
-
         // Try placing where we're looking right now.
         BlockPos current = getCurrentlyLookingBlockPlace(mod);
         if (current != null && _canPlaceHere.test(current)) {
@@ -125,8 +102,14 @@ public class PlaceBlockNearbyTask extends Task {
                 }
             }
             if (!anyProtected && mod.getSlotHandler().forceEquipItem(placeItems)) {
-                if (place(mod, current)) {
-                    return null;
+                // Clear the cursor/screen only right before we place. Closing
+                // the screen unconditionally every tick would yank the
+                // inventory screen out from under a crafting child task and
+                // produce an endless open/close storm.
+                if (clearCursorForPlacement(mod)) {
+                    if (place(mod, current)) {
+                        return null;
+                    }
                 }
             }
         }
@@ -166,6 +149,37 @@ public class PlaceBlockNearbyTask extends Task {
 
         setDebugState("Wandering until we randomly place or find a good place spot.");
         return new TimeoutWanderTask();
+    }
+
+
+    /**
+     * Makes sure the cursor is empty and no screen is open before a direct
+     * placement. Only called when an actual placement is about to happen, so
+     * it never steals a screen from a crafting/container child task.
+     */
+    private boolean clearCursorForPlacement(Belfegor mod) {
+        ItemStack cursorStack = StorageHelper.getItemStackInCursorSlot();
+        if (!cursorStack.isEmpty()) {
+            Optional<Slot> moveTo = mod.getItemStorage().getSlotThatCanFitInPlayerInventory(cursorStack, false);
+            if (moveTo.isPresent()) {
+                mod.getSlotHandler().clickSlot(moveTo.get(), 0, SlotActionType.PICKUP);
+                return false;
+            }
+            if (ItemHelper.canThrowAwayStack(mod, cursorStack)) {
+                mod.getSlotHandler().clickSlot(Slot.UNDEFINED, 0, SlotActionType.PICKUP);
+                return false;
+            }
+            Optional<Slot> garbage = StorageHelper.getGarbageSlot(mod);
+            // Try throwing away cursor slot if it's garbage
+            if (garbage.isPresent()) {
+                mod.getSlotHandler().clickSlot(garbage.get(), 0, SlotActionType.PICKUP);
+                return false;
+            }
+            mod.getSlotHandler().clickSlot(Slot.UNDEFINED, 0, SlotActionType.PICKUP);
+            return false;
+        }
+        StorageHelper.closeScreen();
+        return true;
     }
 
     @Override

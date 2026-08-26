@@ -110,7 +110,10 @@ public class PlaceBlockTask extends Task implements ITaskRequiresGrounded {
         // Placement must happen in-world. If a crafting/container screen was
         // left open by the previous task, direct controller placement silently
         // fails and the task can loop forever trying the same block face.
-        if (MinecraftClient.getInstance().currentScreen != null) {
+        // However, we must NOT close the screen while our own material/crafting
+        // child owns it — that yanks the screen out from under the child every
+        // tick and produces an endless open/close storm (CRAFT-SCREEN-STORM).
+        if (MinecraftClient.getInstance().currentScreen != null && !isCollectingMaterials(mod)) {
             StorageHelper.closeScreen();
             return null;
         }
@@ -262,6 +265,11 @@ public class PlaceBlockTask extends Task implements ITaskRequiresGrounded {
             }
         }
         return null;
+    }
+
+
+    private boolean isCollectingMaterials(Belfegor mod) {
+        return _materialTask != null && _materialTask.isActive() && !_materialTask.isFinished(mod);
     }
 
     @Override
