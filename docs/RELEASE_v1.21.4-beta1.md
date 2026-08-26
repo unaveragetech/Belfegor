@@ -14,9 +14,10 @@ The repo now keeps immutable jar copies under `releases/jars/` so the current be
 | `releases/jars/belfegor-1.21.4-beta1-718e0b7.jar` | `718e0b7` | `27f4eaf257b0a3e67688ad9f984b137510e4b2912903bc17e929a8e137bcc2d4` | Current beta jar with base expansion floor/placement hardening. |
 | `releases/jars/belfegor-1.21.4-beta1-6050309.jar` | `6050309` | `12dbe3564b8586a2f2fd43aa7f02379df225b3452f0e5519d315e1a385488a41` | Beta jar with the autonomy overhaul and cake milk-bucket fix. |
 | `releases/jars/belfegor-1.21.4-beta1-067bcdf.jar` | `067bcdf` | `8d664411632119a6482b22c2989ef9e712b2b68210fa1a38a8f0b3441acb141d` | Beta jar with the full MLG clutch overhaul. |
-| `releases/jars/belfegor-1.21.4-beta1-dbad9b5.jar` | `dbad9b5` | `a5da77272904851159d9901bb091354afd5bc9dd0d5a371a20d8f4018cd35922` | Current beta jar with sweet-berry-bush and vine fall clutches. |
+| `releases/jars/belfegor-1.21.4-beta1-dbad9b5.jar` | `dbad9b5` | `a5da77272904851159d9901bb091354afd5bc9dd0d5a371a20d8f4018cd35922` | Beta jar with sweet-berry-bush and vine fall clutches. |
+| `releases/jars/belfegor-1.21.4-beta1-262a855.jar` | `262a855` | `c867f1482b5ed760bd25926ce4fd50bd3fcda797b1c96a00c0895a478685904b` | Current beta jar with @armor and @equipment loadout commands. |
 
-The moving install jar remains `releases/belfegor-1.21.4-beta1.jar` and currently matches the `dbad9b5` archive copy.
+The moving install jar remains `releases/belfegor-1.21.4-beta1.jar` and currently matches the `262a855` archive copy.
 
 ### What changed from `341eae3` to `718e0b7`
 
@@ -56,6 +57,14 @@ The moving install jar remains `releases/belfegor-1.21.4-beta1.jar` and currentl
   (they slow the fall like water), and the bot no longer jumps inside them.
 - Twisting and weeping vines are scored as full fall protectors; grabbing a
   vine cancels the fall because climbing resets fall distance every tick.
+
+### What changed from `dbad9b5` to `262a855`
+
+- `@armor <material>` crafts and equips a full armor set (helmet, chestplate,
+  leggings, boots) for leather, chainmail, iron, gold, diamond, or netherite.
+- `@equipment <material>` prepares a full loadout: complete tool set plus full
+  armor set. wood/stone craft tools only, leather/chainmail craft armor only,
+  and iron/gold/diamond/netherite craft both, equipping the armor once crafted.
 
 ## Download
 

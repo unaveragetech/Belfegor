@@ -22,7 +22,8 @@ releases/jars/
 | `releases/jars/belfegor-1.21.4-beta1-718e0b7.jar` | `718e0b7` | 3,886,205 bytes | `27f4eaf257b0a3e67688ad9f984b137510e4b2912903bc17e929a8e137bcc2d4` | Beta jar with base expansion floor planning, water placement, and unsupported-footprint guards. |
 | `releases/jars/belfegor-1.21.4-beta1-6050309.jar` | `6050309` | 4,049,926 bytes | `12dbe3564b8586a2f2fd43aa7f02379df225b3452f0e5519d315e1a385488a41` | Beta jar with the full autonomy overhaul and the cake milk-bucket fix. |
 | `releases/jars/belfegor-1.21.4-beta1-067bcdf.jar` | `067bcdf` | 4,056,350 bytes | `8d664411632119a6482b22c2989ef9e712b2b68210fa1a38a8f0b3441acb141d` | Beta jar with the full MLG clutch overhaul. |
-| `releases/jars/belfegor-1.21.4-beta1-dbad9b5.jar` | `dbad9b5` | 4056365 bytes | `a5da77272904851159d9901bb091354afd5bc9dd0d5a371a20d8f4018cd35922` | Current beta jar with sweet-berry-bush and vine fall clutches. |
+| `releases/jars/belfegor-1.21.4-beta1-dbad9b5.jar` | `dbad9b5` | 4056365 bytes | `a5da77272904851159d9901bb091354afd5bc9dd0d5a371a20d8f4018cd35922` | Beta jar with sweet-berry-bush and vine fall clutches. |
+| `releases/jars/belfegor-1.21.4-beta1-262a855.jar` | `262a855` | 4062997 bytes | `c867f1482b5ed760bd25926ce4fd50bd3fcda797b1c96a00c0895a478685904b` | Current beta jar with @armor and @equipment loadout commands. |
 
 ## What changed in the current jar
 
@@ -80,6 +81,17 @@ is actually used the way a player would use it:
   is inside the vine (or grabs it against the landing block), climbing resets
   fall distance every tick, cancelling the fall.
 
+## What changed from `dbad9b5` to `262a855`
+
+- `@armor <material>` crafts and equips a complete armor set (helmet,
+  chestplate, leggings, boots) for leather, chainmail, iron, gold, diamond, or
+  netherite, skipping pieces that are already owned or equipped.
+- `@equipment <material>` prepares a full loadout: a complete tool set plus a
+  full armor set, equipping the armor once crafted. wood/stone craft tools
+  only, leather/chainmail craft armor only, and iron/gold/diamond/netherite
+  craft both (gold and netherite tools are gathered through the recipe
+  catalogue).
+
 ## Runtime bundle note
 
 The runtime zip is tracked with Git LFS because it includes the bundled llama.cpp/model tree:
@@ -91,5 +103,5 @@ releases/belfegor-1.21.4-beta1-runtime.zip
 Current runtime bundle SHA256:
 
 ```text
-a8536fe88f6f5cfe1972893e0c1e6573f7bd97cad765f09018aedd2710e4a5fb
+497a944f4961df84104f64969be6d752125754095ceb5352b483a5e9489a2bcc
 ```
