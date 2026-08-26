@@ -45,7 +45,9 @@ public class PillarCommand extends Command {
     @Override
     public String getDetailedDescription() {
         return "Builds a cobblestone pillar under the bot by jumping and placing "
-                + "blocks beneath itself. Max 128 blocks per command. Useful for "
-                + "escaping holes or reaching high places.";
+                + "blocks beneath itself. Max 128 blocks per command. When the "
+                + "ceiling is blocked above (underground), it looks up and breaks "
+                + "up to three overhead blocks first, then continues pillaring. "
+                + "Useful for escaping holes, caves, and reaching high places.";
     }
 }

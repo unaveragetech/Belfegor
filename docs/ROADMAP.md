@@ -2,6 +2,26 @@
 
 This roadmap is intentionally practical. Belfegor’s main challenge is not “add more commands”; it is making the agent reliable enough that large commands can run for a long time without poisoning the cursor, losing inventory state, or getting trapped in a task loop.
 
+## Recently implemented
+
+- Full MLG clutch overhaul: every configured clutch item has real per-item
+  behavior (fluids, blocks, beds, ladders/vines, sweet berry bushes, totems,
+  ender pearls), placement is verified and retried, and non-clutch items are
+  rejected with a warning. See [MLG_CLUTCHES.md](MLG_CLUTCHES.md).
+- `@armor <material>` and `@equipment <material>`: complete armor and
+  tool+armor loadouts for all armor materials, equipping the armor once
+  crafted.
+- Forced axe requirements: wood gathering demands an axe at the current tool
+  tier (stone or better once past wood), with a loop-free bootstrap for the
+  first wooden axe.
+- Nearby-container usage: crafting tables, furnaces, and other handled blocks
+  already in the world (within six blocks) are used instead of crafting and
+  placing new ones.
+- Screen-storm fixes: placement and 2x2-craft parents no longer close the
+  screen out from under their own crafting children (`CRAFT-SCREEN-STORM`).
+- `@pillar` breaks up to three overhead blocks when underground and keeps
+  pillaring to the requested height.
+
 ## Near term
 
 - Resolve the remaining visual UI display conflict observed in the heavily modded local profile. Current diagnostics show `@ui` sets `BelfegorScreen` as the active Minecraft screen and logs `UI-OPEN`; the remaining issue is visual/capture/profile-layer visibility when other overlay mods are active.

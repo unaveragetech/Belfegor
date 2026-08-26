@@ -84,29 +84,13 @@ See [Shulker management](SHULKER_MANAGEMENT.md) for exact behavior and exclusion
 
 | Command | Usage | What it does | Examples |
 |---|---|---|---|
-| orward | @forward <blocks> | Walks N blocks (1-64) in the direction the bot is facing. | @forward 5, @forward 10 |
-| ack | @back <blocks> | Walks N blocks backwards relative to facing. | @back 3, @back 8 |
-| left | @left <blocks> | Walks N blocks to the left of facing. | @left 2, @left 6 |
-| 
-ight | @right <blocks> | Walks N blocks to the right of facing. | @right 2, @right 10 |
-| ace | @face <north/south/east/west/up/down/yaw> [pitch] | Points the bot at a cardinal direction, straight up/down, or an exact yaw/pitch. | @face north, @face up, @face 45 -30 |
-| 	urn | @turn <left/right/around/degrees> | Rotates the bot by 90, 180, or an exact number of degrees. | @turn left, @turn around, @turn 45 |
-| pillar | @pillar <height> | Jumps and places a cobblestone column under the bot (1-128 blocks), self-correcting and validating the reached height before completing. | @pillar 5, @pillar 20 |
-| hunt | @hunt <mob> [count] | Hunts the nearest mob of a type for food/drops (cow, pig, chicken, sheep, rabbit, zombie, skeleton, spider, creeper, or hostile). | @hunt cow 4, @hunt hostile |
-| mine | @mine <resource> [count] | Mines/collects the nearest tracked ore or resource through the normal planner. | @mine iron 8, @mine diamond 3 |
-| goal | @goal [start/stop/next/<stage>] | Shows or drives the persistent long-term game plan (wood/stone/iron/diamond tools, food, base, nether, stronghold, dragon). @goal next prints what the active stage still needs. | @goal, @goal next, @goal start, @goal iron_tools |
-
-## Base control and goal commands
-
-| Command | Usage | What it does | Examples |
-|---|---|---|---|
 | `forward` | `@forward <blocks>` | Walks N blocks (1-64) in the direction the bot is facing. | `@forward 5`, `@forward 10` |
 | `back` | `@back <blocks>` | Walks N blocks backwards relative to facing. | `@back 3`, `@back 8` |
 | `left` | `@left <blocks>` | Walks N blocks to the left of facing. | `@left 2`, `@left 6` |
 | `right` | `@right <blocks>` | Walks N blocks to the right of facing. | `@right 2`, `@right 10` |
 | `face` | `@face <north/south/east/west/up/down/yaw> [pitch]` | Points the bot at a cardinal direction, straight up/down, or an exact yaw/pitch. | `@face north`, `@face up`, `@face 45 -30` |
 | `turn` | `@turn <left/right/around/degrees>` | Rotates the bot by 90, 180, or an exact number of degrees. | `@turn left`, `@turn around`, `@turn 45` |
-| `pillar` | `@pillar <height>` | Jumps and places a cobblestone column under the bot (1-128 blocks), self-correcting and validating the reached height before completing. | `@pillar 5`, `@pillar 20` |
+| `pillar` | `@pillar <height>` | Jumps and places a cobblestone column under the bot (1-128 blocks). If the ceiling is blocked above (underground), it looks up and breaks up to three overhead blocks first, then continues jump-placing; it self-corrects and validates the reached height before completing. | `@pillar 5`, `@pillar 20` |
 | `hunt` | `@hunt <mob> [count]` | Hunts the nearest mob of a type for food/drops (cow, pig, chicken, sheep, rabbit, zombie, skeleton, spider, creeper, or hostile). | `@hunt cow 4`, `@hunt hostile` |
 | `mine` | `@mine <resource> [count]` | Mines/collects the nearest tracked ore or resource through the normal planner. | `@mine iron 8`, `@mine diamond 3` |
 | `goal` | `@goal [start/stop/next/<stage>]` | Shows or drives the persistent long-term game plan (wood/stone/iron/diamond tools, food, base, nether, stronghold, dragon). `@goal next` prints what the active stage still needs. | `@goal`, `@goal next`, `@goal start`, `@goal iron_tools` |

@@ -40,7 +40,10 @@ The `+` key is a global abort while a task is running.
 | Bot says recipe missing ingredient even though a variant exists | Recipe requires material unification/flexible ingredient support. | Recipe target in `TASK-START`, crafting logs. |
 | Bot walks on shulker instead of opening it | Placement/opening task selected movement path or block above is blocked. | `SHULKER-STATE`, block above placement position. |
 | Stack overflow crash | Recursive task creation or repeated progress checker creation. | Crash report stack trace. |
+| `ZipException: invalid LOC header` crash on load or first command | The mod jar was replaced or truncated while the game was running. | Close Minecraft, reinstall `releases/belfegor-1.21.4-beta1.jar`, restart; verify the SHA-256 matches the release. |
 | Bot gets stuck switching between two tasks | Scheduler oscillation. | Alternating `TASK-STOP` / `TASK-START` pairs. |
+| Rapid `SCREEN-OPEN`/`SCREEN-CLOSE` with no progress | A parent task closes the screen its crafting child is using every tick. | `SCREEN-CLOSE` caller lines, `CRAFT-SCREEN-STORM`, `TASK-START`/`TASK-STOP` pairs. |
+| Bot crafts/places a crafting table even though one is nearby | The container decision did not know about the nearby (untracked) table. | `CONTAINER`, `Walking to container...`, `Using nearby container instead of placing a new one`. |
 | `C` does not open the Belfegor UI | Another client mod captured the key or a screen/overlay conflict replaced the panel. | Try `@ui`; both paths now call the same `openScreen()` method. |
 | `@ui` logs but panel is not visible | Client-screen conflict or overlay mod is replacing/closing the custom screen. | Test in a cleaner profile; verify `BelfegorScreen` is excluded from screen auto-close; check other mods that open/replace screens. |
 | `@status` or another `@` command shows a Baritone unknown-command error | Baritone consumed the message before Belfegor. | Current builds hook `ChatScreen.sendMessage` before Baritone; rebuild/reinstall and verify `@status` prints `[Belfegor] No tasks currently running.` |
@@ -72,6 +75,9 @@ That means the scheduler thinks both tasks are urgent. The fix is usually one of
 | `TASK-START` | Task began running. |
 | `TASK-STOP` | Task stopped or was interrupted. |
 | `CRAFT-2X2` | Player-inventory crafting gate state. |
+| `CRAFT-SCREEN-STORM` | Crafting screen open/close loop detection with backoff. |
+| `SLOT-FORCE` | Forced inventory slot click diagnostics. |
+| `PILLAR` / `PILLAR-STALL` | Pillar progress and no-height-change diagnostics. |
 | `CRAFT-CURSOR` | Cursor recovery around crafting. |
 | `SCREEN-OPEN` | Inventory screen opening diagnostics. |
 | `SCREEN-WATCHDOG` | Screen opening took too long / render stack snapshot. |
@@ -134,6 +140,9 @@ Include:
 
 ```text
 @toolset stone
+@armor iron
+@equipment iron
 @get diamond_shovel
 @stacked
+@pillar 5
 ```

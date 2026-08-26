@@ -7,6 +7,8 @@ At its simplest, Belfegor lets you type commands like:
 ```text
 @get diamond_shovel
 @toolset iron
+@armor iron
+@equipment diamond
 @stockpile stone starter
 @stockpile cobblestone 512
 @stacked
@@ -69,7 +71,7 @@ It is currently beta software, with the most active engineering effort focused o
 | Auto shulker sorting | Eligible non-tool items can be deposited into shulkers by timer or inventory-fill detection. |
 | Offline recipe catalogue | Bundled `1.21.4` recipe data lets Belfegor plan craftable-item dependencies without internet access. |
 | Craft/screen audit harness | `@craftaudit all` proves the craftable registry end-to-end; `@craftaudit screens` proves supported Minecraft handled screens open/close without inventory hangs. |
-| PvP prep | `@stacked`, `@toolset`, and `@pvp` automate gear and combat preparation. |
+| PvP prep | `@stacked`, `@toolset`, `@armor`, `@equipment`, and `@pvp` automate gear and combat preparation. |
 | Player mode | `@player` starts an autonomous explore/gather/craft/home-base loop and grows a remembered modular base. |
 | Base expansion | `@build full` builds, repairs, and route-validates the complete modular base; `@build validate`/`@build repair` checks remembered rooms and fixes incomplete modules; single-room builds avoid overlapping remembered footprints. Home is locked once established and is not overwritten by later camp/build/player passes unless `@drop home` is run. The core campsite is now exported to `.minecraft/belfegor/schematics/base_core_*.belfegor_schematic.json` and validation checks world blocks against that saved blueprint. |
 | Camp stockpiling | `@stockpile` gathers practical base supplies or a targeted resource, prepares a toolset, returns to the locked home, and deposits into the remembered storage-room chest. |
@@ -124,6 +126,31 @@ The current jar has been tested in the `1.21.4` MultiMC instance against the inv
   errand context. New goal commands give it concrete verbs: `@pillar <height>`,
   `@hunt <mob> [count]`, and `@mine <resource> [count]`. The automatic
   cooldown now defaults to one minute (still configurable).
+
+- the MLG fall-clutch system now supports every configured clutch item with
+  real per-item behavior: water/powder snow place into the fall column,
+  hay/honey/slime/cobweb/scaffolding/beds place as blocks (beds pick an
+  empty head cell), ladders and vines are grabbed and climbed, sweet berry
+  bushes are planted to cancel the fall, totems equip to the offhand, ender
+  pearls are thrown just before impact, and placement is verified/retried
+  instead of stacking blocks upward. See [`docs/MLG_CLUTCHES.md`](docs/MLG_CLUTCHES.md).
+- `@armor <material>` and `@equipment <material>` prepare complete loadouts:
+  full armor for leather/chainmail/iron/gold/diamond/netherite, and full
+  tools plus armor for iron/gold/diamond/netherite (wood/stone craft tools
+  only, leather/chainmail craft armor only), equipping the armor once crafted.
+- wood gathering now forces an axe at the bot's current tool tier (stone or
+  better once the bot has a stone pickaxe), and `MiningRequirement` no longer
+  misreports logs/dirt as diamond-tier.
+- container tasks now use a crafting table, furnace, chest, or other handled
+  block already in the world when one is within six blocks, instead of
+  crafting and placing a new one; this fixed the `@equipment iron` 2x2/3x3
+  screen storm.
+- placement and 2x2-craft parents no longer close the inventory screen out
+  from under their own crafting children, eliminating the `CRAFT-SCREEN-STORM`
+  open/close loop.
+- `@pillar` now looks up and breaks up to three overhead blocks when the
+  ceiling is blocked, so it can pillar out of caves and underground instead
+  of stalling.
 
 See [`docs/TESTING.md`](docs/TESTING.md) for the current manual test matrix and known edge cases.
 
@@ -209,7 +236,7 @@ Belfegor can already do a lot of practical survival automation:
 - gather logs, stone, ores, food, and many catalogued resources;
 - craft tools, workstations, utility items, and equipment;
 - run multi-step goals such as `@get diamond_shovel`;
-- prepare PvP kits with `@stacked` and `@toolset`;
+- prepare PvP kits and full loadouts with `@stacked`, `@toolset`, `@armor`, and `@equipment`;
 - path to coordinates and follow players;
 - fight or avoid selected mobs through survival/combat chains;
 - store/retrieve items from containers;
