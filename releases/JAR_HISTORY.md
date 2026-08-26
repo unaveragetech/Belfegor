@@ -27,7 +27,8 @@ releases/jars/
 | `releases/jars/belfegor-1.21.4-beta1-ab907a5.jar` | `ab907a5` | 4063089 bytes | `3df8e1f289e2c741ce067fd459e8887fc654b5c4624f838543a7967607d81941` | Beta jar with the crafting screen-storm hang fix. |
 | `releases/jars/belfegor-1.21.4-beta1-9af2ea7.jar` | `9af2ea7` | 4066189 bytes | `ba559945ca7667a812408f5f9fa12804f1f5403d45c77f3cf68615701ccb3751` | Beta jar with forced axe requirements for wood gathering. |
 | `releases/jars/belfegor-1.21.4-beta1-234a743.jar` | `234a743` | 4067128 bytes | `ff1b4a8628e9c52d14463c1308badf53b602f9d3b29979060817c70f2342d314` | Beta jar that uses nearby crafting tables instead of crafting/placing new ones. |
-| `releases/jars/belfegor-1.21.4-beta1-c774be5.jar` | `c774be5` | 4067423 bytes | `1881c30577f0c4e7ce90ea92f6a78e17fd32cb6bd6b49c8bf923db0f03052e8c` | Current beta jar whose @pillar breaks overhead blocks to work underground. |
+| `releases/jars/belfegor-1.21.4-beta1-c774be5.jar` | `c774be5` | 4067423 bytes | `1881c30577f0c4e7ce90ea92f6a78e17fd32cb6bd6b49c8bf923db0f03052e8c` | Beta jar whose @pillar breaks overhead blocks to work underground. |
+| `releases/jars/belfegor-1.21.4-beta1-20d6151.jar` | `20d6151` | 4067665 bytes | `697f4da1fcb17caa3f86abb46a90e2185af63838af2dcbbe5d7c44fac5761dce` | Current beta jar with the task-engine audit and refreshed docs/help. |
 
 ## What changed in the current jar
 
@@ -141,6 +142,19 @@ is actually used the way a player would use it:
   resumes the normal jump-place-land loop. When the ceiling closes in again
   it repeats the break-and-pillar cycle until the target height is reached.
 
+## What changed from `c774be5` to `20d6151`
+
+- Task-engine audit: verified every screen-close and container-acquisition
+  path against the bug classes fixed recently (screen storms, crafting/placing
+  a table while one is nearby, missing tool requirements); no remaining
+  instances found. Furnaces, smokers, blast furnaces, anvils, and smithing
+  tables all inherit the nearby-container world scan.
+- Docs refreshed to match current code: README, docs/COMMANDS.md (fixed a
+  corrupted movement table and documented @pillar's underground behavior),
+  docs/TROUBLESHOOTING.md (invalid-LOC-header crash, screen-storm and
+  nearby-table symptoms, new debug tags), docs/ROADMAP.md (recently
+  implemented section), and @help/AI command catalogue text for @pillar.
+
 ## Runtime bundle note
 
 The runtime zip is tracked with Git LFS because it includes the bundled llama.cpp/model tree:
@@ -152,5 +166,5 @@ releases/belfegor-1.21.4-beta1-runtime.zip
 Current runtime bundle SHA256:
 
 ```text
-5707e7137687b99acb70e4cfe1112d5173d58fb90376947a41c6e5704fe1478e
+1e0ad7258c61ef8d4ba5d7330b6aa8d2589ea48760af405a644460ddf6cc6fd4
 ```
