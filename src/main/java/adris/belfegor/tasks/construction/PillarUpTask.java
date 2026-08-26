@@ -97,6 +97,18 @@ public class PillarUpTask extends Task {
             return null;
         }
 
+        // Clear any solid blocks above the bot so the jump has headroom. This
+        // is how a player pillars out of a cave: look up, break a few blocks
+        // (up to 3), then jump-place and repeat whenever the ceiling closes in
+        // again. Without this the bot would just bump its head forever.
+        BlockPos overhead = findOverheadBlock(mod, feet);
+        if (overhead != null) {
+            setDebugState("Breaking block above at " + overhead.toShortString());
+            mod.getInputControls().release(Input.JUMP);
+            _activeTask = new DestroyBlockTask(overhead);
+            return _activeTask;
+        }
+
         // Informational stall watchdog: log when the bot is not gaining height
         // so the cause is visible, but never give up while supplies exist.
         if (_lastProgressY == feet.getY()) {
@@ -197,6 +209,22 @@ public class PillarUpTask extends Task {
                 _phase = Phase.LAND;
                 return null;
             }
+        }
+        return null;
+    }
+
+    /**
+     * Returns the first solid block in the three cells above the player's
+     * head (feet.up(2..4)), or null when the column is clear. Fluids are not
+     * "blocked" (the player can jump into water) and the bot never breaks its
+     * own cobblestone pillar.
+     */
+    private BlockPos findOverheadBlock(Belfegor mod, BlockPos feet) {
+        for (int dy = 2; dy <= 4; dy++) {
+            BlockPos check = feet.up(dy);
+            if (!WorldHelper.isSolid(mod, check)) continue;
+            if (isPillarBlock(mod, check)) continue;
+            return check;
         }
         return null;
     }
