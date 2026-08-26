@@ -96,6 +96,24 @@ public class MineAndCollectTask extends ResourceTask {
 
     @Override
     protected Task onResourceTick(Belfegor mod) {
+        // Wood and other axe-suitable blocks need an axe. The old tool system
+        // never demanded one because logs are registered with
+        // MiningRequirement.HAND (no pickaxe tier gates them). Never force an
+        // upgrade while one is already in progress (that would make the
+        // upgrade's own wood gathering loop), and never demand an axe during
+        // the very first bootstrap chop — that is how the first axe is made.
+        if (needsAxeForBlocks()) {
+            if (!SatisfyAxeRequirementTask.isUpgradingAxe()) {
+                if (!SatisfyAxeRequirementTask.hasAnyAxe(mod)) {
+                    return new SatisfyAxeRequirementTask(ToolSetTask.Tier.WOOD);
+                }
+                ToolSetTask.Tier target = ToolSetTask.currentTier(mod);
+                if (target != null && !SatisfyAxeRequirementTask.hasAxeAtLeast(mod, target)) {
+                    return new SatisfyAxeRequirementTask(target);
+                }
+            }
+        }
+
         if (!StorageHelper.miningRequirementMet(mod, _requirement)) {
             return new SatisfyMiningRequirementTask(_requirement);
         }
@@ -173,6 +191,21 @@ public class MineAndCollectTask extends ResourceTask {
             }
             _cursorStackTimer.reset();
         }
+    }
+
+    /**
+     * True when any target block is best chopped with an axe (logs, planks,
+     * wood, bamboo...). These blocks have no pickaxe tier requirement, so the
+     * axe is enforced by SatisfyAxeRequirementTask instead.
+     */
+    private boolean needsAxeForBlocks() {
+        for (Block block : _blocksToMine) {
+            if (block != null && net.minecraft.item.Items.WOODEN_AXE.getDefaultStack()
+                    .isSuitableFor(block.getDefaultState())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static boolean isOreBlock(Block block) {

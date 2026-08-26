@@ -23,8 +23,10 @@ public enum MiningRequirement implements Comparable<MiningRequirement> {
                     return req;
                 }
             }
-            Debug.logWarning("Failed to find ANY effective tool against: " + block + ". I assume netherite is not required anywhere, so something else probably went wrong.");
-            return MiningRequirement.DIAMOND;
+            // No pickaxe is suitable for this block (logs, planks, dirt, etc.).
+            // It is still breakable by hand; axe/shovel speed bonuses are
+            // enforced by their own requirement tasks, not a pickaxe tier.
+            return MiningRequirement.HAND;
         }
         return MiningRequirement.HAND;
     }
