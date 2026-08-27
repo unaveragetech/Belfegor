@@ -28,7 +28,8 @@ releases/jars/
 | `releases/jars/belfegor-1.21.4-beta1-9af2ea7.jar` | `9af2ea7` | 4066189 bytes | `ba559945ca7667a812408f5f9fa12804f1f5403d45c77f3cf68615701ccb3751` | Beta jar with forced axe requirements for wood gathering. |
 | `releases/jars/belfegor-1.21.4-beta1-234a743.jar` | `234a743` | 4067128 bytes | `ff1b4a8628e9c52d14463c1308badf53b602f9d3b29979060817c70f2342d314` | Beta jar that uses nearby crafting tables instead of crafting/placing new ones. |
 | `releases/jars/belfegor-1.21.4-beta1-c774be5.jar` | `c774be5` | 4067423 bytes | `1881c30577f0c4e7ce90ea92f6a78e17fd32cb6bd6b49c8bf923db0f03052e8c` | Beta jar whose @pillar breaks overhead blocks to work underground. |
-| `releases/jars/belfegor-1.21.4-beta1-20d6151.jar` | `20d6151` | 4067665 bytes | `697f4da1fcb17caa3f86abb46a90e2185af63838af2dcbbe5d7c44fac5761dce` | Current beta jar with the task-engine audit and refreshed docs/help. |
+| `releases/jars/belfegor-1.21.4-beta1-20d6151.jar` | `20d6151` | 4067665 bytes | `697f4da1fcb17caa3f86abb46a90e2185af63838af2dcbbe5d7c44fac5761dce` | Beta jar with the task-engine audit and refreshed docs/help. |
+| `releases/jars/belfegor-1.21.4-beta1-0775022.jar` | `0775022` | 4074983 bytes | `10b0ec694fbe334a1e118e1a1764e1846e627687fae1371cbfd6dd145bd09767` | Current beta jar with classic .schematic import and food variety. |
 
 ## What changed in the current jar
 
@@ -155,6 +156,21 @@ is actually used the way a player would use it:
   nearby-table symptoms, new debug tags), docs/ROADMAP.md (recently
   implemented section), and @help/AI command catalogue text for @pillar.
 
+## What changed from `20d6151` to `0775022`
+
+- `@build base import` now accepts classic MCEdit/Schematica `.schematic` and
+  `.schem` files: legacy numeric ids are resolved through the file's
+  SchematicaMapping table with well-known renames and metadata variants, and
+  grass blocks are substituted with dirt so survival gathering can source
+  them in bulk.
+- Imported schematics now loop collect/deposit until every required block
+  material is staged in the chest at the build site (256-block working
+  batches), then build the full structure from the sourced materials.
+- Food collection considers all nearby meats and crops: the bot hunts the
+  nearest/best of pork, beef, chicken, mutton, rabbit, cod, and salmon;
+  harvests wheat, carrots, potatoes, and beetroot; bakes potatoes; picks up a
+  wider set of foods; and `@meat` includes rabbit with porkchop first.
+
 ## Runtime bundle note
 
 The runtime zip is tracked with Git LFS because it includes the bundled llama.cpp/model tree:
@@ -166,5 +182,5 @@ releases/belfegor-1.21.4-beta1-runtime.zip
 Current runtime bundle SHA256:
 
 ```text
-1e0ad7258c61ef8d4ba5d7330b6aa8d2589ea48760af405a644460ddf6cc6fd4
+4d8afd4352701d71e830f908beee710dbc23129090320cb9cc71a1ef2840771d
 ```

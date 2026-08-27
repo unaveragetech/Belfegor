@@ -20,9 +20,10 @@ The repo now keeps immutable jar copies under `releases/jars/` so the current be
 | `releases/jars/belfegor-1.21.4-beta1-9af2ea7.jar` | `9af2ea7` | `ba559945ca7667a812408f5f9fa12804f1f5403d45c77f3cf68615701ccb3751` | Beta jar with forced axe requirements for wood gathering. |
 | `releases/jars/belfegor-1.21.4-beta1-234a743.jar` | `234a743` | `ff1b4a8628e9c52d14463c1308badf53b602f9d3b29979060817c70f2342d314` | Beta jar that uses nearby crafting tables instead of crafting/placing new ones. |
 | `releases/jars/belfegor-1.21.4-beta1-c774be5.jar` | `c774be5` | `1881c30577f0c4e7ce90ea92f6a78e17fd32cb6bd6b49c8bf923db0f03052e8c` | Beta jar whose @pillar breaks overhead blocks to work underground. |
-| `releases/jars/belfegor-1.21.4-beta1-20d6151.jar` | `20d6151` | `697f4da1fcb17caa3f86abb46a90e2185af63838af2dcbbe5d7c44fac5761dce` | Current beta jar with the task-engine audit and refreshed docs/help. |
+| `releases/jars/belfegor-1.21.4-beta1-20d6151.jar` | `20d6151` | `697f4da1fcb17caa3f86abb46a90e2185af63838af2dcbbe5d7c44fac5761dce` | Beta jar with the task-engine audit and refreshed docs/help. |
+| `releases/jars/belfegor-1.21.4-beta1-0775022.jar` | `0775022` | `10b0ec694fbe334a1e118e1a1764e1846e627687fae1371cbfd6dd145bd09767` | Current beta jar with classic .schematic import and food variety. |
 
-The moving install jar remains `releases/belfegor-1.21.4-beta1.jar` and currently matches the `20d6151` archive copy.
+The moving install jar remains `releases/belfegor-1.21.4-beta1.jar` and currently matches the `0775022` archive copy.
 
 ### What changed from `341eae3` to `718e0b7`
 
@@ -104,6 +105,16 @@ The moving install jar remains `releases/belfegor-1.21.4-beta1.jar` and currentl
   @armor/@equipment commands, MLG clutch overhaul, forced axe requirements,
   nearby crafting-table usage, screen-storm fixes, and @pillar overhead
   breaking.
+
+### What changed from `20d6151` to `0775022`
+
+- Classic `.schematic`/`.schem` files can be imported with
+  `@build base import "file" [name]`; the bot sources every required block
+  material in game, stages it at the build site, and builds the full
+  structure.
+- Food gathering now considers all nearby meats and crops (pork, beef,
+  chicken, mutton, rabbit, fish, wheat/carrot/potato/beetroot), baking and
+  smelting as needed.
 
 ## Download
 
