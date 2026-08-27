@@ -188,12 +188,14 @@ See [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) and
 | Area | What it means in-game |
 |---|---|
 | Recipe-driven `@get` | Every normal craftable item in 1.21.4 is planned from a bundled offline recipe catalogue, expanded into ingredients, and sourced from the best available place. |
+| Food variety | `@food`/`@meat` gather whatever is nearby: pork, beef, chicken, mutton, rabbit, fish, wheat/carrot/potato/beetroot crops, hay/bread, and sweet berries, cooking meat and baking potatoes as needed. |
 | Safe crafting | 2x2 inventory and 3x3 table crafting with cursor recovery, screen diagnostics, and transaction guards - including the `CRAFT-SCREEN-STORM` protection. |
 | Managed shulkers | Carried shulkers are treated as sub-inventories: placed, opened, scanned, transferred into, recatalogued, mined, and picked back up. |
 | Shulker auto-sort | Eligible non-tool items deposit into shulkers by timer or inventory-fill detection. |
 | Base storage economy | Chests are remembered as a storage network with persisted counts; stockpile, triage, and stash flows update the ledger. |
 | Autonomous player mode | `@player` explores, gathers, builds a remembered modular base, expands rooms, maintains tools, and resumes the persistent `@goal` game plan. |
 | Base building | `@build full` builds/repairs/validates the complete modular base; rooms are footprint-aware, home is locked, and validation uses the saved blueprint. |
+| Schematic import | `@build base import "file"` accepts `.litematic`, `.schematic`, `.schem`, and `.json` files, sources every required block material in game, stages it in a chest at the build site, and builds the full structure. |
 | PvP and loadouts | `@toolset`, `@armor`, `@equipment`, and `@stacked` prepare full gear; `@pvp` runs the combat loop. |
 | MLG fall clutches | Auto-MLG supports water, powder snow, slime, honey, hay, scaffolding, cobweb, ladders, vines, sweet berry bushes, totems, ender pearls, and all bed colors. |
 | Local AI advisor | Optional packaged llama.cpp advisor answers `@ai` and can suggest the next validated command in `@player`. |

@@ -28,6 +28,13 @@ flowchart TD
 
 ## Current implementation bridge
 
+Imported `.schematic`/`.litematic`/`.json` files now run through a full
+staging loop in `BuildImportedSchematicTask`: the bot collects every
+required block material in game (256-block working batches), deposits it
+into the staging chest next to the build site, and only then hands off to
+the region builder, which withdraws staged batches and prints the full
+structure.
+
 The current `BuildRegionSchematicTask` is Belfegor's bridge layer:
 
 - it receives an expected map of world positions to desired blocks;
@@ -107,7 +114,10 @@ This keeps inventory pressure predictable and prevents the bot from discarding i
 ## Next engineering steps
 
 - Extend `.litematic` parsing beyond the current default camp import into explicit user commands such as `@schematic load`.
-- Add Sponge `.schem` parsing into the internal schematic model.
+- Classic `.schematic` (MCEdit/Schematica) parsing is implemented: legacy
+  numeric ids are resolved through the file's `SchematicaMapping` table with
+  well-known renames and metadata variants (grass blocks are substituted
+  with dirt so survival gathering can source them in bulk).
 - Continue improving full block-state placement for stairs, slabs, doors, trapdoors, logs, crops, water, and redstone.
 - Add export to Baritone-compatible `.schematic` or direct Baritone build-process adapters where useful.
 - Add a safe optional integration path for Litematica-loaded schematics via Baritone `#litematica`/API support when Litematica is installed.

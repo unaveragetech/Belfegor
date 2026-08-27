@@ -48,6 +48,7 @@ public class CollectFoodTask extends Task {
             new CookableFoodTarget("beef", CowEntity.class),
             new CookableFoodTarget("chicken", ChickenEntity.class),
             new CookableFoodTarget("mutton", SheepEntity.class),
+            new CookableFoodTarget("rabbit", RabbitEntity.class),
             new CookableFoodTargetFish("cod", CodEntity.class),
             new CookableFoodTargetFish("salmon", SalmonEntity.class)
     };
@@ -57,12 +58,23 @@ public class CollectFoodTask extends Task {
             Items.GOLDEN_APPLE,
             Items.GOLDEN_CARROT,
             Items.BREAD,
-            Items.BAKED_POTATO
+            Items.BAKED_POTATO,
+            Items.APPLE,
+            Items.MELON_SLICE,
+            Items.PUMPKIN_PIE,
+            Items.CARROT,
+            Items.POTATO,
+            Items.COOKED_RABBIT,
+            Items.COOKED_MUTTON,
+            Items.COOKED_COD,
+            Items.COOKED_SALMON
     };
 
     private static final CropTarget[] CROPS = new CropTarget[]{
             new CropTarget(Items.WHEAT, Blocks.WHEAT),
-            new CropTarget(Items.CARROT, Blocks.CARROTS)
+            new CropTarget(Items.CARROT, Blocks.CARROTS),
+            new CropTarget(Items.POTATO, Blocks.POTATOES),
+            new CropTarget(Items.BEETROOT, Blocks.BEETROOTS)
     };
 
     private final double _unitsNeeded;
@@ -101,6 +113,9 @@ public class CollectFoodTask extends Task {
         }
         int potentialBread = (int) (mod.getItemStorage().getItemCount(Items.WHEAT) / 3) + mod.getItemStorage().getItemCount(Items.HAY_BLOCK) * 3;
         potentialFood += Objects.requireNonNull(Items.BREAD.getComponents().get(DataComponentTypes.FOOD)).nutrition() * potentialBread;
+        // Raw potatoes count as their baked-potato potential.
+        int rawPotatoes = mod.getItemStorage().getItemCount(Items.POTATO);
+        potentialFood += Objects.requireNonNull(Items.BAKED_POTATO.getComponents().get(DataComponentTypes.FOOD)).nutrition() * rawPotatoes;
         // Check smelting
         ScreenHandler screen = mod.getPlayer().currentScreenHandler;
         if (screen instanceof SmokerScreenHandler) {
@@ -206,6 +221,18 @@ public class CollectFoodTask extends Task {
             }
             // Convert raw foods -> cooked foods
 
+            // Bake potatoes into baked potatoes.
+            int rawPotatoes = mod.getItemStorage().getItemCount(Items.POTATO);
+            if (rawPotatoes > 0) {
+                setDebugState("Baking potatoes");
+                int toSmelt = rawPotatoes + mod.getItemStorage().getItemCount(Items.BAKED_POTATO);
+                _smeltTask = new SmeltInSmokerTask(new SmeltTarget(
+                        new ItemTarget(Items.BAKED_POTATO, toSmelt),
+                        new ItemTarget(Items.POTATO, rawPotatoes)));
+                _smeltTask.ignoreMaterials();
+                return _smeltTask;
+            }
+
             for (CookableFoodTarget cookable : COOKABLE_FOODS) {
                 int rawCount = mod.getItemStorage().getItemCount(cookable.getRaw());
                 if (rawCount > 0) {
@@ -271,27 +298,30 @@ public class CollectFoodTask extends Task {
                     return _currentResourceTask;
                 }
             }
-            // Cooked foods
+            // Cooked foods: pick the nearest/best meat across every type the
+            // tracker can see instead of always the first type with any sighting.
+            double bestScore = 0;
+            Entity bestEntity = null;
+            Item bestRawFood = null;
             for (CookableFoodTarget cookable : COOKABLE_FOODS) {
                 Predicate<Entity> notBaby = entity -> entity instanceof LivingEntity livingEntity && !livingEntity.isBaby();
                 Optional<Entity> nearest = mod.getEntityTracker().getClosestEntity(notBaby, cookable.mobToKill);
-                if (nearest.isPresent()) {
-                    setDebugState("Killing " + nearest.get().getType().getTranslationKey());
-                    _currentResourceTask = killTaskOrNull(nearest.get(), notBaby, cookable.getRaw());
-                    return _currentResourceTask;
+                if (nearest.isEmpty()) continue;
+                int hungerPerformance = cookable.getCookedUnits();
+                double sqDistance = nearest.get().squaredDistanceTo(mod.getPlayer());
+                double score = (double) 100 * hungerPerformance / (sqDistance);
+                if (cookable.isFish()) score *= 0.5;
+                if (score > bestScore) {
+                    bestScore = score;
+                    bestEntity = nearest.get();
+                    bestRawFood = cookable.getRaw();
                 }
-//                if (nearest.isEmpty()) continue; // ?? This crashed once?
-//                int hungerPerformance = cookable.getCookedUnits();
-//                double sqDistance = nearest.get().squaredDistanceTo(mod.getPlayer());
-//                double score = (double) 100 * hungerPerformance / (sqDistance);
-//                if (cookable.isFish()) {
-//                    score *= FISH_PENALTY;
-//                }
-//                if (score > bestScore) {
-//                    bestScore = score;
-//                    bestEntity = nearest.get();
-//                    bestRawFood = cookable.getRaw();
-//                }
+            }
+            if (bestEntity != null) {
+                setDebugState("Killing " + bestEntity.getType().getTranslationKey());
+                Predicate<Entity> notBaby = entity -> entity instanceof LivingEntity livingEntity && !livingEntity.isBaby();
+                _currentResourceTask = killTaskOrNull(bestEntity, notBaby, bestRawFood);
+                return _currentResourceTask;
             }
 
             // Sweet berries (separate from crops because they should have a lower priority than everything else cause they suck)

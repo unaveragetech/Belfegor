@@ -8,6 +8,7 @@ import adris.belfegor.memory.BaseMemory;
 import adris.belfegor.memory.LocationMemory;
 import adris.belfegor.schematic.BelfegorSchematic;
 import adris.belfegor.schematic.LitematicSchematicLoader;
+import adris.belfegor.schematic.ClassicSchematicLoader;
 import adris.belfegor.tasks.container.StoreInContainerTask;
 import adris.belfegor.tasksystem.Task;
 import adris.belfegor.util.ItemTarget;
@@ -37,7 +38,7 @@ import java.util.Optional;
  */
 public class BuildImportedSchematicTask extends Task {
 
-    private static final int STARTER_BATCH_PER_ITEM = 64;
+    private static final int STARTER_BATCH_PER_ITEM = 256;
 
     private enum Phase {
         IMPORT,
@@ -62,6 +63,11 @@ public class BuildImportedSchematicTask extends Task {
     private Map<Item, Integer> _requirements = new LinkedHashMap<>();
     private Map<BlockPos, Block[]> _directTargets;
     private Item _currentDepositItem;
+    // How many of each requirement have been deposited into the staging
+    // chest so far; used to loop collect/deposit until everything is staged.
+    private final Map<Item, Integer> _stagedCounts = new LinkedHashMap<>();
+    private Item _depositingItem;
+    private int _depositingCount;
 
     public BuildImportedSchematicTask(File sourceFile, String requestedName) {
         _sourceFile = sourceFile;
@@ -73,6 +79,9 @@ public class BuildImportedSchematicTask extends Task {
         _phase = Phase.IMPORT;
         _activeTask = null;
         _currentDepositItem = null;
+        _stagedCounts.clear();
+        _depositingItem = null;
+        _depositingCount = 0;
         _origin = findGroundedOrigin(mod, mod.getPlayer().getBlockPos());
         _dimension = WorldHelper.getCurrentDimension().name();
     }
@@ -292,13 +301,23 @@ public class BuildImportedSchematicTask extends Task {
             case COLLECT -> {
                 Task collect = collectMissingMaterial(mod);
                 if (collect != null) yield collect;
-                next(Phase.DEPOSIT);
+                if (hasCarriedRequirements(mod)) {
+                    next(Phase.DEPOSIT);
+                } else {
+                    // Nothing more can be gathered: remaining requirements are
+                    // already staged or unobtainable. Build with what we have.
+                    next(Phase.BUILD);
+                }
                 yield null;
             }
             case DEPOSIT -> {
                 Task deposit = depositMaterials(mod);
                 if (deposit != null) yield deposit;
-                next(Phase.BUILD);
+                if (allRequirementsStaged(mod)) {
+                    next(Phase.BUILD);
+                } else {
+                    next(Phase.COLLECT);
+                }
                 yield null;
             }
             case BUILD -> {
@@ -347,6 +366,10 @@ public class BuildImportedSchematicTask extends Task {
             if (extension.equalsIgnoreCase(".litematic")) {
                 _schematic = LitematicSchematicLoader.load(_copiedSource, _origin, _dimension);
                 _schematic.name = safeName;
+            } else if (extension.equalsIgnoreCase(".schematic")
+                    || extension.equalsIgnoreCase(".schem")) {
+                _schematic = ClassicSchematicLoader.load(_copiedSource, _origin, _dimension);
+                _schematic.name = safeName;
             } else if (extension.equalsIgnoreCase(".json")
                     || extension.equalsIgnoreCase(".belfegor_schematic")) {
                 _schematic = BelfegorSchematic.load(_copiedSource)
@@ -356,7 +379,7 @@ public class BuildImportedSchematicTask extends Task {
                 _schematic.dimension = _dimension;
             } else {
                 throw new IllegalArgumentException("Unsupported schematic extension: " + extension
-                        + ". Supported: .litematic, .json");
+                        + ". Supported: .litematic, .schematic, .schem, .json");
             }
 
             _requirements = directPlaceableRequirements();
@@ -422,7 +445,8 @@ public class BuildImportedSchematicTask extends Task {
                                 + " note=special block requires specialist task or pre-staged material");
                 continue;
             }
-            int have = mod.getItemStorage().getItemCount(item);
+            int have = mod.getItemStorage().getItemCount(item)
+                    + _stagedCounts.getOrDefault(item, 0);
             int starterTarget = starterTarget(item, needed);
             if (have >= starterTarget) continue;
             setDebugState("Collecting imported schematic material "
@@ -542,16 +566,29 @@ public class BuildImportedSchematicTask extends Task {
     }
 
     private Task depositMaterials(Belfegor mod) {
+        // Credit the previous deposit into the staged ledger once it finishes.
+        if (_activeTask != null && _depositingItem != null
+                && (_activeTask.stopped() || _activeTask.isFinished(mod))) {
+            _stagedCounts.put(_depositingItem,
+                    _stagedCounts.getOrDefault(_depositingItem, 0) + _depositingCount);
+            _depositingItem = null;
+            _depositingCount = 0;
+            _activeTask = null;
+        }
         for (Map.Entry<Item, Integer> entry : _requirements.entrySet()) {
             Item item = entry.getKey();
             int needed = entry.getValue();
             int carried = mod.getItemStorage().getItemCountInventoryOnly(item);
             if (carried <= 0) continue;
-            int deposit = Math.min(carried, needed);
-            if (_currentDepositItem == item && _activeTask != null
+            int deposit = Math.min(carried,
+                    Math.max(0, needed - _stagedCounts.getOrDefault(item, 0)));
+            if (deposit <= 0) continue;
+            if (_depositingItem == item && _activeTask != null
                     && !_activeTask.stopped() && !_activeTask.isFinished(mod)) {
                 return _activeTask;
             }
+            _depositingItem = item;
+            _depositingCount = deposit;
             _currentDepositItem = item;
             setDebugState("Depositing imported schematic material "
                     + item + " x" + deposit + " into staging chest");
@@ -559,9 +596,33 @@ public class BuildImportedSchematicTask extends Task {
                     new ItemTarget(item, deposit));
             return _activeTask;
         }
+        _depositingItem = null;
+        _depositingCount = 0;
         _currentDepositItem = null;
         _activeTask = null;
         return null;
+    }
+
+    private boolean allRequirementsStaged(Belfegor mod) {
+        for (Map.Entry<Item, Integer> entry : _requirements.entrySet()) {
+            Item item = entry.getKey();
+            if (isSpecialSchematicItem(item)) continue;
+            int needed = entry.getValue();
+            int staged = _stagedCounts.getOrDefault(item, 0)
+                    + mod.getItemStorage().getItemCountInventoryOnly(item);
+            if (staged < needed) return false;
+        }
+        return true;
+    }
+
+    private boolean hasCarriedRequirements(Belfegor mod) {
+        for (Map.Entry<Item, Integer> entry : _requirements.entrySet()) {
+            if (isSpecialSchematicItem(entry.getKey())) continue;
+            if (mod.getItemStorage().getItemCountInventoryOnly(entry.getKey()) > 0) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void remember(String status) {
