@@ -30,7 +30,8 @@ releases/jars/
 | `releases/jars/belfegor-1.21.4-beta1-c774be5.jar` | `c774be5` | 4067423 bytes | `1881c30577f0c4e7ce90ea92f6a78e17fd32cb6bd6b49c8bf923db0f03052e8c` | Beta jar whose @pillar breaks overhead blocks to work underground. |
 | `releases/jars/belfegor-1.21.4-beta1-20d6151.jar` | `20d6151` | 4067665 bytes | `697f4da1fcb17caa3f86abb46a90e2185af63838af2dcbbe5d7c44fac5761dce` | Beta jar with the task-engine audit and refreshed docs/help. |
 | `releases/jars/belfegor-1.21.4-beta1-0775022.jar` | `0775022` | 4074983 bytes | `10b0ec694fbe334a1e118e1a1764e1846e627687fae1371cbfd6dd145bd09767` | Beta jar with classic .schematic import and food variety. |
-| `releases/jars/belfegor-1.21.4-beta1-f1f75ff.jar` | `f1f75ff` | 4075074 bytes | `977bba834ca2bc7a0eee04aa1e15dfb976ed9f2f4fad141c9ea4d1ec2ec3ff89` | Current beta jar with the wood-gathering/axe task restart storm fix. |
+| `releases/jars/belfegor-1.21.4-beta1-f1f75ff.jar` | `f1f75ff` | 4075074 bytes | `977bba834ca2bc7a0eee04aa1e15dfb976ed9f2f4fad141c9ea4d1ec2ec3ff89` | Beta jar with the wood-gathering/axe task restart storm fix. |
+| `releases/jars/belfegor-1.21.4-beta1-790e45f.jar` | `790e45f` | 4074942 bytes | `d1c47284ad9d64db6094159bc1a6e9ff0f15c8bcaa1ccee753509b84ef650ed4` | Current beta jar with the overflow-to-chest recursion fix. |
 
 ## What changed in the current jar
 
@@ -180,6 +181,15 @@ is actually used the way a player would use it:
   tick). MineAndCollectTask now caches the axe-requirement child and keeps
   running it until the axe is obtained.
 
+## What changed from `f1f75ff` to `790e45f`
+
+- Fixed the overflow-to-chest recursion that tripped the task-depth guard
+  when crafting the first chest (e.g. the staging chest for an imported
+  schematic): OverflowInventoryTask no longer creates/crafts a container, and
+  falls back to dropping throwaway junk (or giving up cleanly) when no ready
+  chest is nearby. CraftInInventoryTask also stops recreating a finished
+  overflow task every tick.
+
 ## Runtime bundle note
 
 The runtime zip is tracked with Git LFS because it includes the bundled llama.cpp/model tree:
@@ -191,5 +201,5 @@ releases/belfegor-1.21.4-beta1-runtime.zip
 Current runtime bundle SHA256:
 
 ```text
-0469252449f19a011f993a39b3034f821eec965e2b553d5a3453a6b947d6a463
+a9e6b63edc5436bdc3d553c1b9409239f27da2b3b2b63b7014d99a316e8e341a
 ```

@@ -20,11 +20,11 @@ verify the result.
 | Latest jar | [`releases/belfegor-1.21.4-beta1.jar`](releases/belfegor-1.21.4-beta1.jar) |
 | Runtime bundle | [`releases/belfegor-1.21.4-beta1-runtime.zip`](releases/belfegor-1.21.4-beta1-runtime.zip) |
 | Release notes | [`docs/RELEASE_v1.21.4-beta1.md`](docs/RELEASE_v1.21.4-beta1.md) |
-| Jar SHA256 | `977bba834ca2bc7a0eee04aa1e15dfb976ed9f2f4fad141c9ea4d1ec2ec3ff89` |
-| Runtime bundle SHA256 | `0469252449f19a011f993a39b3034f821eec965e2b553d5a3453a6b947d6a463` |
+| Jar SHA256 | `d1c47284ad9d64db6094159bc1a6e9ff0f15c8bcaa1ccee753509b84ef650ed4` |
+| Runtime bundle SHA256 | `a9e6b63edc5436bdc3d553c1b9409239f27da2b3b2b63b7014d99a316e8e341a` |
 
 The repo keeps immutable jar copies under [`releases/jars/`](releases/jars/) so
-the previous public jar can be compared with the current one. The current jar is `belfegor-1.21.4-beta1-f1f75ff.jar`; the previous public jar is `belfegor-1.21.4-beta1-341eae3.jar`. Fall-clutch configuration is documented
+the previous public jar can be compared with the current one. The current jar is `belfegor-1.21.4-beta1-790e45f.jar`; the previous public jar is `belfegor-1.21.4-beta1-341eae3.jar`. Fall-clutch configuration is documented
 in [`docs/MLG_CLUTCHES.md`](docs/MLG_CLUTCHES.md).
 
 ---

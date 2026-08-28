@@ -1,9 +1,9 @@
-977bba834ca2bc7a0eee04aa1e15dfb976ed9f2f4fad141c9ea4d1ec2ec3ff89  .\releases\belfegor-1.21.4-beta1.jar
-0469252449f19a011f993a39b3034f821eec965e2b553d5a3453a6b947d6a463  .\releases\belfegor-1.21.4-beta1-runtime.zip
-977bba834ca2bc7a0eee04aa1e15dfb976ed9f2f4fad141c9ea4d1ec2ec3ff89  .\releases\v1.21.4-beta1\mods\belfegor-1.21.4-beta1.jar
+d1c47284ad9d64db6094159bc1a6e9ff0f15c8bcaa1ccee753509b84ef650ed4  .\releases\belfegor-1.21.4-beta1.jar
+a9e6b63edc5436bdc3d553c1b9409239f27da2b3b2b63b7014d99a316e8e341a  .\releases\belfegor-1.21.4-beta1-runtime.zip
+d1c47284ad9d64db6094159bc1a6e9ff0f15c8bcaa1ccee753509b84ef650ed4  .\releases\v1.21.4-beta1\mods\belfegor-1.21.4-beta1.jar
 6f5c978857af636017d2526b961468f63b204e56762669d711640915627f0917  .\releases\v1.21.4-beta1\mods\fabric-api-0.114.3+1.21.4.jar
 a9417cc1f77f0435a71a834605c4d5c5ca2f4a02808bdd75fb4f36102c9255b8  .\releases\v1.21.4-beta1\mods\baritone-api.jar
-977bba834ca2bc7a0eee04aa1e15dfb976ed9f2f4fad141c9ea4d1ec2ec3ff89  .\releases\jars\belfegor-1.21.4-beta1-f1f75ff.jar
+d1c47284ad9d64db6094159bc1a6e9ff0f15c8bcaa1ccee753509b84ef650ed4  .\releases\jars\belfegor-1.21.4-beta1-790e45f.jar
 961e6b5994976312a84f0fbf9e588c5d55272072470e3a4e9ceb43c456c1f2ec  .\releases\jars\belfegor-1.21.4-beta1-341eae3.jar
 27f4eaf257b0a3e67688ad9f984b137510e4b2912903bc17e929a8e137bcc2d4  .\releases\jars\belfegor-1.21.4-beta1-718e0b7.jar
 12dbe3564b8586a2f2fd43aa7f02379df225b3452f0e5519d315e1a385488a41  .\releases\jars\belfegor-1.21.4-beta1-6050309.jar
@@ -16,3 +16,4 @@ ff1b4a8628e9c52d14463c1308badf53b602f9d3b29979060817c70f2342d314  .\releases\jar
 1881c30577f0c4e7ce90ea92f6a78e17fd32cb6bd6b49c8bf923db0f03052e8c  .\releases\jars\belfegor-1.21.4-beta1-c774be5.jar
 697f4da1fcb17caa3f86abb46a90e2185af63838af2dcbbe5d7c44fac5761dce  .\releases\jars\belfegor-1.21.4-beta1-20d6151.jar
 10b0ec694fbe334a1e118e1a1764e1846e627687fae1371cbfd6dd145bd09767  .\releases\jars\belfegor-1.21.4-beta1-0775022.jar
+977bba834ca2bc7a0eee04aa1e15dfb976ed9f2f4fad141c9ea4d1ec2ec3ff89  .\releases\jars\belfegor-1.21.4-beta1-f1f75ff.jar
