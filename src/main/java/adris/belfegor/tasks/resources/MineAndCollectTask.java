@@ -47,6 +47,7 @@ public class MineAndCollectTask extends ResourceTask {
     // same SatisfyAxeRequirementTask until it finishes, or it flips between
     // the axe task and the mining subtask every tick (restart storm).
     private Task _axeRequirementTask = null;
+    private Task _shovelRequirementTask = null;
 
     public MineAndCollectTask(ItemTarget[] itemTargets, Block[] blocksToMine, MiningRequirement requirement) {
         super(itemTargets);
@@ -91,6 +92,7 @@ public class MineAndCollectTask extends ResourceTask {
 
         _subtask.resetSearch();
         _axeRequirementTask = null;
+        _shovelRequirementTask = null;
     }
 
     @Override
@@ -126,6 +128,26 @@ public class MineAndCollectTask extends ResourceTask {
                 if (target != null && !SatisfyAxeRequirementTask.hasAxeAtLeast(mod, target)) {
                     _axeRequirementTask = new SatisfyAxeRequirementTask(target);
                     return _axeRequirementTask;
+                }
+            }
+        }
+        // Dirt, sand, gravel, and other shovel-suitable blocks are dug with a
+        // shovel at the current tool tier; cached so it cannot ping-pong.
+        if (needsShovelForBlocks()) {
+            if (_shovelRequirementTask != null
+                    && !_shovelRequirementTask.stopped()
+                    && !_shovelRequirementTask.isFinished(mod)) {
+                return _shovelRequirementTask;
+            }
+            _shovelRequirementTask = null;
+            if (!SatisfyShovelRequirementTask.isUpgradingShovel()) {
+                ToolSetTask.Tier target = ToolSetTask.currentTier(mod);
+                if (!SatisfyShovelRequirementTask.hasAnyShovel(mod)) {
+                    target = ToolSetTask.Tier.WOOD;
+                }
+                if (target != null && !SatisfyShovelRequirementTask.hasShovelAtLeast(mod, target)) {
+                    _shovelRequirementTask = new SatisfyShovelRequirementTask(target);
+                    return _shovelRequirementTask;
                 }
             }
         }
@@ -217,6 +239,18 @@ public class MineAndCollectTask extends ResourceTask {
     private boolean needsAxeForBlocks() {
         for (Block block : _blocksToMine) {
             if (block != null && net.minecraft.item.Items.WOODEN_AXE.getDefaultStack()
+                    .isSuitableFor(block.getDefaultState())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** True when any target block is best dug with a shovel (dirt, sand,
+     *  gravel, clay...). */
+    private boolean needsShovelForBlocks() {
+        for (Block block : _blocksToMine) {
+            if (block != null && net.minecraft.item.Items.WOODEN_SHOVEL.getDefaultStack()
                     .isSuitableFor(block.getDefaultState())) {
                 return true;
             }

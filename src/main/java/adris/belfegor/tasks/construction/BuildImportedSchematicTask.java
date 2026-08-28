@@ -294,8 +294,16 @@ public class BuildImportedSchematicTask extends Task {
             case STAGING -> {
                 Task staging = ensureStagingChest(mod);
                 if (staging != null) yield staging;
-                remember("staging_ready");
-                next(Phase.COLLECT);
+                if (_stagingChest == null) {
+                    // No chest available: skip the stage-everything loop and
+                    // build directly from inventory; the region builder fetches
+                    // exact working batches mid-build as needed.
+                    remember("building_direct");
+                    next(Phase.BUILD);
+                } else {
+                    remember("staging_ready");
+                    next(Phase.COLLECT);
+                }
                 yield null;
             }
             case COLLECT -> {
@@ -407,6 +415,21 @@ public class BuildImportedSchematicTask extends Task {
     }
 
     private Task ensureStagingChest(Belfegor mod) {
+        // The staging chest is an optimization, never a hard requirement.
+        // Crafting one can deadlock when the inventory is full of building
+        // material (chest -> planks -> sticks -> needs space -> ...). If the
+        // bot does not already carry a chest item and no chest is at the spot,
+        // skip staging entirely and build from inventory + mid-build gathering.
+        if (!mod.getItemStorage().hasItem(Items.CHEST)
+                && (mod.getWorld() == null
+                || mod.getWorld().getBlockState(_stagingChest).getBlock() != Blocks.CHEST)) {
+            DebugLogger.getInstance().log("SCHEMATIC-IMPORT",
+                    "staging-skipped name=" + schematicName()
+                            + " note=no chest item carried; building directly from inventory");
+            _stagingChest = null;
+            _stagingStand = null;
+            return null;
+        }
         if (_stagingStand == null) _stagingStand = findAdjacentStandSpot(mod, _stagingChest);
         if (_stagingStand == null) _stagingStand = _stagingChest.west();
         if (!WorldHelper.isSolid(mod, _stagingStand.down())) {
@@ -566,6 +589,13 @@ public class BuildImportedSchematicTask extends Task {
     }
 
     private Task depositMaterials(Belfegor mod) {
+        if (_stagingChest == null) {
+            _depositingItem = null;
+            _depositingCount = 0;
+            _currentDepositItem = null;
+            _activeTask = null;
+            return null;
+        }
         // Credit the previous deposit into the staged ledger once it finishes.
         if (_activeTask != null && _depositingItem != null
                 && (_activeTask.stopped() || _activeTask.isFinished(mod))) {
@@ -638,9 +668,11 @@ public class BuildImportedSchematicTask extends Task {
                 "source=" + (_copiedSource == null ? "" : _copiedSource.getName())
                         + " internal=" + (_internalFile == null ? "" : _internalFile.getName())
                         + " blocks=" + _schematic.totalBlocks());
-        memory.rememberModule(_origin, _dimension, schematicName() + "_staging", "construction_staging_chest",
-                _stagingChest, 1, 1, 1, "ready",
-                "staging chest for imported schematic " + schematicName());
+        if (_stagingChest != null) {
+            memory.rememberModule(_origin, _dimension, schematicName() + "_staging", "construction_staging_chest",
+                    _stagingChest, 1, 1, 1, "ready",
+                    "staging chest for imported schematic " + schematicName());
+        }
         memory.rememberInspection(_origin, _dimension, schematicName(), "schematic_import",
                 _schematic.totalBlocks(), 0, _schematic.countMismatches(null), 0,
                 status, "requirements=" + _requirements.size());
