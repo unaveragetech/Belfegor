@@ -31,7 +31,8 @@ releases/jars/
 | `releases/jars/belfegor-1.21.4-beta1-20d6151.jar` | `20d6151` | 4067665 bytes | `697f4da1fcb17caa3f86abb46a90e2185af63838af2dcbbe5d7c44fac5761dce` | Beta jar with the task-engine audit and refreshed docs/help. |
 | `releases/jars/belfegor-1.21.4-beta1-0775022.jar` | `0775022` | 4074983 bytes | `10b0ec694fbe334a1e118e1a1764e1846e627687fae1371cbfd6dd145bd09767` | Beta jar with classic .schematic import and food variety. |
 | `releases/jars/belfegor-1.21.4-beta1-f1f75ff.jar` | `f1f75ff` | 4075074 bytes | `977bba834ca2bc7a0eee04aa1e15dfb976ed9f2f4fad141c9ea4d1ec2ec3ff89` | Beta jar with the wood-gathering/axe task restart storm fix. |
-| `releases/jars/belfegor-1.21.4-beta1-790e45f.jar` | `790e45f` | 4074942 bytes | `d1c47284ad9d64db6094159bc1a6e9ff0f15c8bcaa1ccee753509b84ef650ed4` | Current beta jar with the overflow-to-chest recursion fix. |
+| `releases/jars/belfegor-1.21.4-beta1-790e45f.jar` | `790e45f` | 4074942 bytes | `d1c47284ad9d64db6094159bc1a6e9ff0f15c8bcaa1ccee753509b84ef650ed4` | Beta jar with the overflow-to-chest recursion fix. |
+| `releases/jars/belfegor-1.21.4-beta1-cca94f6.jar` | `cca94f6` | 4078419 bytes | `5871c64b95ffc7fbb3ad46692ba2d87164e57453d555735121973871b950371a` | Current beta jar with optional staging chest and shovel requirement. |
 
 ## What changed in the current jar
 
@@ -190,6 +191,17 @@ is actually used the way a player would use it:
   chest is nearby. CraftInInventoryTask also stops recreating a finished
   overflow task every tick.
 
+## What changed from `790e45f` to `cca94f6`
+
+- The imported-schematic staging chest is now optional: if the bot does not
+  carry a chest item and none is at the spot, it skips staging and builds
+  straight from inventory while the region builder fetches exact working
+  batches mid-build. This unblocks dirt-only schematics even with a full
+  inventory of building material (no more chest/planks/sticks/drop-junk loop).
+- MineAndCollectTask enforces a shovel requirement (cached, like the axe) for
+  dirt, sand, gravel, and other shovel-suitable blocks, so the bot makes the
+  digging tool before gathering bulk building material.
+
 ## Runtime bundle note
 
 The runtime zip is tracked with Git LFS because it includes the bundled llama.cpp/model tree:
@@ -201,5 +213,5 @@ releases/belfegor-1.21.4-beta1-runtime.zip
 Current runtime bundle SHA256:
 
 ```text
-a9e6b63edc5436bdc3d553c1b9409239f27da2b3b2b63b7014d99a316e8e341a
+09e6f402dcf0643b86f308ee62af97eee5d45eadbfc919eb82f2e9eb8349cffb
 ```

@@ -9,8 +9,8 @@ It includes the offline recipe catalogue and the developer command `@craftaudit`
 The current jar in this runtime folder matches:
 
 ```text
-releases/jars/belfegor-1.21.4-beta1-790e45f.jar
-SHA256: d1c47284ad9d64db6094159bc1a6e9ff0f15c8bcaa1ccee753509b84ef650ed4
+releases/jars/belfegor-1.21.4-beta1-cca94f6.jar
+SHA256: 5871c64b95ffc7fbb3ad46692ba2d87164e57453d555735121973871b950371a
 ```
 
 The previous public jar is preserved at:

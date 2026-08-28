@@ -23,9 +23,10 @@ The repo now keeps immutable jar copies under `releases/jars/` so the current be
 | `releases/jars/belfegor-1.21.4-beta1-20d6151.jar` | `20d6151` | `697f4da1fcb17caa3f86abb46a90e2185af63838af2dcbbe5d7c44fac5761dce` | Beta jar with the task-engine audit and refreshed docs/help. |
 | `releases/jars/belfegor-1.21.4-beta1-0775022.jar` | `0775022` | `10b0ec694fbe334a1e118e1a1764e1846e627687fae1371cbfd6dd145bd09767` | Beta jar with classic .schematic import and food variety. |
 | `releases/jars/belfegor-1.21.4-beta1-f1f75ff.jar` | `f1f75ff` | `977bba834ca2bc7a0eee04aa1e15dfb976ed9f2f4fad141c9ea4d1ec2ec3ff89` | Beta jar with the wood-gathering/axe task restart storm fix. |
-| `releases/jars/belfegor-1.21.4-beta1-790e45f.jar` | `790e45f` | `d1c47284ad9d64db6094159bc1a6e9ff0f15c8bcaa1ccee753509b84ef650ed4` | Current beta jar with the overflow-to-chest recursion fix. |
+| `releases/jars/belfegor-1.21.4-beta1-790e45f.jar` | `790e45f` | `d1c47284ad9d64db6094159bc1a6e9ff0f15c8bcaa1ccee753509b84ef650ed4` | Beta jar with the overflow-to-chest recursion fix. |
+| `releases/jars/belfegor-1.21.4-beta1-cca94f6.jar` | `cca94f6` | `5871c64b95ffc7fbb3ad46692ba2d87164e57453d555735121973871b950371a` | Current beta jar with optional staging chest and shovel requirement. |
 
-The moving install jar remains `releases/belfegor-1.21.4-beta1.jar` and currently matches the `790e45f` archive copy.
+The moving install jar remains `releases/belfegor-1.21.4-beta1.jar` and currently matches the `cca94f6` archive copy.
 
 ### What changed from `341eae3` to `718e0b7`
 
@@ -130,6 +131,15 @@ The moving install jar remains `releases/belfegor-1.21.4-beta1.jar` and currentl
   when crafting the first chest with a full inventory: overflow now drops
   throwaway junk instead of creating/crafting a container, and the 2x2 craft
   no longer recreates the finished overflow task every tick.
+
+### What changed from `790e45f` to `cca94f6`
+
+- Imported schematics build without a staging chest when none is available:
+  the bot places the material it already has and the region builder gathers
+  exact working batches mid-build. When a chest is carried/exists it is still
+  filled with materials first.
+- Shovel requirement added for dirt/sand/gravel gathering (cached like the
+  axe requirement), so the bot crafts the digging tool before bulk gathering.
 
 ## Download
 
