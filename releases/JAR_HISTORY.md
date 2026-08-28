@@ -34,7 +34,8 @@ releases/jars/
 | `releases/jars/belfegor-1.21.4-beta1-790e45f.jar` | `790e45f` | 4074942 bytes | `d1c47284ad9d64db6094159bc1a6e9ff0f15c8bcaa1ccee753509b84ef650ed4` | Beta jar with the overflow-to-chest recursion fix. |
 | `releases/jars/belfegor-1.21.4-beta1-cca94f6.jar` | `cca94f6` | 4078419 bytes | `5871c64b95ffc7fbb3ad46692ba2d87164e57453d555735121973871b950371a` | Beta jar with optional staging chest and shovel requirement. |
 | `releases/jars/belfegor-1.21.4-beta1-f8f0dac.jar` | `f8f0dac` | 4079362 bytes | `a1411d31478196f8f9fdad9a9ac5f212a795f42d36c302f9c733a2e8f1707de1` | Beta jar with layered schematic building and dirt-family matching. |
-| `releases/jars/belfegor-1.21.4-beta1-9470625.jar` | `9470625` | 4079744 bytes | `b99b3a5ab4d14fe22c0d0e253e8de002672b79b8b73b64c5c15453baf28b51ea` | Current beta jar with no-item plant deferral in imported schematics. |
+| `releases/jars/belfegor-1.21.4-beta1-9470625.jar` | `9470625` | 4079744 bytes | `b99b3a5ab4d14fe22c0d0e253e8de002672b79b8b73b64c5c15453baf28b51ea` | Beta jar with no-item plant deferral in imported schematics. |
+| `releases/jars/belfegor-1.21.4-beta1-523dee8.jar` | `523dee8` | 4080019 bytes | `3bedbc0957307d82cdd356f2dec8fac9ab3128c5491222ccefbfe5a2fb5c6b77` | Current beta jar with the block-break mixin crash fix and manual-fallback stand latch. |
 
 ## What changed in the current jar
 
@@ -221,6 +222,16 @@ is actually used the way a player would use it:
   (short/tall grass, ferns, seagrass, kelp plants, vine plants, stems), so the
   builder no longer tries to source or place tall grass and stalls.
 
+## What changed from `9470625` to `523dee8`
+
+- The `updateBlockBreakingProgress` mixin injector is now cancellable, fixing
+  the client crash (`CancellationException: The call method_2902 is not
+  cancellable`) when the construction break guard rejected a progress-phase
+  break.
+- Manual fallback placement latches onto one missing cell until it is placed
+  and keeps the player's current position as a stand when it can already reach
+  the target, ending the two-cell stand ping-pong that stalled builds.
+
 ## Runtime bundle note
 
 The runtime zip is tracked with Git LFS because it includes the bundled llama.cpp/model tree:
@@ -232,5 +243,5 @@ releases/belfegor-1.21.4-beta1-runtime.zip
 Current runtime bundle SHA256:
 
 ```text
-e865996a9efd182ad7a370b0d6cca40d681ed4873d5f762dced486137f47d981
+27f4fc738154e2d347c6c5e7d7cc3e05f4ec4106c5ef4fa878ed08bdf139c56f
 ```

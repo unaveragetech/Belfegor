@@ -26,9 +26,10 @@ The repo now keeps immutable jar copies under `releases/jars/` so the current be
 | `releases/jars/belfegor-1.21.4-beta1-790e45f.jar` | `790e45f` | `d1c47284ad9d64db6094159bc1a6e9ff0f15c8bcaa1ccee753509b84ef650ed4` | Beta jar with the overflow-to-chest recursion fix. |
 | `releases/jars/belfegor-1.21.4-beta1-cca94f6.jar` | `cca94f6` | `5871c64b95ffc7fbb3ad46692ba2d87164e57453d555735121973871b950371a` | Beta jar with optional staging chest and shovel requirement. |
 | `releases/jars/belfegor-1.21.4-beta1-f8f0dac.jar` | `f8f0dac` | `a1411d31478196f8f9fdad9a9ac5f212a795f42d36c302f9c733a2e8f1707de1` | Beta jar with layered schematic building and dirt-family matching. |
-| `releases/jars/belfegor-1.21.4-beta1-9470625.jar` | `9470625` | `b99b3a5ab4d14fe22c0d0e253e8de002672b79b8b73b64c5c15453baf28b51ea` | Current beta jar with no-item plant deferral in imported schematics. |
+| `releases/jars/belfegor-1.21.4-beta1-9470625.jar` | `9470625` | `b99b3a5ab4d14fe22c0d0e253e8de002672b79b8b73b64c5c15453baf28b51ea` | Beta jar with no-item plant deferral in imported schematics. |
+| `releases/jars/belfegor-1.21.4-beta1-523dee8.jar` | `523dee8` | `3bedbc0957307d82cdd356f2dec8fac9ab3128c5491222ccefbfe5a2fb5c6b77` | Current beta jar with the block-break mixin crash fix and manual-fallback stand latch. |
 
-The moving install jar remains `releases/belfegor-1.21.4-beta1.jar` and currently matches the `9470625` archive copy.
+The moving install jar remains `releases/belfegor-1.21.4-beta1.jar` and currently matches the `523dee8` archive copy.
 
 ### What changed from `341eae3` to `718e0b7`
 
@@ -156,6 +157,15 @@ The moving install jar remains `releases/belfegor-1.21.4-beta1.jar` and currentl
 - No-item plants (short/tall grass, ferns, seagrass, kelp plants, vine plants,
   stems) are deferred from imported-schematic builds, so tall-grass cells are
   skipped instead of stalling the builder.
+
+### What changed from `9470625` to `523dee8`
+
+- The `updateBlockBreakingProgress` mixin injector is now cancellable, fixing
+  the client crash when the construction break guard rejected a break during
+  the progress phase.
+- Manual fallback placement latches onto one missing cell until placed and
+  keeps the player's current position as a stand when it can already reach
+  the target, ending the adjacent-cell stand ping-pong that stalled builds.
 
 ## Download
 

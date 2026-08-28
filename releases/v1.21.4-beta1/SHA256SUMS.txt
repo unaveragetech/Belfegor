@@ -1,3 +1,3 @@
-b99b3a5ab4d14fe22c0d0e253e8de002672b79b8b73b64c5c15453baf28b51ea  .\releases\v1.21.4-beta1\mods\belfegor-1.21.4-beta1.jar
+3bedbc0957307d82cdd356f2dec8fac9ab3128c5491222ccefbfe5a2fb5c6b77  .\releases\v1.21.4-beta1\mods\belfegor-1.21.4-beta1.jar
 6f5c978857af636017d2526b961468f63b204e56762669d711640915627f0917  .\releases\v1.21.4-beta1\mods\fabric-api-0.114.3+1.21.4.jar
 a9417cc1f77f0435a71a834605c4d5c5ca2f4a02808bdd75fb4f36102c9255b8  .\releases\v1.21.4-beta1\mods\baritone-api.jar
