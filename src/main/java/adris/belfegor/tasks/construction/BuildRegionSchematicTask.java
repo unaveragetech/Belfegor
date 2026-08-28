@@ -351,7 +351,9 @@ public class BuildRegionSchematicTask extends Task implements ITaskRequiresGroun
         if (current != Blocks.AIR && current != Blocks.WATER && !isTargetDone(mod, pos, entry.getValue())) {
             return new DestroyBlockTask(pos);
         }
-        return new PlaceBlockTask(pos, entry.getValue(), _allowAnyThrowaway, true,
+        // Pass the whole family as acceptable so coarse dirt can fill a dirt
+        // cell and vice versa.
+        return new PlaceBlockTask(pos, familyExpanded(entry.getValue()), _allowAnyThrowaway, true,
                 !_allowAnyThrowaway, _minimumStandY);
     }
 
@@ -367,7 +369,9 @@ public class BuildRegionSchematicTask extends Task implements ITaskRequiresGroun
             return null;
         }
 
-        int inventoryCount = mod.getItemStorage().getItemCountInventoryOnly(needed.getMatches());
+        int inventoryCount = needed.getMatches().length == 0
+                ? 0
+                : countInventoryForItem(mod, needed.getMatches()[0]);
         if (inventoryCount >= Math.min(needed.getTargetCount(), 32)) {
             _waitingForSupply = false;
             _supplyTask = null;
@@ -485,7 +489,7 @@ public class BuildRegionSchematicTask extends Task implements ITaskRequiresGroun
         Item best = null;
         int bestCount = 0;
         for (Map.Entry<Item, Integer> entry : counts.entrySet()) {
-            int inventory = mod.getItemStorage().getItemCountInventoryOnly(entry.getKey());
+            int inventory = countInventoryForItem(mod, entry.getKey());
             int stillNeeded = Math.max(0, entry.getValue() - inventory);
             if (stillNeeded > bestCount) {
                 best = entry.getKey();
@@ -605,6 +609,37 @@ public class BuildRegionSchematicTask extends Task implements ITaskRequiresGroun
         return "Build region schematic " + _name + " targets=" + _targets.size();
     }
 
+    // Coarse dirt, regular dirt, grass blocks, podzol, dirt paths, and rooted
+    // dirt are treated as interchangeable building material: a dirt-family
+    // cell is satisfied by any family member, and the manual placer may use
+    // whichever family item is available.
+    private static final List<Block> DIRT_FAMILY = List.of(
+            Blocks.DIRT, Blocks.COARSE_DIRT, Blocks.GRASS_BLOCK, Blocks.DIRT_PATH,
+            Blocks.PODZOL, Blocks.ROOTED_DIRT);
+
+    private static boolean isDirtFamily(Block block) {
+        return block != null && DIRT_FAMILY.contains(block);
+    }
+
+    private static Block[] familyExpanded(Block[] desired) {
+        if (desired == null || desired.length == 0) return desired;
+        if (isDirtFamily(desired[0])) {
+            return DIRT_FAMILY.toArray(new Block[0]);
+        }
+        return desired;
+    }
+
+    private int countInventoryForItem(Belfegor mod, Item item) {
+        if (isDirtFamily(Block.getBlockFromItem(item))) {
+            int total = 0;
+            for (Block b : DIRT_FAMILY) {
+                total += mod.getItemStorage().getItemCountInventoryOnly(b.asItem());
+            }
+            return total;
+        }
+        return mod.getItemStorage().getItemCountInventoryOnly(item);
+    }
+
     private boolean isTargetDone(Belfegor mod, BlockPos pos, Block[] desired) {
         if (BaseMemory.getInstance().isProtectedFixturePosition(pos, WorldHelper.getCurrentDimension().name())) {
             return true;
@@ -616,7 +651,7 @@ public class BuildRegionSchematicTask extends Task implements ITaskRequiresGroun
         if (_allowAnyThrowaway) {
             return WorldHelper.isSolid(mod, pos);
         }
-        return Arrays.asList(desired).contains(block);
+        return Arrays.asList(familyExpanded(desired)).contains(block);
     }
 
     private boolean isNonFarmFloorRegion() {
@@ -792,7 +827,7 @@ public class BuildRegionSchematicTask extends Task implements ITaskRequiresGroun
                     && WorldHelper.isSolid(_mod, worldPos)) {
                 return blockState;
             }
-            List<Block> desiredBlocks = Arrays.asList(desired);
+            List<Block> desiredBlocks = Arrays.asList(familyExpanded(desired));
             for (BlockState possible : available == null ? new ArrayList<BlockState>() : available) {
                 if (possible == null) continue;
                 Block block = possible.getBlock();

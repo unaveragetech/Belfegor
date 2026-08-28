@@ -62,6 +62,11 @@ public class BuildImportedSchematicTask extends Task {
     private String _dimension;
     private Map<Item, Integer> _requirements = new LinkedHashMap<>();
     private Map<BlockPos, Block[]> _directTargets;
+    // Build the structure bottom-up in bounded vertical slices so the
+    // region builder only scans the active layers, the bot stands on
+    // finished lower layers, and progress is visible layer by layer.
+    private static final int LAYER_HEIGHT = 4;
+    private int _layerY = Integer.MIN_VALUE;
     private Item _currentDepositItem;
     // How many of each requirement have been deposited into the staging
     // chest so far; used to loop collect/deposit until everything is staged.
@@ -82,6 +87,8 @@ public class BuildImportedSchematicTask extends Task {
         _stagedCounts.clear();
         _depositingItem = null;
         _depositingCount = 0;
+        _layerY = Integer.MIN_VALUE;
+        _directTargets = null;
         _origin = findGroundedOrigin(mod, mod.getPlayer().getBlockPos());
         _dimension = WorldHelper.getCurrentDimension().name();
     }
@@ -333,24 +340,30 @@ public class BuildImportedSchematicTask extends Task {
                     next(Phase.DONE);
                     yield null;
                 }
-                if (_directTargets == null) {
-                    _directTargets = directPlaceableTargets();
+                if (_layerY == Integer.MIN_VALUE) {
+                    _layerY = _schematic.minY;
                 }
-                if (_directTargets.isEmpty()) {
-                    DebugLogger.getInstance().log("SCHEMATIC-IMPORT",
-                            "build-skip-no-direct-targets name=" + schematicName()
-                                    + " total=" + _schematic.totalBlocks());
-                    remember("built_direct_blocks");
+                if (_layerY > _schematic.maxY) {
+                    remember("built");
                     next(Phase.DONE);
                     yield null;
                 }
+                if (_directTargets == null) {
+                    _directTargets = directPlaceableTargetsForLayer(
+                            _layerY, _layerY + LAYER_HEIGHT - 1);
+                }
+                if (_directTargets.isEmpty()) {
+                    _layerY += LAYER_HEIGHT;
+                    _directTargets = null;
+                    yield null;
+                }
                 Task build = cache(mod, new BuildRegionSchematicTask(
-                        "imported schematic " + _schematic.name,
+                        "imported schematic " + _schematic.name + " y" + _layerY,
                         _directTargets,
                         false));
                 if (!build.isFinished(mod)) yield build;
-                remember("built");
-                next(Phase.DONE);
+                _layerY += LAYER_HEIGHT;
+                _directTargets = null;
                 yield null;
             }
             case DONE -> null;
@@ -534,6 +547,27 @@ public class BuildImportedSchematicTask extends Task {
                 || block == Blocks.CHERRY_LEAVES
                 || block == Blocks.AZALEA_LEAVES
                 || block == Blocks.FLOWERING_AZALEA_LEAVES;
+    }
+
+    private Map<BlockPos, Block[]> directPlaceableTargetsForLayer(int minY, int maxY) {
+        LinkedHashMap<BlockPos, Block[]> result = new LinkedHashMap<>();
+        if (_schematic == null || _schematic.blocks == null) return result;
+        for (Map.Entry<String, String> entry : _schematic.blocks.entrySet()) {
+            Optional<BlockPos> pos = parseKey(entry.getKey());
+            if (pos.isEmpty()) continue;
+            int y = pos.get().getY();
+            if (y < minY || y > maxY) continue;
+            Block block = Registries.BLOCK.get(Identifier.of(entry.getValue()));
+            if (isDeferredFunctionalBlock(block)) continue;
+            result.put(pos.get(), new Block[]{block});
+        }
+        if (!result.isEmpty()) {
+            DebugLogger.getInstance().log("SCHEMATIC-IMPORT",
+                    "build-layer name=" + schematicName()
+                            + " y=" + minY + ".." + maxY
+                            + " targets=" + result.size());
+        }
+        return result;
     }
 
     private Map<BlockPos, Block[]> directPlaceableTargets() {
