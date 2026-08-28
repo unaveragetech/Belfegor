@@ -21,9 +21,10 @@ The repo now keeps immutable jar copies under `releases/jars/` so the current be
 | `releases/jars/belfegor-1.21.4-beta1-234a743.jar` | `234a743` | `ff1b4a8628e9c52d14463c1308badf53b602f9d3b29979060817c70f2342d314` | Beta jar that uses nearby crafting tables instead of crafting/placing new ones. |
 | `releases/jars/belfegor-1.21.4-beta1-c774be5.jar` | `c774be5` | `1881c30577f0c4e7ce90ea92f6a78e17fd32cb6bd6b49c8bf923db0f03052e8c` | Beta jar whose @pillar breaks overhead blocks to work underground. |
 | `releases/jars/belfegor-1.21.4-beta1-20d6151.jar` | `20d6151` | `697f4da1fcb17caa3f86abb46a90e2185af63838af2dcbbe5d7c44fac5761dce` | Beta jar with the task-engine audit and refreshed docs/help. |
-| `releases/jars/belfegor-1.21.4-beta1-0775022.jar` | `0775022` | `10b0ec694fbe334a1e118e1a1764e1846e627687fae1371cbfd6dd145bd09767` | Current beta jar with classic .schematic import and food variety. |
+| `releases/jars/belfegor-1.21.4-beta1-0775022.jar` | `0775022` | `10b0ec694fbe334a1e118e1a1764e1846e627687fae1371cbfd6dd145bd09767` | Beta jar with classic .schematic import and food variety. |
+| `releases/jars/belfegor-1.21.4-beta1-f1f75ff.jar` | `f1f75ff` | `977bba834ca2bc7a0eee04aa1e15dfb976ed9f2f4fad141c9ea4d1ec2ec3ff89` | Current beta jar with the wood-gathering/axe task restart storm fix. |
 
-The moving install jar remains `releases/belfegor-1.21.4-beta1.jar` and currently matches the `0775022` archive copy.
+The moving install jar remains `releases/belfegor-1.21.4-beta1.jar` and currently matches the `f1f75ff` archive copy.
 
 ### What changed from `341eae3` to `718e0b7`
 
@@ -115,6 +116,12 @@ The moving install jar remains `releases/belfegor-1.21.4-beta1.jar` and currentl
 - Food gathering now considers all nearby meats and crops (pork, beef,
   chicken, mutton, rabbit, fish, wheat/carrot/potato/beetroot), baking and
   smelting as needed.
+
+### What changed from `0775022` to `f1f75ff`
+
+- Fixed the wood-gathering/axe-requirement task restart storm that blocked
+  imported schematic builds (the staging-chest wood craft ping-ponged between
+  the axe requirement and mining every tick).
 
 ## Download
 

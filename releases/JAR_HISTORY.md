@@ -29,7 +29,8 @@ releases/jars/
 | `releases/jars/belfegor-1.21.4-beta1-234a743.jar` | `234a743` | 4067128 bytes | `ff1b4a8628e9c52d14463c1308badf53b602f9d3b29979060817c70f2342d314` | Beta jar that uses nearby crafting tables instead of crafting/placing new ones. |
 | `releases/jars/belfegor-1.21.4-beta1-c774be5.jar` | `c774be5` | 4067423 bytes | `1881c30577f0c4e7ce90ea92f6a78e17fd32cb6bd6b49c8bf923db0f03052e8c` | Beta jar whose @pillar breaks overhead blocks to work underground. |
 | `releases/jars/belfegor-1.21.4-beta1-20d6151.jar` | `20d6151` | 4067665 bytes | `697f4da1fcb17caa3f86abb46a90e2185af63838af2dcbbe5d7c44fac5761dce` | Beta jar with the task-engine audit and refreshed docs/help. |
-| `releases/jars/belfegor-1.21.4-beta1-0775022.jar` | `0775022` | 4074983 bytes | `10b0ec694fbe334a1e118e1a1764e1846e627687fae1371cbfd6dd145bd09767` | Current beta jar with classic .schematic import and food variety. |
+| `releases/jars/belfegor-1.21.4-beta1-0775022.jar` | `0775022` | 4074983 bytes | `10b0ec694fbe334a1e118e1a1764e1846e627687fae1371cbfd6dd145bd09767` | Beta jar with classic .schematic import and food variety. |
+| `releases/jars/belfegor-1.21.4-beta1-f1f75ff.jar` | `f1f75ff` | 4075074 bytes | `977bba834ca2bc7a0eee04aa1e15dfb976ed9f2f4fad141c9ea4d1ec2ec3ff89` | Current beta jar with the wood-gathering/axe task restart storm fix. |
 
 ## What changed in the current jar
 
@@ -171,6 +172,14 @@ is actually used the way a player would use it:
   harvests wheat, carrots, potatoes, and beetroot; bakes potatoes; picks up a
   wider set of foods; and `@meat` includes rabbit with porkchop first.
 
+## What changed from `0775022` to `f1f75ff`
+
+- Fixed the wood-gathering/axe-requirement task restart storm that hit the
+  imported-schematic build (the staging chest needs wood, and the wood
+  gatherer and its own axe-requirement child interrupted each other every
+  tick). MineAndCollectTask now caches the axe-requirement child and keeps
+  running it until the axe is obtained.
+
 ## Runtime bundle note
 
 The runtime zip is tracked with Git LFS because it includes the bundled llama.cpp/model tree:
@@ -182,5 +191,5 @@ releases/belfegor-1.21.4-beta1-runtime.zip
 Current runtime bundle SHA256:
 
 ```text
-4d8afd4352701d71e830f908beee710dbc23129090320cb9cc71a1ef2840771d
+0469252449f19a011f993a39b3034f821eec965e2b553d5a3453a6b947d6a463
 ```

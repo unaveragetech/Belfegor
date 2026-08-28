@@ -18,6 +18,7 @@ Use this folder when you need to compare an old release jar against the current 
 | `belfegor-1.21.4-beta1-c774be5.jar` | `c774be5` | `1881c30577f0c4e7ce90ea92f6a78e17fd32cb6bd6b49c8bf923db0f03052e8c` |
 | `belfegor-1.21.4-beta1-20d6151.jar` | `20d6151` | `697f4da1fcb17caa3f86abb46a90e2185af63838af2dcbbe5d7c44fac5761dce` |
 | `belfegor-1.21.4-beta1-0775022.jar` | `0775022` | `10b0ec694fbe334a1e118e1a1764e1846e627687fae1371cbfd6dd145bd09767` |
+| `belfegor-1.21.4-beta1-f1f75ff.jar` | `f1f75ff` | `977bba834ca2bc7a0eee04aa1e15dfb976ed9f2f4fad141c9ea4d1ec2ec3ff89` |
 
 The current install jar is also copied to:
 
