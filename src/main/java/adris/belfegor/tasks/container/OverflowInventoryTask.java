@@ -4,6 +4,7 @@ import adris.belfegor.Belfegor;
 import adris.belfegor.memory.BaseMemory;
 import adris.belfegor.memory.BaseStorageMemory;
 import adris.belfegor.tasksystem.ITaskCanForce;
+import adris.belfegor.tasks.slot.DropJunkToMakeSpaceTask;
 import adris.belfegor.tasksystem.Task;
 import adris.belfegor.util.ItemTarget;
 import adris.belfegor.util.helpers.ItemHelper;
@@ -77,13 +78,21 @@ public class OverflowInventoryTask extends Task implements ITaskCanForce {
         if (surplus.length == 0) return null;
         setDebugState("Storing overflow inventory in chest " + Arrays.toString(surplus));
         Optional<BlockPos> staging = findReadyConstructionStaging(mod);
-        _delegate = staging
-                .<Task>map(pos -> {
-                    rememberStorageTarget(mod, pos, "overflow");
-                    BaseStorageMemory.getInstance().save();
-                    return new StoreInContainerTask(pos, false, surplus);
-                })
-                .orElseGet(() -> new StoreInAnyContainerTask(false, false, surplus));
+        if (staging.isPresent()) {
+            BlockPos pos = staging.get();
+            rememberStorageTarget(mod, pos, "overflow");
+            BaseStorageMemory.getInstance().save();
+            _delegate = new StoreInContainerTask(pos, false, surplus);
+            return _delegate;
+        }
+        // No ready chest nearby: NEVER create/craft a container to hold the
+        // overflow. StoreInAnyContainerTask places a chest, and placing the
+        // chest crafts one, and crafting the chest needs inventory space,
+        // which recursively re-enters this overflow task until the task-depth
+        // guard aborts the tick. Drop only throwaway junk instead; the drop
+        // task gives up cleanly when nothing is safe to discard.
+        setDebugState("Dropping overflow junk to free inventory space");
+        _delegate = new DropJunkToMakeSpaceTask(_desiredFreeSlots);
         return _delegate;
     }
 

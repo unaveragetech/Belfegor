@@ -174,16 +174,21 @@ public class CraftInInventoryTask extends ResourceTask implements adris.belfegor
         // result and could recursively bootstrap another chest/table craft.
         if (!StorageHelper.isPlayerInventoryOpen()
                 && OverflowInventoryTask.freeSlots(mod) < 2) {
-            if (_craftSpaceTask == null || _craftSpaceTask.stopped() || _craftSpaceTask.isFinished(mod)) {
+            if (_craftSpaceTask == null || _craftSpaceTask.stopped()) {
                 _craftSpaceTask = new OverflowInventoryTask(3, _itemTargets);
                 adris.belfegor.debug.DebugLogger.getInstance().logImmediate("CRAFT-SPACE",
                         "reserving output slots target=" + _target
                                 + " free=" + OverflowInventoryTask.freeSlots(mod));
             }
-            if (!_craftSpaceTask.isFinished(mod)) {
+            if (_craftSpaceTask != null
+                    && !_craftSpaceTask.isFinished(mod)
+                    && !_craftSpaceTask.stopped()) {
                 setDebugState("Reserving inventory space before crafting");
                 return _craftSpaceTask;
             }
+            // The overflow task finished (freed space or gave up cleanly):
+            // do not recreate it every tick and loop forever.
+            _craftSpaceTask = null;
         }
 
         // Materials ready — open inventory if neither screen is open. When a
