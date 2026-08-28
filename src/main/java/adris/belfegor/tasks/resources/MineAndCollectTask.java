@@ -43,6 +43,10 @@ public class MineAndCollectTask extends ResourceTask {
 
     private final MineOrCollectTask _subtask;
     private final boolean _mineSurplusVein;
+    // Cached axe-requirement child: the parent must keep returning the
+    // same SatisfyAxeRequirementTask until it finishes, or it flips between
+    // the axe task and the mining subtask every tick (restart storm).
+    private Task _axeRequirementTask = null;
 
     public MineAndCollectTask(ItemTarget[] itemTargets, Block[] blocksToMine, MiningRequirement requirement) {
         super(itemTargets);
@@ -86,6 +90,7 @@ public class MineAndCollectTask extends ResourceTask {
         mod.getBehaviour().addProtectedItems(Items.WOODEN_PICKAXE, Items.STONE_PICKAXE, Items.IRON_PICKAXE, Items.DIAMOND_PICKAXE, Items.NETHERITE_PICKAXE);
 
         _subtask.resetSearch();
+        _axeRequirementTask = null;
     }
 
     @Override
@@ -103,13 +108,24 @@ public class MineAndCollectTask extends ResourceTask {
         // upgrade's own wood gathering loop), and never demand an axe during
         // the very first bootstrap chop — that is how the first axe is made.
         if (needsAxeForBlocks()) {
+            // Keep running the same axe-requirement child until it finishes.
+            // Creating a fresh one every tick made the parent flip between the
+            // axe task and the mining subtask each tick (task restart storm)
+            // while the axe craft's own wood gathering waited on the flag.
+            if (_axeRequirementTask != null
+                    && !_axeRequirementTask.stopped()
+                    && !_axeRequirementTask.isFinished(mod)) {
+                return _axeRequirementTask;
+            }
+            _axeRequirementTask = null;
             if (!SatisfyAxeRequirementTask.isUpgradingAxe()) {
-                if (!SatisfyAxeRequirementTask.hasAnyAxe(mod)) {
-                    return new SatisfyAxeRequirementTask(ToolSetTask.Tier.WOOD);
-                }
                 ToolSetTask.Tier target = ToolSetTask.currentTier(mod);
+                if (!SatisfyAxeRequirementTask.hasAnyAxe(mod)) {
+                    target = ToolSetTask.Tier.WOOD;
+                }
                 if (target != null && !SatisfyAxeRequirementTask.hasAxeAtLeast(mod, target)) {
-                    return new SatisfyAxeRequirementTask(target);
+                    _axeRequirementTask = new SatisfyAxeRequirementTask(target);
+                    return _axeRequirementTask;
                 }
             }
         }
