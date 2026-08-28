@@ -71,6 +71,7 @@ public class BuildRegionSchematicTask extends Task implements ITaskRequiresGroun
     private int _lastMissing = Integer.MAX_VALUE;
     private int _noProgressTicks;
     private Task _manualFallbackTask;
+    private BlockPos _manualTargetPos;
     private Task _supplyTask;
     private boolean _builderLaunched;
     private boolean _manualFallbackLatched;
@@ -124,6 +125,7 @@ public class BuildRegionSchematicTask extends Task implements ITaskRequiresGroun
         _lastMissing = Integer.MAX_VALUE;
         _noProgressTicks = 0;
         _manualFallbackTask = null;
+        _manualTargetPos = null;
         _supplyTask = null;
         _builderLaunched = false;
         _manualFallbackLatched = false;
@@ -335,8 +337,18 @@ public class BuildRegionSchematicTask extends Task implements ITaskRequiresGroun
     }
 
     private Task createManualFallback(Belfegor mod, int missing) {
-        Map.Entry<BlockPos, Block[]> entry = closestMissing(mod);
-        if (entry == null) return null;
+        Map.Entry<BlockPos, Block[]> entry = null;
+        if (_manualTargetPos != null) {
+            Block[] desired = _targets.get(_manualTargetPos);
+            if (desired != null && !isTargetDone(mod, _manualTargetPos, desired)) {
+                entry = Map.entry(_manualTargetPos, desired);
+            }
+        }
+        if (entry == null) {
+            entry = closestMissing(mod);
+            if (entry == null) return null;
+            _manualTargetPos = entry.getKey();
+        }
         BlockPos pos = entry.getKey();
         Block current = mod.getWorld().getBlockState(pos).getBlock();
         DebugLogger.getInstance().log("BUILD-REGION", "manual-fallback name=" + _name
@@ -547,6 +559,13 @@ public class BuildRegionSchematicTask extends Task implements ITaskRequiresGroun
 
     private BlockPos approachPositionForManualFallback(Belfegor mod, BlockPos target) {
         BlockPos player = mod.getPlayer() == null ? target : mod.getPlayer().getBlockPos();
+        // If the player is already standing in a cell that can reach this
+        // target, stay put. Walking to a neighboring stand every tick made the
+        // builder ping-pong between two adjacent cells (each stand choice was
+        // the other target's approach cell) and never place anything.
+        if (player != null && isValidManualStand(mod, target, player)) {
+            return player;
+        }
         Direction[] directions = {Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST};
         BlockPos best = null;
         double bestDistance = Double.POSITIVE_INFINITY;
@@ -568,6 +587,16 @@ public class BuildRegionSchematicTask extends Task implements ITaskRequiresGroun
             }
         }
         return best == null ? target.up() : best;
+    }
+
+    private boolean isValidManualStand(Belfegor mod, BlockPos target, BlockPos stand) {
+        if (stand.getY() < _minimumStandY) return false;
+        if (_targets.containsKey(stand)) return false;
+        if (!WorldHelper.isSolid(mod, stand.down())) return false;
+        if (!mod.getWorld().getBlockState(stand).isAir()) return false;
+        if (!mod.getWorld().getBlockState(stand.up()).isAir()) return false;
+        Vec3d eye = Vec3d.ofCenter(stand).add(0, 1.62, 0);
+        return eye.squaredDistanceTo(Vec3d.ofCenter(target)) <= 20.25;
     }
 
     @Override

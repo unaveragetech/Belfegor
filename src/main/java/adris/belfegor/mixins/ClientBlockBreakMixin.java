@@ -36,7 +36,8 @@ public final class ClientBlockBreakMixin {
 
     @Inject(
             method = "updateBlockBreakingProgress",
-            at = @At("HEAD")
+            at = @At("HEAD"),
+            cancellable = true
     )
     private void onBreakUpdate(BlockPos pos, Direction direction, CallbackInfoReturnable<Boolean> ci) {
         if (rejectProtectedBreak(pos, "progress")) {
