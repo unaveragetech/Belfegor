@@ -594,8 +594,22 @@ public class BuildImportedSchematicTask extends Task {
         return result;
     }
 
+    // Plant blocks with no placeable item (short/tall grass, ferns, seagrass,
+    // kelp plants, vine plants, stems...). Block.asItem() is not reliable for
+    // every one of these, so defer them explicitly: they can never be sourced
+    // or placed and would otherwise stall the build.
+    private static final java.util.Set<Block> NO_ITEM_PLANTS = java.util.Set.of(
+            Blocks.SHORT_GRASS, Blocks.TALL_GRASS, Blocks.FERN, Blocks.LARGE_FERN,
+            Blocks.SEAGRASS, Blocks.TALL_SEAGRASS, Blocks.KELP_PLANT,
+            Blocks.BAMBOO_SAPLING, Blocks.CAVE_VINES_PLANT,
+            Blocks.TWISTING_VINES_PLANT, Blocks.WEEPING_VINES_PLANT,
+            Blocks.PITCHER_CROP, Blocks.TORCHFLOWER_CROP,
+            Blocks.ATTACHED_MELON_STEM, Blocks.ATTACHED_PUMPKIN_STEM,
+            Blocks.MELON_STEM, Blocks.PUMPKIN_STEM);
+
     private boolean isDeferredFunctionalBlock(Block block) {
         if (block == null || block == Blocks.AIR) return true;
+        if (NO_ITEM_PLANTS.contains(block)) return true;
         if (block == Blocks.WATER || block == Blocks.LAVA) return true;
         if (block == Blocks.FARMLAND) return true;
         if (isSpecialSchematicItem(block.asItem())) return true;
