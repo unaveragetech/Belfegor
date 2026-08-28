@@ -32,7 +32,9 @@ releases/jars/
 | `releases/jars/belfegor-1.21.4-beta1-0775022.jar` | `0775022` | 4074983 bytes | `10b0ec694fbe334a1e118e1a1764e1846e627687fae1371cbfd6dd145bd09767` | Beta jar with classic .schematic import and food variety. |
 | `releases/jars/belfegor-1.21.4-beta1-f1f75ff.jar` | `f1f75ff` | 4075074 bytes | `977bba834ca2bc7a0eee04aa1e15dfb976ed9f2f4fad141c9ea4d1ec2ec3ff89` | Beta jar with the wood-gathering/axe task restart storm fix. |
 | `releases/jars/belfegor-1.21.4-beta1-790e45f.jar` | `790e45f` | 4074942 bytes | `d1c47284ad9d64db6094159bc1a6e9ff0f15c8bcaa1ccee753509b84ef650ed4` | Beta jar with the overflow-to-chest recursion fix. |
-| `releases/jars/belfegor-1.21.4-beta1-cca94f6.jar` | `cca94f6` | 4078419 bytes | `5871c64b95ffc7fbb3ad46692ba2d87164e57453d555735121973871b950371a` | Current beta jar with optional staging chest and shovel requirement. |
+| `releases/jars/belfegor-1.21.4-beta1-cca94f6.jar` | `cca94f6` | 4078419 bytes | `5871c64b95ffc7fbb3ad46692ba2d87164e57453d555735121973871b950371a` | Beta jar with optional staging chest and shovel requirement. |
+| `releases/jars/belfegor-1.21.4-beta1-f8f0dac.jar` | `f8f0dac` | 4079362 bytes | `a1411d31478196f8f9fdad9a9ac5f212a795f42d36c302f9c733a2e8f1707de1` | Beta jar with layered schematic building and dirt-family matching. |
+| `releases/jars/belfegor-1.21.4-beta1-9470625.jar` | `9470625` | 4079744 bytes | `b99b3a5ab4d14fe22c0d0e253e8de002672b79b8b73b64c5c15453baf28b51ea` | Current beta jar with no-item plant deferral in imported schematics. |
 
 ## What changed in the current jar
 
@@ -202,6 +204,23 @@ is actually used the way a player would use it:
   dirt, sand, gravel, and other shovel-suitable blocks, so the bot makes the
   digging tool before gathering bulk building material.
 
+## What changed from `cca94f6` to `f8f0dac`
+
+- Imported schematics build bottom-up in bounded 4-layer slices, so scans are
+  fast, the bot stands on finished lower layers, and progress is visible
+  layer by layer instead of recomputing the whole schematic after every block.
+- Dirt-family blocks (dirt, coarse dirt, grass blocks, dirt paths, podzol,
+  rooted dirt) are interchangeable: a dirt-family cell is satisfied by any
+  family member, the placer may use whichever family item is available, and
+  inventory counting is family-aware. Grass blocks in dirt cells are no longer
+  broken and replaced.
+
+## What changed from `f8f0dac` to `9470625`
+
+- Imported schematics explicitly defer plant blocks with no placeable item
+  (short/tall grass, ferns, seagrass, kelp plants, vine plants, stems), so the
+  builder no longer tries to source or place tall grass and stalls.
+
 ## Runtime bundle note
 
 The runtime zip is tracked with Git LFS because it includes the bundled llama.cpp/model tree:
@@ -213,5 +232,5 @@ releases/belfegor-1.21.4-beta1-runtime.zip
 Current runtime bundle SHA256:
 
 ```text
-09e6f402dcf0643b86f308ee62af97eee5d45eadbfc919eb82f2e9eb8349cffb
+e865996a9efd182ad7a370b0d6cca40d681ed4873d5f762dced486137f47d981
 ```
