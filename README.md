@@ -1,5 +1,8 @@
 # Belfegor
 
+
+[![Watch a one-minute video tour of belfegor](https://gitdiagram.com/video-badge.svg)](https://gitdiagram.com/unaveragetech/belfegor/video)
+
 ![Belfegor](src/main/resources/assets/belfegor/icon.png)
 
 **A production-minded Minecraft automation agent for Fabric 1.21.4.**
